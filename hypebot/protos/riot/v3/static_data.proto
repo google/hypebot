@@ -1,0 +1,343 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot.riot.v3;
+
+service StaticDataService {
+  rpc ListChampions(ListChampionsRequest) returns (ListChampionsResponse) {
+  }
+  /*
+  rpc GetChampion(GetChampionRequest) returns (Champion) {
+  }
+  */
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse) {
+  }
+  /*
+  rpc GetItem(GetItemRequest) returns (Item) {
+  }
+  rpc ListLanguageStrings(ListLanguageStringsRequest)
+      returns (ListLanguageStringsResponse) {
+  }
+  rpc ListLanguages(ListLanguagesRequest) returns (ListLanguagesResponse) {
+  }
+  rpc ListMaps(ListMapsRequest) returns (ListMapsResponse) {
+  }
+  */
+  rpc ListMasteries(ListMasteriesRequest) returns (ListMasteriesResponse) {
+  }
+  /*
+  rpc GetMastery(GetMasteryRequest) returns (Mastery) {
+  }
+  rpc ListRealms(ListProfileIconsRequest) returns (ListRealmsResponse) {
+  }
+  rpc ListRealms(ListRealmsRequest) returns (ListRealmsResponse) {
+  }
+  rpc ListRunes(ListRunesRequest) returns (ListRunesResponse) {
+  }
+  rpc GetRune(GetRuneRequest) returns (Rune) {
+  }
+  rpc ListSummonerSpells(ListSummonerSpellsRequest)
+      returns (ListSummonerSpellsResponse) {
+  }
+  rpc GetSummonerSpell(GetSummonerSpellRequest) returns (SummonerSpell) {
+  }
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse) {
+  }
+  */
+}
+
+message ListChampionsRequest {
+  string locale = 1;
+  string version = 2;
+  repeated string tags = 3;
+  bool data_by_id = 4;
+}
+
+message ListChampionsResponse {
+  map<string, string> keys = 1;
+  map<string, Champion> data = 2;
+  string version = 3;
+  string type = 4;
+  string format = 5;
+}
+
+message Champion {
+  Info info = 1;
+  repeated string enemytips = 2;
+  Stats stats = 3;
+  string name = 4;
+  string title = 5;
+  Image image = 6;
+  repeated string tags = 7;
+  string partype = 8;
+  repeated Skin skins = 9;
+  Passive passive = 10;
+  repeated Recommended recommended = 11;
+  repeated string allytips = 12;
+  string key = 13;
+  string lore = 14;
+  int32 id = 15;
+  string blurb = 16;
+  repeated ChampionSpell spells = 17;
+}
+
+message Info {
+  int32 difficulty = 1;
+  int32 attack = 2;
+  int32 defense = 3;
+  int32 magic = 4;
+}
+
+message Stats {
+  double armorperlevel = 1;
+  double hpperlevel = 2;
+  double attackdamage = 3;
+  double mpperlevel = 4;
+  double attackspeedoffset = 5;
+  double armor = 6;
+  double hp = 7;
+  double hpregenperlevel = 8;
+  double spellblock = 9;
+  double attackrange = 10;
+  double movespeed = 11;
+  double attackdamageperlevel = 12;
+  double mpregenperlevel = 13;
+  double mp = 14;
+  double spellblockperlevel = 15;
+  double crit = 16;
+  double mpregen = 17;
+  double attackspeedperlevel = 18;
+  double hpregen = 19;
+  double critperlevel = 20;
+}
+
+message Image {
+  string full = 1;
+  string group = 2;
+  string sprite = 3;
+  int32 h = 4;
+  int32 w = 5;
+  int32 y = 6;
+  int32 x = 7;
+}
+
+message Skin {
+  int32 num = 1;
+  string name = 2;
+  int32 id = 3;
+}
+
+message Passive {
+  Image image = 1;
+  string sanitized_description = 2;
+  string name = 3;
+  string description = 4;
+}
+
+message Recommended {
+  string map = 1;
+  repeated Block blocks = 2;
+  string champion = 3;
+  string title = 4;
+  bool priority = 5;
+  string mode = 6;
+  string type = 7;
+}
+
+message Block {
+  repeated BlockItem items = 1;
+  bool rec_math = 2;
+  string type = 3;
+}
+
+message BlockItem {
+  int32 count = 1;
+  int32 id = 2;
+}
+
+message ChampionSpell {
+  string cooldown_burn = 1;
+  string resource = 2;
+  LevelTip leveltip = 3;
+  repeated SpellVars vars = 4;
+  string cost_type = 5;
+  Image image = 6;
+  string sanitized_description = 7;
+  string sanitized_tooltip = 8;
+  //repeated repeated double effect = 9;
+  string tooltip = 10;
+  int32 maxrank = 11;
+  string cost_burn = 12;
+  string range_burn = 13;
+  repeated int32 range = 14;
+  repeated double cooldown = 15;
+  repeated int32 cost = 16;
+  string key = 17;
+  string description = 18;
+  repeated string effect_burn = 19;
+  repeated Image altimages = 20;
+  string name = 21;
+}
+
+message LevelTip {
+  repeated string effect = 1;
+  repeated string label = 2;
+}
+
+message SpellVars {
+  string ranks_with = 1;
+  string dyn = 2;
+  string link = 3;
+  repeated double coeff = 4;
+  string key = 5;
+}
+
+message ListItemsRequest {
+  string locale = 1;
+  string version = 2;
+  repeated string tags = 3;
+}
+
+message ListItemsResponse {
+  map<string, Item> data = 1;
+  string version = 2;
+  repeated ItemTree tree = 3;
+  repeated Group groups = 4;
+  string type = 5;
+}
+
+message ItemTree {
+  string header = 1;
+  repeated string tags = 2;
+}
+
+message Item {
+  Gold gold = 1;
+  string plaintext = 2;
+  bool hide_from_all = 3;
+  bool in_store = 4;
+  repeated string into = 5;
+  int32 id = 6;
+  //InventoryDataStats stats = 7;
+  string colloq = 8;
+  map<string, bool> maps = 9;
+  int32 special_recipe = 10;
+  Image image = 11;
+  string description = 12;
+  repeated string tags = 13;
+  map<string, string> effect = 14;
+  string required_champion = 15;
+  repeated string from = 16;
+  string group = 17;
+  bool consume_on_full = 18;
+  string name = 19;
+  bool consumed = 20;
+  string sanitized_description = 21;
+  int32 depth = 22;
+  int32 stacks = 23;
+}
+
+message Gold {
+  int32 sell = 1;
+  int32 total = 2;
+  int32 base = 3;
+  bool purchasable = 4;
+}
+
+//message InventoryDataStats {
+//PercentCritDamageMod	double
+//PercentSpellBlockMod	double
+//PercentHPRegenMod	double
+//PercentMovementSpeedMod	double
+//FlatSpellBlockMod	double
+//FlatCritDamageMod	double
+//FlatEnergyPoolMod	double
+//PercentLifeStealMod	double
+//FlatMPPoolMod	double
+//FlatMovementSpeedMod	double
+//PercentAttackSpeedMod	double
+//FlatBlockMod	double
+//PercentBlockMod	double
+//FlatEnergyRegenMod	double
+//PercentSpellVampMod	double
+//FlatMPRegenMod	double
+//PercentDodgeMod	double
+//FlatAttackSpeedMod	double
+//FlatArmorMod	double
+//FlatHPRegenMod	double
+//PercentMagicDamageMod	double
+//PercentMPPoolMod	double
+//FlatMagicDamageMod	double
+//PercentMPRegenMod	double
+//PercentPhysicalDamageMod	double
+//FlatPhysicalDamageMod	double
+//PercentHPPoolMod	double
+//PercentArmorMod	double
+//PercentCritChanceMod	double
+//PercentEXPBonus	double
+//FlatHPPoolMod	double
+//FlatCritChanceMod	double
+//FlatEXPBonus	double
+//}
+
+message Group {
+  string max_group_ownable = 1;
+  string key = 2;
+}
+
+message ListMasteriesRequest {
+  string locale = 1;
+  string version = 2;
+  repeated string tags = 3;
+}
+
+message ListMasteriesResponse {
+  map<string, Mastery> data = 1;
+  string version = 2;
+  MasteryTree tree = 3;
+  string type = 4;
+}
+
+message MasteryTree {
+  repeated MasteryTreeList Resolve = 1;
+  repeated MasteryTreeList Ferocity = 2;
+  repeated MasteryTreeList Cunning = 3;
+}
+
+message MasteryTreeList {
+  repeated MasteryTreeItem mastery_tree_items = 1;
+}
+
+message MasteryTreeItem {
+  int32 mastery_id = 1;
+  string prereq = 2;
+}
+
+message Mastery {
+  string prereq = 1;
+  enum Tree {
+    INVALID_TREE = 0;
+    Cunning = 1;
+    Ferocity = 2;
+    Resolve = 3;
+  }
+  Tree mastery_tree = 2;
+  string name = 3;
+  int32 ranks = 4;
+  Image image = 5;
+  repeated string sanitized_description = 6;
+  int32 id = 7;
+  repeated string description = 8;
+}

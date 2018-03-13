@@ -1,0 +1,57 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot;
+
+import "google/protobuf/any.proto";
+
+message Bet {
+  // The name of the game for which this bet is placed.
+  string game = 1;
+
+  // The user who placed the bet.
+  string user = 2;
+
+  // The target for the bet. Combined with the game/user, this makes a unique
+  // key. E.g., stock symbol, league match_id.
+  string target = 3;
+
+  // Amount of hypecoins wagered.
+  int64 amount = 4;
+
+  // Looks like a binary decision of if we are for/against the target, but
+  // sometime later truth may not be binary.
+  enum Direction {
+    FOR = 0;
+    AGAINST = 1;
+  }
+  Direction direction = 5;
+
+  // Name of the bot who is responsible for resolving this bet. If not set, any
+  // bot can resolve the bet.
+  string resolver = 6;
+
+  // Game-specific data.
+  google.protobuf.Any data = 7;
+}
+
+message StockData {
+  double quote = 1;
+}
+
+message LCSData {
+  string winner = 1;
+  string loser = 2;
+}

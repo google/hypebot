@@ -1,0 +1,44 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot;
+
+// Ordered list of messages output by the execution of a Hypebot command.
+message MessageList {
+  // The ordered list of output messages.
+  repeated Message messages = 1;
+}
+
+// A single message from the ordered output of a Hypebot command's execution.
+message Message {
+  oneof message {
+    // A text-only message. Text messages may include IRC markup.
+    string text = 1;
+
+    // A message that may be rendered as a card.
+    CardMessage card = 2;
+  }
+}
+
+// Specification for optionally rendering a message as a card.
+//
+// Client interfaces that support card rendering must only render `card`. All
+// other client interfaces must render the `alternate_text` specification
+// instead.
+message CardMessage {
+  // Alternate text-only specification for rendering the message. Text
+  // specifications may include IRC markup.
+  repeated string alternate_text = 2;
+}

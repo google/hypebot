@@ -1,0 +1,249 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot.riot.v3;
+
+import "hypebot/protos/riot/v3/constants.proto";
+
+service MatchService {
+  rpc ListRecentMatches(ListRecentMatchesRequest)
+      returns (ListMatchesResponse) {
+  }
+  rpc ListRankedMatches(ListRankedMatchesRequest)
+      returns (ListMatchesResponse) {
+  }
+  rpc ListTournamentMatchIds(ListTournamentMatchIdsRequest)
+      returns (ListTournamentMatchIdsResponse) {
+  }
+  rpc GetMatch(GetMatchRequest) returns (Match) {
+  }
+}
+
+message ListRecentMatchesRequest {
+  // REQUIRED
+  int64 account_id = 1;
+}
+
+message ListRankedMatchesRequest {
+  // REQUIRED
+  int64 account_id = 1;
+
+  repeated QueueType queues = 2;
+  repeated Season seasons = 3;
+  repeated int32 champions = 4;
+  int64 begin_time_ms = 5;
+  int64 end_time_ms = 6;
+  int32 begin_index = 7;
+  int32 end_index = 8;
+}
+
+message ListMatchesResponse {
+  repeated MatchReference matches = 1;
+  int32 total_games = 2;
+  int32 start_index = 3;
+  int32 end_index = 4;
+}
+
+message MatchReference {
+  // Lane lane = 1;
+  int64 game_id = 2;
+  int32 champion = 3;
+  string platform_id = 4;
+  Season season = 5;
+  QueueType queue = 6;
+  Role role = 7;
+  int64 timestamp = 8;
+}
+
+message ListTournamentMatchIdsRequest {
+  string tournament_code = 1;
+}
+
+message ListTournamentMatchIdsResponse {
+  repeated int64 game_ids = 1;
+}
+
+message GetMatchRequest {
+  // REQUIRED
+  int64 game_id = 1;
+
+  string tournament_code = 2;
+}
+
+message Match {
+  Season season_id = 1;
+  QueueType queue_id = 2;
+  int64 game_id = 3;
+  repeated ParticipantIdentity participant_identities = 4;
+  string game_version = 5;
+  string platform_id = 6;
+  string game_mode = 7;
+  int32 map_id = 8;
+  string game_type = 9;
+  repeated TeamStats teams = 10;
+  repeated Participant participants = 11;
+  int64 game_duration = 12;
+  int64 game_creation = 13;
+}
+
+message ParticipantIdentity {
+  Player player = 1;
+  int32 participant_id = 2;
+}
+
+message Player {
+  string current_platform_id = 1;
+  string summoner_name = 2;
+  string match_history_uri = 3;
+  string platform_id = 4;
+  int64 current_account_id = 5;
+  int32 profile_icon = 6;
+  int64 summoner_id = 7;
+  int64 account_id = 8;
+}
+
+message TeamStats {
+  bool first_dragon = 1;
+  bool first_inhibitor = 2;
+  repeated TeamBans bans = 3;
+  int32 baron_kills = 4;
+  bool first_rift_herald = 5;
+  bool first_baron = 6;
+  int32 rift_herald_kills = 7;
+  bool first_blood = 8;
+  int32 team_id = 9;
+  bool first_tower = 10;
+  int32 vilemaw_kills = 11;
+  int32 inhibitor_kills = 12;
+  int32 tower_kills = 13;
+  int32 dominion_victory_score = 14;
+  string win = 15;
+  int32 dragon_kills = 16;
+}
+
+message TeamBans {
+  int32 pick_turn = 1;
+  int32 champion_id = 2;
+}
+
+message Participant {
+  ParticipantStats stats = 1;
+  int32 participant_id = 2;
+  repeated Rune runes = 3;
+  ParticipantTimeline timeline = 4;
+  int32 team_id = 5;
+  int32 spell2_id = 6;
+  message Mastery {
+    int32 mastery_id = 1;
+    int32 rank = 2;
+  }
+  repeated Mastery masteries = 7;
+  Tier highest_achieved_season_tier = 8;
+  int32 spell1_id = 9;
+  int32 champion_id = 10;
+}
+
+message ParticipantStats {
+  int64 physical_damage_dealt = 1;
+  int32 neutral_minions_killed_team_jungle = 2;
+  int64 magic_damage_dealt = 3;
+  int32 total_player_score = 4;
+  int32 deaths = 5;
+  bool win = 6;
+  int32 neutral_minions_killed_enemy_jungle = 7;
+  int32 altars_captured = 8;
+  int32 largest_critical_strike = 9;
+  int64 total_damage_dealt = 10;
+  int64 magic_damage_dealt_to_champions = 11;
+  int32 vision_wards_bought_in_game = 12;
+  int64 damage_dealt_to_objectives = 13;
+  int32 largest_killing_spree = 14;
+  int32 item1 = 15;
+  int32 quadra_kills = 16;
+  int32 team_objective = 17;
+  int32 total_time_crowd_control_dealt = 18;
+  int32 longest_time_spent_living = 19;
+  int32 wards_killed = 20;
+  bool first_tower_assist = 21;
+  bool first_tower_kill = 22;
+  int32 item2 = 23;
+  int32 item3 = 24;
+  int32 item0 = 25;
+  bool first_blood_assist = 26;
+  int64 vision_score = 27;
+  int32 wards_placed = 28;
+  int32 item4 = 29;
+  int32 item5 = 30;
+  int32 item6 = 31;
+  int32 turret_kills = 32;
+  int32 triple_kills = 33;
+  int64 damage_self_mitigated = 34;
+  int32 champ_level = 35;
+  int32 node_neutralize_assist = 36;
+  bool first_inhibitor_kill = 37;
+  int32 gold_earned = 38;
+  int64 magical_damage_taken = 39;
+  int32 kills = 40;
+  int32 double_kills = 41;
+  int32 node_capture_assist = 42;
+  int64 true_damage_taken = 43;
+  int32 node_neutralize = 44;
+  bool first_inhibitor_assist = 45;
+  int32 assists = 46;
+  int32 unreal_kills = 47;
+  int32 neutral_minions_killed = 48;
+  int32 objective_player_score = 49;
+  int32 combat_player_score = 50;
+  int64 damage_dealt_to_turrets = 51;
+  int32 altars_neutralized = 52;
+  int64 physical_damage_dealt_to_champions = 53;
+  int32 gold_spent = 54;
+  int64 true_damage_dealt = 55;
+  int64 true_damage_dealt_to_champions = 56;
+  int32 participant_id = 57;
+  int32 penta_kills = 58;
+  int64 total_heal = 59;
+  int32 total_minions_killed = 60;
+  bool first_blood_kill = 61;
+  int32 node_capture = 63;
+  int32 largest_multi_kill = 64;
+  int32 sight_wards_bought_in_game = 65;
+  int64 total_damage_dealt_to_champions = 66;
+  int32 total_units_healed = 67;
+  int32 inhibitor_kills = 68;
+  int32 total_score_rank = 69;
+  int64 total_damage_taken = 70;
+  int32 killing_sprees = 71;
+  int64 time_c_cing_others = 72;
+  int64 physical_damage_taken = 73;
+}
+
+message Rune {
+  int32 rune_id = 1;
+  int32 rank = 2;
+}
+
+message ParticipantTimeline {
+  // Lane lane = 1;
+  int32 participant_id = 2;
+  map<string, double> cs_diff_per_min_deltas = 3;
+  map<string, double> gold_per_min_deltas = 4;
+  map<string, double> xp_diff_per_min_deltas = 5;
+  map<string, double> creeps_per_min_deltas = 6;
+  map<string, double> xp_per_min_deltas = 7;
+  Role role = 8;
+  map<string, double> damage_taken_diff_per_min_deltas = 9;
+  map<string, double> damage_taken_per_min_deltas = 10;
+}

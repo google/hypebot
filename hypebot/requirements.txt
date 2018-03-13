@@ -1,0 +1,10 @@
+arrow
+# APScheduler v3 has breaking API changes, so pin it to a v2 release.
+apscheduler==2.1.2
+backports.functools_lru_cache
+discord
+grpcio
+inflection
+redis
+retrying
+requests
