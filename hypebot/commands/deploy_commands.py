@@ -13,6 +13,11 @@
 # limitations under the License.
 """Commands for deployment."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 from absl import logging
 from hypebot import hypecore
 from hypebot.commands import command_lib
