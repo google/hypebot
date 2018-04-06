@@ -495,8 +495,8 @@ class GameLib(object):
     tooltip = util_lib.Dankify(rune.long_desc)
     var_table = client_vars.REFORGED_RUNE_VARS.get(rune.key, {})
     tooltip = re.sub(
-        ur'@.+?@',
-        lambda match: var_table.get(match.group(0), ur'¯\_(ツ)_/¯'), tooltip)
+        r'@.+?@',
+        lambda match: var_table.get(match.group(0), r'¯\_(ツ)_/¯'), tooltip)
     slot = self._reforged_rune_slot[rune.key]
     path_description = '{} {}'.format(
         rune.rune_path_name, 'Keystone'
@@ -507,9 +507,9 @@ class GameLib(object):
     rune_strs.append('{}: {}'.format(rune_name, path_description))
 
     tooltip_strs = []
-    for line in util_lib.AsText(tooltip).split(u'<br>'):
+    for line in tooltip.split('<br>'):
       if line:
-        line = re.sub(ur'<.+?>', u'', line)
+        line = re.sub(r'<.+?>', '', line)
         tooltip_strs += self._CleanChampionWrap(line)
     rune_strs += tooltip_strs
 
