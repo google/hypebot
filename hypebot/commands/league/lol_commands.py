@@ -59,6 +59,13 @@ class PatchNotesCommand(command_lib.BaseCommand):
     return base_link % patch
 
 
+@command_lib.CommandRegexParser(r'rune (.+)')
+class ReforgedRuneCommand(command_lib.BaseCommand):
+
+  def _Handle(self, channel, user, rune_name):
+    return self._core.game.GetReforgedRuneMessage(rune_name)
+
+
 @command_lib.CommandRegexParser(r'set-api-key ([\w]+)', reply_to_public=False)
 class SetApiKeyCommand(command_lib.BaseCommand):
   """Set rito api key."""

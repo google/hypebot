@@ -35,23 +35,7 @@ func NewMatchService(c *http.Client) *MatchService {
 	return &MatchService{c: c}
 }
 
-func (s *MatchService) ListRecentMatches(ctx context.Context, in *matchpb.ListRecentMatchesRequest) (*matchpb.ListMatchesResponse, error) {
-	u := &url.URL{
-		Host:   fmt.Sprintf("%s.api.riotgames.com", util.GetPlatformID(ctx)),
-		Scheme: "https",
-		Path:	fmt.Sprintf("/lol/match/v3/matchlists/by-account/%d/recent", in.AccountId),
-	}
-	req, err := http.NewRequest("GET", u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	out := &matchpb.ListMatchesResponse{}
-	err = util.DoWithAPIKey(ctx, s.c, req, out)
-	return out, err
-}
-
-func (s *MatchService) ListRankedMatches(ctx context.Context, in *matchpb.ListRankedMatchesRequest) (*matchpb.ListMatchesResponse, error) {
+func (s *MatchService) ListMatches(ctx context.Context, in *matchpb.ListMatchesRequest) (*matchpb.ListMatchesResponse, error) {
 	u := &url.URL{
 		Host:   fmt.Sprintf("%s.api.riotgames.com", util.GetPlatformID(ctx)),
 		Scheme: "https",

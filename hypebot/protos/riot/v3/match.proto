@@ -18,10 +18,7 @@ package hypebot.riot.v3;
 import "hypebot/protos/riot/v3/constants.proto";
 
 service MatchService {
-  rpc ListRecentMatches(ListRecentMatchesRequest)
-      returns (ListMatchesResponse) {
-  }
-  rpc ListRankedMatches(ListRankedMatchesRequest)
+  rpc ListMatches(ListMatchesRequest)
       returns (ListMatchesResponse) {
   }
   rpc ListTournamentMatchIds(ListTournamentMatchIdsRequest)
@@ -31,17 +28,12 @@ service MatchService {
   }
 }
 
-message ListRecentMatchesRequest {
-  // REQUIRED
-  int64 account_id = 1;
-}
-
-message ListRankedMatchesRequest {
+message ListMatchesRequest {
   // REQUIRED
   int64 account_id = 1;
 
-  repeated QueueType queues = 2;
-  repeated Season seasons = 3;
+  repeated QueueType.Enum queues = 2;
+  repeated Season.Enum seasons = 3;
   repeated int32 champions = 4;
   int64 begin_time_ms = 5;
   int64 end_time_ms = 6;
@@ -61,9 +53,9 @@ message MatchReference {
   int64 game_id = 2;
   int32 champion = 3;
   string platform_id = 4;
-  Season season = 5;
-  QueueType queue = 6;
-  Role role = 7;
+  Season.Enum season = 5;
+  QueueType.Enum queue = 6;
+  Role.Enum role = 7;
   int64 timestamp = 8;
 }
 
@@ -150,7 +142,7 @@ message Participant {
     int32 rank = 2;
   }
   repeated Mastery masteries = 7;
-  Tier highest_achieved_season_tier = 8;
+  Tier.Enum highest_achieved_season_tier = 8;
   int32 spell1_id = 9;
   int32 champion_id = 10;
 }
@@ -236,14 +228,14 @@ message Rune {
 }
 
 message ParticipantTimeline {
-  // Lane lane = 1;
+  Lane.Enum lane = 1;
   int32 participant_id = 2;
   map<string, double> cs_diff_per_min_deltas = 3;
   map<string, double> gold_per_min_deltas = 4;
   map<string, double> xp_diff_per_min_deltas = 5;
   map<string, double> creeps_per_min_deltas = 6;
   map<string, double> xp_per_min_deltas = 7;
-  Role role = 8;
+  Role.Enum role = 8;
   map<string, double> damage_taken_diff_per_min_deltas = 9;
   map<string, double> damage_taken_per_min_deltas = 10;
 }

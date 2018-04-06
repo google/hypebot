@@ -83,6 +83,7 @@ class HypeBot(basebot.BaseBot):
           'ItemCommand': {},
           'LoreCommand': {},
           'PatchNotesCommand': {},
+          'ReforgedRuneCommand': {},
           'SetApiKeyCommand': {},
           'SkillCommand': {},
           'StatsCommand': {},

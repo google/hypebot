@@ -16,6 +16,12 @@ package(default_visibility = ["//hypebot:private"])
 licenses(["notice"])  # Apache 2.0
 
 py_library(
+    name = "client_vars",
+    srcs = ["client_vars.py"],
+    deps = [],
+)
+
+py_library(
     name = "messages",
     srcs = ["messages.py"],
     deps = [],
