@@ -93,6 +93,17 @@ py_library(
         ":params_lib",
         "//hypebot/protos:user_py_pb2",
         requirement("arrow"),
+        requirement("six"),
+    ],
+)
+
+py_test(
+    name = "util_lib_test",
+    srcs = ["util_lib_test.py"],
+    deps = [
+        ":util_lib",
+        requirement("arrow"),
+        requirement("mock"),
     ],
 )
 
