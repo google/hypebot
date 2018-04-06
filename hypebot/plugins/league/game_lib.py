@@ -41,6 +41,7 @@ from typing import List, Text
 
 from hypebot.core import name_complete_lib
 from hypebot.core import util_lib
+from hypebot.data.league import client_vars
 from hypebot.data.league import nicknames
 
 
@@ -78,7 +79,9 @@ class GameLib(object):
     self._champ_name_complete = None
     self._champ_name_to_champ_map = {}
     self._canonical_champ_names = []
-    self._LoadChampions()
+    self._reforged_runes_name_complete = None
+    self._reforged_rune_slot = {}
+    self.ReloadData()
 
   @property
   def champion_id_to_name(self):
@@ -92,7 +95,7 @@ class GameLib(object):
   def ReloadData(self):
     """Reload LoL game-related data into memory from the Rito API."""
     self._LoadChampions()
-    self._LoadMasteries()
+    self._LoadReforgedRunes()
 
   def _LoadChampions(self):
     """Logic for loading champions. Stored in-memory."""
@@ -120,6 +123,30 @@ class GameLib(object):
     self.champion_id_to_name = new_champion_id_to_name
     self._version = champions_response.version
     self.version = '.'.join(self._version.rsplit('.', 1)[0])
+
+  def _LoadReforgedRunes(self):
+    """Logic for loading reforged runes. Stored in-memory."""
+
+    runes_response = self._rito.ListReforgedRunePaths()
+    if not runes_response:
+      return
+
+    canonical_name_map = {}
+    new_reforged_rune_slot = {}
+    for path in runes_response.paths:
+      for i, slot in enumerate(path.slots):
+        for rune in slot.runes:
+          rune.rune_path_name = path.name
+          canonical_name = util_lib.CanonicalizeName(rune.key)
+          canonical_name_map[canonical_name] = rune
+          new_reforged_rune_slot[rune.key] = i
+
+    self._reforged_runes_name_complete = name_complete_lib.NameComplete(
+        {},
+        canonical_name_map,
+        [rune.name for _, rune in canonical_name_map.items()],
+        dankify=True)
+    self._reforged_rune_slot = new_reforged_rune_slot
 
   def GetAllChampNames(self):
     """Returns a list of all champ names."""
@@ -452,6 +479,41 @@ class GameLib(object):
     if not champ:
       return None
     return self.GetImageUrl('champion', champ.image.full)
+
+  def GetReforgedRuneMessage(self, rune_name):
+    """Gets the reforged rune."""
+    if self._reforged_runes_name_complete:
+      rune = self._reforged_runes_name_complete.GuessThing(rune_name)
+      if rune:
+        return self._ComputeReforgedRuneCard(rune)
+
+    return 'Reforged rune "{}" not found.'.format(rune_name)
+
+  def _ComputeReforgedRuneCard(self, rune):
+    # Make runes more dank.
+    rune_name = util_lib.Dankify(rune.name)
+    tooltip = util_lib.Dankify(rune.long_desc)
+    var_table = client_vars.REFORGED_RUNE_VARS.get(rune.key, {})
+    tooltip = re.sub(
+        ur'@.+?@',
+        lambda match: var_table.get(match.group(0), ur'¯\_(ツ)_/¯'), tooltip)
+    slot = self._reforged_rune_slot[rune.key]
+    path_description = '{} {}'.format(
+        rune.rune_path_name, 'Keystone'
+        if slot == 0 else 'Tier {}'.format(slot))
+
+    rune_strs = []
+
+    rune_strs.append('{}: {}'.format(rune_name, path_description))
+
+    tooltip_strs = []
+    for line in util_lib.AsText(tooltip).split(u'<br>'):
+      if line:
+        line = re.sub(ur'<.+?>', u'', line)
+        tooltip_strs += self._CleanChampionWrap(line)
+    rune_strs += tooltip_strs
+
+    return rune_strs
 
   @staticmethod
   def _CleanChampionWrap(description: Text) -> List[Text]:

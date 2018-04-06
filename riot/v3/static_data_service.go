@@ -14,7 +14,9 @@
 package api
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -113,5 +115,31 @@ func (s *StaticDataService) ListMasteries(ctx context.Context, in *staticpb.List
 	}
 	out := &staticpb.ListMasteriesResponse{}
 	err = util.DoWithAPIKey(ctx, s.c, req, out)
+	return out, err
+}
+
+func (s *StaticDataService) ListReforgedRunePaths(ctx context.Context, in *staticpb.ListReforgedRunePathsRequest) (*staticpb.ListReforgedRunePathsResponse, error) {
+	u := &url.URL{
+		Host:   fmt.Sprintf("%s.api.riotgames.com", util.GetPlatformID(ctx)),
+		Scheme: "https",
+		Path:   "/lol/static-data/v3/reforged-rune-paths",
+	}
+	v := url.Values{}
+	if in.Locale != "" {
+		v.Add("locale", in.Locale)
+	}
+	if in.Version != "" {
+		v.Add("version", in.Version)
+	}
+	u.RawQuery = v.Encode()
+
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	out := &staticpb.ListReforgedRunePathsResponse{}
+	err = util.DoWithAPIKeyAndTransformBody(ctx, s.c, req, func(r io.Reader) io.Reader {
+		return io.MultiReader(bytes.NewReader([]byte("{ \"paths\": ")), r, bytes.NewReader([]byte(" }")))
+	}, out)
 	return out, err
 }

@@ -173,3 +173,9 @@ class RitoLib(object):
         static_data_pb2.ListChampionsRequest(
             tags=['image', 'lore', 'stats', 'spells', 'passive']),
         'na')
+
+  def ListReforgedRunePaths(self):
+    return self._CallApi(
+        self._static_data_service.ListReforgedRunePaths,
+        static_data_pb2.ListReforgedRunePathsRequest(),
+        'na')

@@ -36,6 +36,7 @@ py_library(
     deps = [
         "//hypebot/core:name_complete_lib",
         "//hypebot/core:util_lib",
+        "//hypebot/data/league:client_vars",
         "//hypebot/data/league:nicknames",
     ],
 )

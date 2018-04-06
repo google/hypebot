@@ -44,6 +44,19 @@ service StaticDataService {
   }
   rpc ListRealms(ListRealmsRequest) returns (ListRealmsResponse) {
   }
+  */
+  rpc ListReforgedRunePaths(ListReforgedRunePathsRequest)
+      returns (ListReforgedRunePathsResponse) {
+  }
+  /*
+  rpc GetReforgedRunePath(GetReforgedRunePathRequest)
+      returns (ReforgedRunePath) {
+  }
+  rpc ListReforgedRunes(ListReforgedRunesRequest)
+      returns (ListReforgedRunesResponse) {
+  }
+  rpc GetReforgedRune(GetReforgedRuneRequest) returns (ReforgedRune) {
+  }
   rpc ListRunes(ListRunesRequest) returns (ListRunesResponse) {
   }
   rpc GetRune(GetRuneRequest) returns (Rune) {
@@ -340,4 +353,43 @@ message Mastery {
   repeated string sanitized_description = 6;
   int32 id = 7;
   repeated string description = 8;
+}
+
+message ListReforgedRunePathsRequest {
+  string locale = 1;
+  string version = 2;
+}
+
+message ListReforgedRunePathsResponse {
+  repeated ReforgedRunePath paths = 1;
+}
+
+message ReforgedRunePath {
+  int32 id = 1;
+  string key = 2;
+  string name = 3;
+
+  // Ordered list of rune slots in the path. The keystone slot is first.
+  repeated ReforgedRuneSlot slots = 4;
+
+  string icon = 5;
+}
+
+message ReforgedRuneSlot {
+  // Ordered list of rune choices for the rune slot.
+  repeated ReforgedRune runes = 1;
+}
+
+message ReforgedRune {
+  int32 id = 1;
+  string key = 2;
+  string name = 3;
+
+  int32 rune_path_id = 4;
+  string rune_path_name = 5;
+
+  string short_desc = 6;
+  string long_desc = 7;
+
+  string icon = 8;
 }
