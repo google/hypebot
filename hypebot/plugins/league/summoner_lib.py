@@ -36,21 +36,21 @@ GAME_MODES = {
     'ARAM': 'ARAM',
     'ASCENSION': 'Ascension',
     'CLASSIC': {
-        constants_pb2.BOT_5x5: 'Bots',
-        constants_pb2.BOT_TT_3x3: 'TT Bots',
-        constants_pb2.GROUP_FINDER_5x5: 'Team Builder',
-        constants_pb2.NORMAL_5x5_BLIND: 'Normals',
-        constants_pb2.NORMAL_5x5_DRAFT: 'Normals',
-        constants_pb2.NORMAL_3x3: 'TT Normals',
-        constants_pb2.ONEFORALL_5x5: 'One For All (SR)',
-        constants_pb2.RANKED_FLEX_SR: 'Flecks',
-        constants_pb2.RANKED_FLEX_TT: 'TT Flecks',
-        constants_pb2.RANKED_SOLO_5x5: 'YoloQ',
-        constants_pb2.TEAM_BUILDER_RANKED_SOLO: 'YoloQ',  # this is weird
-        constants_pb2.RANKED_TEAM_3x3: 'Ranked 3s',
-        constants_pb2.RANKED_TEAM_5x5: 'Ranked 5s',
-        constants_pb2.TEAM_BUILDER_DRAFT_UNRANKED_5x5: 'Normals',
-        constants_pb2.URF_5x5: 'URF',
+        constants_pb2.QueueType.BOT_5x5: 'Bots',
+        constants_pb2.QueueType.BOT_TT_3x3: 'TT Bots',
+        constants_pb2.QueueType.GROUP_FINDER_5x5: 'Team Builder',
+        constants_pb2.QueueType.NORMAL_5x5_BLIND: 'Normals',
+        constants_pb2.QueueType.NORMAL_5x5_DRAFT: 'Normals',
+        constants_pb2.QueueType.NORMAL_3x3: 'TT Normals',
+        constants_pb2.QueueType.ONEFORALL_5x5: 'One For All (SR)',
+        constants_pb2.QueueType.RANKED_FLEX_SR: 'Flecks',
+        constants_pb2.QueueType.RANKED_FLEX_TT: 'TT Flecks',
+        constants_pb2.QueueType.RANKED_SOLO_5x5: 'YoloQ',
+        constants_pb2.QueueType.TEAM_BUILDER_RANKED_SOLO: 'YoloQ',  # this is weird
+        constants_pb2.QueueType.RANKED_TEAM_3x3: 'Ranked 3s',
+        constants_pb2.QueueType.RANKED_TEAM_5x5: 'Ranked 5s',
+        constants_pb2.QueueType.TEAM_BUILDER_DRAFT_UNRANKED_5x5: 'Normals',
+        constants_pb2.QueueType.URF_5x5: 'URF',
     },
     'KINGPORO': 'Poro King',
     'ODIN': 'Dominion',
@@ -152,9 +152,10 @@ class SummonerLib(object):
     if r:
       leagues = r.positions
       for league in leagues:
-        if league.queue_type == constants_pb2.RANKED_SOLO_5x5:
-          tier = constants_pb2.Tier.Name(league.tier)[0].upper()
-          division = self._RomanToLatin(league_pb2.TierRank.Name(league.rank))
+        if league.queue_type == constants_pb2.QueueType.RANKED_SOLO_5x5:
+          tier = constants_pb2.Tier.Enum.Name(league.tier)[0].upper()
+          division = self._RomanToLatin(
+              league_pb2.TierRank.Enum.Name(league.rank))
           rank = tier + division
     if not rank:
       rank = 'Unranked'

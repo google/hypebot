@@ -31,19 +31,21 @@ message ListLeaguePositionsResponse {
   repeated LeaguePosition positions = 1;
 }
 
-enum TierRank {
-  INVALID_RANK = 0;
+message TierRank {
+  enum Enum {
+    INVALID_RANK = 0;
 
-  I = 1;
-  II = 2;
-  III = 3;
-  IV = 4;
-  V = 5;
+    I = 1;
+    II = 2;
+    III = 3;
+    IV = 4;
+    V = 5;
+  }
 }
 
 message LeaguePosition {
-  TierRank rank = 1;
-  QueueType queue_type = 2;
+  TierRank.Enum rank = 1;
+  QueueType.Enum queue_type = 2;
   bool hot_streak = 3;
   MiniSeries mini_series = 4;
   int32 wins = 5;
@@ -54,7 +56,7 @@ message LeaguePosition {
   string player_or_team_name = 10;
   bool inactive = 11;
   bool fresh_blood = 12;
-  Tier tier = 13;
+  Tier.Enum tier = 13;
   int32 league_points = 14;
 }
 
