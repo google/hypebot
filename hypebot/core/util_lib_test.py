@@ -23,7 +23,7 @@ import unittest
 import arrow
 import mock
 
-import util_lib
+from hypebot.core import util_lib
 
 
 class UtilLibTest(unittest.TestCase):
