@@ -18,10 +18,7 @@ package hypebot.riot.v3;
 import "hypebot/protos/riot/v3/constants.proto";
 
 service MatchService {
-  rpc ListRecentMatches(ListRecentMatchesRequest)
-      returns (ListMatchesResponse) {
-  }
-  rpc ListRankedMatches(ListRankedMatchesRequest)
+  rpc ListMatches(ListMatchesRequest)
       returns (ListMatchesResponse) {
   }
   rpc ListTournamentMatchIds(ListTournamentMatchIdsRequest)
@@ -31,12 +28,7 @@ service MatchService {
   }
 }
 
-message ListRecentMatchesRequest {
-  // REQUIRED
-  int64 account_id = 1;
-}
-
-message ListRankedMatchesRequest {
+message ListMatchesRequest {
   // REQUIRED
   int64 account_id = 1;
 

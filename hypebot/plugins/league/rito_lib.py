@@ -150,8 +150,8 @@ class RitoLib(object):
 
   def ListRecentMatches(self, region, account_id):
     return self._CallApi(
-        self._match_service.ListRecentMatches,
-        match_pb2.ListRecentMatchesRequest(account_id=account_id),
+        self._match_service.ListMatches,
+        match_pb2.ListMatchesRequest(account_id=account_id, end_index=20),
         region)
 
   def GetMatch(self, region, game_id):
