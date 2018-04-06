@@ -26,6 +26,7 @@ from threading import Lock
 import unicodedata
 
 import arrow
+import six
 from typing import Text, Union
 
 from hypebot.core import params_lib
@@ -288,7 +289,7 @@ def Dankify(string):
 
 def FuzzyBool(value):
   """Returns value as a boolean with special handling for false-like strings."""
-  if (isinstance(value, basestring) and
+  if (isinstance(value, six.string_types) and
       value.strip().lower() in ('false', 'no', '0')):
     return False
   return bool(value)

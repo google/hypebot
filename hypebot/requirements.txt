@@ -5,6 +5,8 @@ backports.functools_lru_cache
 discord
 grpcio
 inflection
+mock
 redis
 retrying
 requests
+six
