@@ -31,13 +31,14 @@ import (
 )
 
 var (
+	hostname = flag.String("host", "localhost", "The server hostname")
 	port = flag.Int("port", 50051, "The server port")
 )
 
 func main() {
 	flag.Parse()
-	log.Printf("%s:%d", "localhost", *port)
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "localhost", *port))
+	log.Printf("%s:%d", *hostname, *port)
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", *hostname, *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
