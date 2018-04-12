@@ -20,8 +20,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/vilhelm/hypebot/riot/util"
-	leaguepb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/league_go"
+	"github.com/google/hypebot/riot/util"
+	leaguepb "github.com/google/hypebot/hypebot/protos/riot/v3/league_go"
 
 	"golang.org/x/net/context"
 )

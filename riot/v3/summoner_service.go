@@ -18,8 +18,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/vilhelm/hypebot/riot/util"
-	summonerpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/summoner_go"
+	"github.com/google/hypebot/riot/util"
+	summonerpb "github.com/google/hypebot/hypebot/protos/riot/v3/summoner_go"
 
 	"golang.org/x/net/context"
 )
