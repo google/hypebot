@@ -21,8 +21,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/vilhelm/hypebot/riot/util"
-	matchpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/match_go"
+	"github.com/google/hypebot/riot/util"
+	matchpb "github.com/google/hypebot/hypebot/protos/riot/v3/match_go"
 
 	"golang.org/x/net/context"
 )

@@ -20,12 +20,12 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/vilhelm/hypebot/riot/v3/api"
-	cmasterypb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/champion_mastery_go"
-	leaguepb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/league_go"
-	matchpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/match_go"
-	staticpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/static_data_go"
-	summonerpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/summoner_go"
+	"github.com/google/hypebot/riot/v3/api"
+	cmasterypb "github.com/google/hypebot/hypebot/protos/riot/v3/champion_mastery_go"
+	leaguepb "github.com/google/hypebot/hypebot/protos/riot/v3/league_go"
+	matchpb "github.com/google/hypebot/hypebot/protos/riot/v3/match_go"
+	staticpb "github.com/google/hypebot/hypebot/protos/riot/v3/static_data_go"
+	summonerpb "github.com/google/hypebot/hypebot/protos/riot/v3/summoner_go"
 
 	"google.golang.org/grpc"
 )

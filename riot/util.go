@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	platformpb "github.com/vilhelm/hypebot/hypebot/protos/riot/platform_go"
+	platformpb "github.com/google/hypebot/hypebot/protos/riot/platform_go"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/jsonpb"

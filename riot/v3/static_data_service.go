@@ -20,8 +20,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/vilhelm/hypebot/riot/util"
-	staticpb "github.com/vilhelm/hypebot/hypebot/protos/riot/v3/static_data_go"
+	"github.com/google/hypebot/riot/util"
+	staticpb "github.com/google/hypebot/hypebot/protos/riot/v3/static_data_go"
 
 	"golang.org/x/net/context"
 )

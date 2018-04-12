@@ -13,4 +13,4 @@
 # limitations under the License.
 load("@io_bazel_rules_go//go:def.bzl", "go_prefix")
 
-go_prefix("github.com/vilhelm/hypebot")
+go_prefix("github.com/google/hypebot")
