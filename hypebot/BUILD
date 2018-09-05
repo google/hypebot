@@ -16,12 +16,42 @@ package(default_visibility = ["//hypebot:private"])
 licenses(["notice"])  # Apache 2.0
 
 load("@hypebot_deps//:requirements.bzl", "requirement")
+load("@org_pubref_rules_protobuf//python:rules.bzl", "py_proto_library")
 load("@subpar//:subpar.bzl", "par_binary")
 
 package_group(
     name = "private",
     packages = [
         "//hypebot/...",
+    ],
+)
+
+py_proto_library(
+    name = "all_py_pb2",
+    proto_deps = ["//google/protobuf:any_py_pb2"],
+    protos = glob(["**/*.proto"]),
+    with_grpc = True,
+)
+
+py_library(
+    name = "hypebot_lib",
+    srcs = glob(["**/*.py"]),
+    data = glob(["**/*.json"]),
+    deps = [
+        ":all_py_pb2",
+        "@com_google_protobuf//:protobuf_python",
+        "@io_abseil_py//absl/flags",
+        "@io_abseil_py//absl/logging",
+        "@six_archive//:six",
+        requirement("arrow"),
+        requirement("apscheduler"),
+        requirement("discord"),
+        requirement("grpcio"),
+        requirement("inflection"),
+        requirement("redis"),
+        requirement("retrying"),
+        requirement("requests"),
+        requirement("six"),
     ],
 )
 
@@ -33,18 +63,8 @@ par_binary(
     # Required since cacert.pem is not extracted otherwise.
     zip_safe = False,
     deps = [
-        ":hypecore",
-        "//hypebot/commands:command_factory",
-        "//hypebot/core:params_lib",
-        "//hypebot/core:util_lib",
-        "//hypebot/interfaces:interface_factory",
-        "//hypebot/plugins:alias_lib",
-        "//hypebot/plugins:vegas_game_lib",
-        "//hypebot/protos:channel_py_pb2",
+        ":hypebot_lib",
         "@io_abseil_py//absl:app",
-        "@io_abseil_py//absl/flags",
-        "@io_abseil_py//absl/logging",
-        requirement("arrow"),
     ],
 )
 
@@ -55,48 +75,7 @@ par_binary(
     srcs_version = "PY3",
     zip_safe = False,
     deps = [
-        ":basebot",
-        "//hypebot/core:params_lib",
-        "//hypebot/data/league:messages",
-        "//hypebot/plugins:vegas_game_lib",
-        "//hypebot/plugins/league:esports_lib",
-        "//hypebot/plugins/league:game_lib",
-        "//hypebot/plugins/league:items_lib",
-        "//hypebot/plugins/league:rito_lib",
-        "//hypebot/plugins/league:summoner_lib",
-        "//hypebot/plugins/league:trivia_lib",
-        "//hypebot/protos:channel_py_pb2",
+        ":hypebot_lib",
         "@io_abseil_py//absl:app",
-        "@io_abseil_py//absl/flags",
-    ],
-)
-
-py_library(
-    name = "hypecore",
-    srcs = ["hypecore.py"],
-    deps = [
-        ":types",
-        "//hypebot/core:async_lib",
-        "//hypebot/core:proxy_lib",
-        "//hypebot/core:schedule_lib",
-        "//hypebot/core:util_lib",
-        "//hypebot/core:zombie_lib",
-        "//hypebot/interfaces:interface_lib",
-        "//hypebot/plugins:coin_lib",
-        "//hypebot/plugins:deploy_lib",
-        "//hypebot/plugins:hypestack_lib",
-        "//hypebot/plugins:inventory_lib",
-        "//hypebot/protos:channel_py_pb2",
-        "//hypebot/stocks:stock_factory",
-        "//hypebot/storage:storage_factory",
-    ],
-)
-
-py_library(
-    name = "types",
-    srcs = ["types.py"],
-    deps = [
-        "//hypebot/protos:channel_py_pb2",
-        "//hypebot/protos:message_py_pb2",
     ],
 )
