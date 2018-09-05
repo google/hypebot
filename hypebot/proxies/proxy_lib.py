@@ -20,17 +20,18 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import abc
 from functools import partial
 import json
 
 from absl import logging
-import requests
+from six import with_metaclass
 
 from hypebot.core import cache_lib
 from hypebot.core import util_lib
 
 
-class Proxy(object):
+class Proxy(with_metaclass(abc.ABCMeta)):
   """A class to proxy requests."""
 
   _STORAGE_SUBKEY = 'fetch_results'
@@ -38,6 +39,18 @@ class Proxy(object):
   def __init__(self, store=None):
     self._request_cache = cache_lib.LRUCache(256, max_age=60 * 60)
     self._store = store
+
+  @abc.abstractmethod
+  def _GetUrl(self, url, params):
+    """Fetches data from a specified URL.
+
+    Args:
+      url: (string) URL to request data from
+      params: Dict of url GET params.
+
+    Returns:
+      HTTP response body if it exists, otherwise None
+    """
 
   def FlushCache(self):
     self._request_cache.Flush()
@@ -132,26 +145,13 @@ class Proxy(object):
     Returns:
       The data or None if the fetch failed.
     """
-    action = partial(self._FetchUrl, url, params)
+    action = partial(self._GetUrl, url, params)
     return self.RawFetch(
         util_lib.SafeUrl(url),
         action,
         validate_fn,
         force_lookup=force_lookup,
         use_storage=use_storage)
-
-  def _FetchUrl(self, url, params):
-    try:
-      req = requests.get(url,
-                         params=params,
-                         headers={'User-Agent': 'HypeBot'})
-      if req.status_code != requests.codes.ok:
-        self._LogError(url, req.status_code)
-        return None
-    except Exception as e:
-      self._LogError(url, exception=e)
-      return None
-    return req.text
 
   def _LogError(self, url, error_code=None, exception=None):
     """Logs an error in a standardized format."""

@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 
 from functools import partial
 import random
+from threading import Lock
 
 from absl import flags
 import arrow
@@ -120,9 +121,8 @@ class LCSLivestreamLinkCommand(command_lib.BaseCommand):
               'outside?')
 
 
-# TODO(b/65917977) Convert to a scheduled callback.
-@command_lib.PublicParser
-class LCSMatchNotificationCommand(command_lib.BasePublicCommand):
+class LCSMatchNotificationCommand(command_lib.BaseCommand):
+  """Sends a notification when matches are nearing scheduled start time."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS,
@@ -130,40 +130,56 @@ class LCSMatchNotificationCommand(command_lib.BasePublicCommand):
           # How soon before an LCS match to send a notification to subscribed
           # channels.
           'match_notification_sec': 15 * 60,
-          'ratelimit': {'enabled': False},
       })
 
-  def _Handle(self, channel, user, message):
-    now = arrow.utcnow()
-    for match in self._core.esports.schedule:
-      if channel.id in match['announced']:
-        continue
-      time_until_match = match['time'] - now
-      if time_until_match.days < 0 or time_until_match.seconds < 0:
-        match['announced'][channel.id] = True
-        continue
+  def __init__(self, *args):
+    super(LCSMatchNotificationCommand, self).__init__(*args)
+    self._core.esports.RegisterCallback(self._ScheduleAnnouncements)
+    self._lock = Lock()
+    self._scheduled_announcements = []
 
-      if (time_until_match.days == 0 and
-          time_until_match.seconds < self._params.match_notification_sec):
-        if match.get('playoffs') and channel.id in FLAGS.spoiler_free_channels:
+  def _ScheduleAnnouncements(self):
+    now = arrow.utcnow()
+    with self._lock:
+      # Clear pending announcements.
+      for job in self._scheduled_announcements:
+        self._core.scheduler.UnscheduleJob(job)
+      self._scheduled_announcements = []
+
+      for match in self._core.esports.schedule:
+        # TODO: Determine a good way to handle matches split across
+        # multiple days.
+        if match.announced:
           continue
-        match['announced'][channel.id] = True
-        blue, red = (match.get('blue'), match.get('red'))
-        if blue and red:
-          match_name = '%s v %s' % (blue, red)
-        else:
-          match_name = 'A LCS match'
-        livestream_str = messages.FALLBACK_LIVESTREAM_LINK
-        livestream_link = self._core.esports.GetLivestreamLinks().get(
-            match['id'])
-        if livestream_link:
-          livestream_str = 'Watch at %s' % livestream_link
-          self._core.interface.Topic(
-              self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
-        self._core.interface.Notice(
-            channel, u'%s is starting in ~%s. %s and get #Hyped!' %
-            (match_name, inflect_lib.Plural(time_until_match.seconds / 60,
-                                            'minute'), livestream_str))
+        time_until_match = match.time - now
+        seconds_until_match = (time_until_match.days * 86400
+                               + time_until_match.seconds)
+        if seconds_until_match > 0:
+          self._scheduled_announcements.append(self._core.scheduler.InSeconds(
+              seconds_until_match - self._params.match_notification_sec,
+              self._AnnounceMatch, match))
+
+  def _AnnounceMatch(self, match):
+    match.announced = True
+    topic = 'lcs_match'
+    if self._core.esports.brackets[match.bracket_id].is_playoffs:
+      topic = 'lcs_match_playoffs'
+
+    blue, red = (match.blue, match.red)
+    if blue and red:
+      match_name = '%s v %s' % (blue, red)
+    else:
+      match_name = 'An LCS match'
+    livestream_str = messages.FALLBACK_LIVESTREAM_LINK
+    livestream_link = self._core.esports.GetLivestreamLinks().get(
+        match.match_id)
+    if livestream_link:
+      livestream_str = 'Watch at %s' % livestream_link
+      self._core.interface.Topic(
+          self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
+    self._core.SendNotification(
+        topic, u'%s is starting soon. %s and get #Hyped!' %
+        (match_name, livestream_str))
 
 
 @command_lib.CommandRegexParser(
@@ -179,19 +195,19 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
     pb_info['appear_str'] = ''
     if subcommand == 'all':
       pb_info['appear_str'] = '{:4.3g}% pick+ban rate, '.format(
-          (stats['bans'] + stats['picks']) / float(num_games) * 100)
+          (stats['bans'] + stats['picks']) / num_games * 100)
       # For 'all' we show both pick+ban rate and win rate
       pb_info['rate_str'] = 'win'
 
     per_subcommand_data = {
         'ban': {
-            'rate': stats['bans'] / float(num_games) * 100,
+            'rate': stats['bans'] / num_games * 100,
             'stat': stats['bans'],
             'stat_desc': 'ban',
             'include_win_loss': False
         },
         'pick': {
-            'rate': stats['picks'] / float(num_games) * 100,
+            'rate': stats['picks'] / num_games * 100,
             'stat': stats['picks'],
             'stat_desc': 'game',
             'include_win_loss': True
@@ -199,7 +215,7 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
         'win': {
             'rate':
                 0 if not stats['picks'] else
-                stats['wins'] / float(stats['picks']) * 100,
+                stats['wins'] / stats['picks'] * 100,
             'stat':
                 stats['picks'],
             'stat_desc':
@@ -232,7 +248,7 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
       num_unique, num_games = self._core.esports.GetUniqueChampCount(region)
       if num_games == 0:
         return 'I don\'t have any data =(.'
-      avg_unique_per_game = float(num_games) / num_unique
+      avg_unique_per_game = num_games / num_unique
       return ('There have been {} unique champs [1 every {:.1f} '
               'games] picked or banned {}.').format(
                   num_unique, avg_unique_per_game, region_msg)
@@ -242,7 +258,7 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
           'all': lambda stats: stats['picks'] + stats['bans'],
           'bans': lambda stats: stats['bans'],
           'picks': lambda stats: stats['picks'],
-          'wins': lambda stats: stats['wins'] / float(stats['picks']),
+          'wins': lambda stats: stats['wins'] / stats['picks'],
       }
       sort_key_fn = specifier_to_sort_key_fn[subcommand]
       descending = order != '^'
@@ -277,12 +293,12 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
       return '%s is not very popular %s.' % (canonical_name, region_msg)
 
     appear_rate = (
-        pb_data['bans'] + pb_data['picks']) / float(pb_data['num_games'])
+        pb_data['bans'] + pb_data['picks']) / pb_data['num_games']
     win_msg = ' with a {:.0%} win rate'
     if pb_data['picks'] == 0:
       win_msg = ''
     else:
-      win_msg = win_msg.format(pb_data['wins'] / float(pb_data['picks']))
+      win_msg = win_msg.format(pb_data['wins'] / pb_data['picks'])
     losses = pb_data['picks'] - pb_data['wins']
 
     return '{} has appeared in {:.1%} of games ({}, {}){} ({}-{}) {}.'.format(
@@ -333,11 +349,11 @@ class LCSStandingsCommand(command_lib.BaseCommand):
     # Avoid spoilers in spoiler-free channels.
     if channel.id in FLAGS.spoiler_free_channels:
       return 'pls no spoilerino'
-    query = query.upper().split()
-    req_league = query[0] if query else self._params.default_region
-    req_brackets = query[1:] if len(query) > 1 else ['SEASON']
+    query = query.split()
+    league = query[0] if query else self._params.default_region
+    bracket = ' '.join(query[1:]) if len(query) > 1 else 'season'
 
-    return self._core.esports.GetStandings(req_league, req_brackets)
+    return self._core.esports.GetStandings(league, bracket)
 
 
 @command_lib.CommandRegexParser(r'results(full)? ?(.*?)')
@@ -365,13 +381,29 @@ class LCSResultsCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'roster(full)?(?:-(\w+))? (.+?)')
 class LCSRosterCommand(command_lib.BaseCommand):
+  """Display players and their roles."""
+
+  # A map of actual player names to what their name should be displayed as.
+  # You know, for memes.
+  NAME_SUBSTITUTIONS = {
+      'Revolta': 'Travolta',
+      'MikeYeung': 'Mike "Mike Yeung" Yeung',
+  }
 
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, include_subs, region, team):
-    roster = self._core.esports.GetRoster(team, region, include_subs)
-    if not roster:
+    team = self._core.esports.teams[team]
+    if not team:
       return 'Unknown team.'
-    return roster
+    response = ['%s Roster:' % team.name]
+    players = [player for player in team.players
+               if not player.is_substitute or include_subs]
+    for player in players:
+      response.append('%s - %s' % (
+          self.NAME_SUBSTITUTIONS.get(player.summoner_name,
+                                      player.summoner_name),
+          player.position))
+    return response
 
 
 @command_lib.CommandRegexParser(r'rooster(full)? (.+?)')

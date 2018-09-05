@@ -44,7 +44,7 @@ class _BaseDeployCommand(command_lib.BaseCommand):
                               channel: Channel,
                               bot_name: str = '') -> None:
     msg = ('%s deploy action already in progress.' % bot_name).capitalize()
-    # TODO(someone): Add logging ability to Reply. Commands shouldn't use
+    # TODO: Add logging ability to Reply. Commands shouldn't use
     # LogAndOutput, it is intended for HBDS.
     self._core.output_util.LogAndOutput(logging.WARN, channel, msg.strip())
 

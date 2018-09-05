@@ -20,6 +20,7 @@ the API. Instead, the substitution table lives in the League client and we chose
 to copy them here.
 """
 
+from __future__ import unicode_literals
 
 REFORGED_RUNE_VARS = {
     'SummonAery': {
@@ -51,5 +52,5 @@ REFORGED_RUNE_VARS = {
         '@Duration@': '3',
         '@Cooldown@': '15',
     },
-    # TODO(???): Fill in the rest of these.
+    # TODO: Fill in the rest of these.
 }

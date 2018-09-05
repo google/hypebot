@@ -164,7 +164,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
             not coin_lib.IsSubAccount(user))):
       got_paid = self._DeliverPaycheck(user)
 
-    # TODO(someone): This and below don't really belong here.
+    # TODO: This and below don't really belong here.
     if re.search(r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
                  (self._core.nick, channel.name), message):
       return 'And flights of angels sing thee to thy rest, {}'.format(user)
@@ -233,8 +233,6 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     if '{bal}' in greeting:
       greeting_params['bal'] = util_lib.FormatHypecoins(
           self._core.bank.GetBalance(user))
-    if '{elo}' in greeting:
-      greeting_params['elo'] = self._core.hypeletter.GetUserStat(user, 'elo')
     try:
       return greeting.format(**greeting_params)
     except Exception as e:

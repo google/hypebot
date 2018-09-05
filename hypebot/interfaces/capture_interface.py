@@ -65,7 +65,8 @@ class CaptureInterface(interface_lib.BaseChatInterface):
       else:
         self._msgs.append(msg.text)
 
-  def Notice(self, unused_channel: types.Channel, unused_message: Text):
+  def Notice(self, unused_channel: types.Channel,
+             unused_message: types.Message):
     pass
 
   def Topic(self, unused_channel: types.Channel, unused_new_topic: Text):

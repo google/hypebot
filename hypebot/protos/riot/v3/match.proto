@@ -49,7 +49,7 @@ message ListMatchesResponse {
 }
 
 message MatchReference {
-  // Lane lane = 1;
+  Lane.Enum lane = 1;
   int64 game_id = 2;
   int32 champion = 3;
   string platform_id = 4;
@@ -75,8 +75,8 @@ message GetMatchRequest {
 }
 
 message Match {
-  Season season_id = 1;
-  QueueType queue_id = 2;
+  Season.Enum season_id = 1;
+  QueueType.Enum queue_id = 2;
   int64 game_id = 3;
   repeated ParticipantIdentity participant_identities = 4;
   string game_version = 5;

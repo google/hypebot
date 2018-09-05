@@ -17,6 +17,8 @@
 Please keep sorted by alpabetical order of variable names.
 """
 
+from __future__ import unicode_literals
+
 # ASCIImojis often have backslashes where they aren't "needed".
 # pylint: disable=anomalous-backslash-in-string
 
@@ -59,11 +61,6 @@ GAMBLE_STRINGS = ['it all', 'the house', 'the farm',
                   'the whole enchilada', 'everything', 'the whole enchirito',
                   'a shitload of money', 'the whole kitchen caboodle',
                   'my reputation', 'my good name', 'my life']
-HAPPY_BIRTHDAY = [
-    'It\'s %s\'s birthday!',
-    'Happy birthday to you.',
-    'Happy birthday dear %s.',
-]
 HYPECOIN_MINT_EXHAUSTION_STR = (
     'The HypeCoin mint is currently out of bits to make into HypeCoins. Please '
     'tell the HypeCoin Reserve Board to enact a more fruitful monetary policy')
@@ -100,7 +97,6 @@ RATELIMIT_MEMES = [
     ('You are receiving this message because you have been ratelimited, not '
      'because hypebot is angry with you. Hypebot rarely punishes users'),
 ]
-RIP_HUMANS = {}
 SPECIAL_STICK_USERS = {}
 SPOOKY_STRINGS = [
     u'( ͡° ͜ʖ ͡°) I AM WATCHING YOU ( ͡° ͜ʖ ͡°)',

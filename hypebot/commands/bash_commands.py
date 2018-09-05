@@ -190,7 +190,7 @@ class WordCountCommand(command_lib.BaseCommand):
 
   def __init__(self, *args):
     super(WordCountCommand, self).__init__(*args)
-    # TODO(someone): Create a command_lib.ArgumentParser.
+    # TODO: Create a command_lib.ArgumentParser.
     self._parser = argparse.ArgumentParser()
     self._parser.add_argument('-l', '--lines', action='store_true')
     self._parser.add_argument('-w', '--words', action='store_true')

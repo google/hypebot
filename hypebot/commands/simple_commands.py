@@ -59,12 +59,21 @@ class DisappointCommand(command_lib.BaseCommand):
     return '%s, I am disappoint.' % son
 
 
+@command_lib.CommandRegexParser(r'unlock (.+?)')
+class PrideAndAccomplishmentCommand(command_lib.BaseCommand):
+
+  @command_lib.MainChannelOnly
+  def _Handle(self, channel, user, unlockable):
+    return ('The intent is to provide players with a sense of pride and '
+            'accomplishment for unlocking different %s.') % unlockable
+
+
 @command_lib.CommandRegexParser(r'energy (.+?)')
 class EnergyCommand(command_lib.BaseCommand):
 
   @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, energy_target):
-    return u'༼ つ ◕_◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕_◕ ༽つ' % energy_target
+    return '༼ つ ◕_◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕_◕ ༽つ' % energy_target
 
 
 @command_lib.CommandRegexParser(r'jackpot')
@@ -104,7 +113,7 @@ class JackpotCommand(command_lib.BaseCommand):
         util_lib.FormatHypecoins(jackpot), item.human_name)]
     for bet_user, user_bets in pool.items():
       for bet in user_bets:
-        responses.append(u'- %s, %s' % (bet_user, self._game.FormatBet(bet)))
+        responses.append('- %s, %s' % (bet_user, self._game.FormatBet(bet)))
     return responses
 
   def _LotteryCallback(self):
@@ -112,7 +121,6 @@ class JackpotCommand(command_lib.BaseCommand):
     msg_fn = partial(self._Reply, default_channel=self._core.default_channel)
     self._core.bets.SettleBets(self._game, self._core.nick, msg_fn)
 
-  @command_lib.DefaultMainChannelOnly
   def _LotteryWarningCallback(self, remaining=None):
     logging.info('Running lottery warning callback.')
     warning_str = ''
@@ -123,7 +131,7 @@ class JackpotCommand(command_lib.BaseCommand):
     coins, item = self._game.ComputeCurrentJackpot(pool)
     warning_str += 'Current jackpot is %s and a(n) %s' % (
         util_lib.FormatHypecoins(coins), item.human_name)
-    self._Reply(self._core.default_channel, warning_str)
+    self._core.SendNotification('lottery', warning_str)
 
 
 @command_lib.CommandRegexParser(r'mains?')
@@ -164,9 +172,9 @@ class OrRiotCommand(command_lib.BaseCommand):
       self._core.last_command = partial(self._Handle, or_riot=or_riot)
       or_riot = user.upper()
     if normalized_riot == self._core.nick:
-      return u'ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.nick.upper()
+      return 'ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.nick.upper()
     else:
-      return u'ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot
+      return 'ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot
 
 
 @command_lib.CommandRegexParser(r'rage')
@@ -208,9 +216,9 @@ class RaiseCommand(command_lib.BaseCommand):
       return 'Do not raise me, I am but a simple %s' % self._core.params.name
     elif self._core.zombie_manager.GetCorpseForChannel(
         channel) == normalized_dongs:
-      self._core.zombie_manager.AnimateCorpse(channel)
+      return self._core.zombie_manager.AnimateCorpse(channel)
     else:
-      return u'ヽ༼ຈل͜ຈ༽ﾉ raise your %s ヽ༼ຈل͜ຈ༽ﾉ' % dongs
+      return 'ヽ༼ຈل͜ຈ༽ﾉ raise your %s ヽ༼ຈل͜ຈ༽ﾉ' % dongs
 
 
 @command_lib.CommandRegexParser(r'reload', reply_to_private=False)
@@ -238,6 +246,10 @@ class ReloadCommand(command_lib.BaseCommand):
 class RipCommand(command_lib.BaseCommand):
   """Show respects for the dead."""
 
+  RIP_HUMANS = {
+      'qtpie': 'memelord',
+  }
+
   def __init__(self, *args):
     super(RipCommand, self).__init__(*args)
     self._normalized_commands = [util_lib.CanonicalizeName(name) for name in
@@ -246,7 +258,7 @@ class RipCommand(command_lib.BaseCommand):
   @command_lib.MainChannelOnly
   def _Handle(self, channel, user, rip_target):
     normalized_rip_target = None
-    rip_string = u'Here lies %s, a once-valued %s %s.'
+    rip_string = 'Here lies %s, a once-valued %s %s.'
     if rip_target:
       normalized_rip_target = util_lib.CanonicalizeName(rip_target)
       if normalized_rip_target == 'me':
@@ -256,9 +268,9 @@ class RipCommand(command_lib.BaseCommand):
         self._Spook(user)
         normalized_rip_target = user
 
-      if normalized_rip_target in messages.RIP_HUMANS:
+      if normalized_rip_target in self.RIP_HUMANS:
         rip_vals = (normalized_rip_target, self._core.nick,
-                    messages.RIP_HUMANS[normalized_rip_target])
+                    self.RIP_HUMANS[normalized_rip_target])
       elif self._core.user_tracker.IsHuman(normalized_rip_target):
         if user == normalized_rip_target:
           rip_mod = 'noober'
@@ -268,10 +280,10 @@ class RipCommand(command_lib.BaseCommand):
       elif normalized_rip_target in self._normalized_commands:
         rip_vals = (rip_target, self._core.nick, 'command')
       else:
-        rip_string = u'RIP in pepperonis %s, you will be missed.'
+        rip_string = 'RIP in pepperonis %s, you will be missed.'
         rip_vals = rip_target
     else:
-      rip_target, rip_mod = random.choice(list(messages.RIP_HUMANS.items()))
+      rip_target, rip_mod = random.choice(list(self.RIP_HUMANS.items()))
       rip_vals = (rip_target, self._core.nick, rip_mod)
 
     self._core.zombie_manager.NewCorpse(
@@ -293,7 +305,7 @@ class SameCommand(command_lib.BaseCommand):
   @command_lib.MainChannelOnly
   def _Handle(self, channel, user):
     if self._core.last_command:
-      self._core.last_command(channel=channel, user=user)  # pylint: disable=not-callable
+      return self._core.last_command(channel=channel, user=user)  # pylint: disable=not-callable
     else:
       return 'How can I do what has not been done?'
 
@@ -339,6 +351,15 @@ class ScrabbleCommand(command_lib.BaseCommand):
       return 'Silly human, you can\'t play %s in scrabble.' % msg
     scrabble_score = sum(self._CHAR_TO_POINTS[c] for c in scrabble_msg)
     return '%s is worth %s' % (msg, inflect_lib.Plural(scrabble_score, 'point'))
+
+
+@command_lib.RegexParser(r'¯\\_\(ツ\)_/¯')
+@command_lib.CommandRegexParser(r'shrug(?:gie)?')
+class ShruggieCommand(command_lib.BaseCommand):
+
+  @command_lib.MainChannelOnly
+  def _Handle(self, channel, unused_user):
+    return r'¯\ˍ(ツ)ˍ/¯'
 
 
 @command_lib.CommandRegexParser(r'sticks?')

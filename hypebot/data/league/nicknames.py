@@ -13,6 +13,8 @@
 # limitations under the License.
 """Mapping of league-related nicknames to their correct keys."""
 
+from __future__ import unicode_literals
+
 CHAMP_NICKNAME_MAP = {
     'articuno': 'anivia',
     'asol': 'aurelionsol',

@@ -29,6 +29,8 @@ from __future__ import unicode_literals
 import json
 import os
 
+import six
+
 
 class HypeParams(object):
   """See file docstring for details."""
@@ -49,7 +51,7 @@ class HypeParams(object):
     self._RaiseIfLocked()
     params_dict = self._ParseDict(params)
     for key, value in params_dict.items():
-      if not isinstance(key, str):
+      if not isinstance(key, six.string_types):
         raise ValueError('HypeParams keys must all be strings. Encountered %s '
                          '(type: %s).' % (key, type(key)))
       self._AssignValueConvertDict(key, value)
@@ -80,7 +82,7 @@ class HypeParams(object):
     """
     if isinstance(params, HypeParams):
       return params.AsDict()
-    if isinstance(params, str):
+    if isinstance(params, six.string_types):
       if os.path.isfile(params):
         with open(params) as params_file:
           params = json.load(params_file)
@@ -118,8 +120,9 @@ class HypeParams(object):
       raise AttributeError('HypeParams is locked.')
 
 
-def MergeParams(defaults, overrides):
+def MergeParams(defaults, *overrides):
   """Merges parameter containers."""
   params = HypeParams(defaults)
-  params.Override(overrides)
+  for override in overrides:
+    params.Override(override)
   return params

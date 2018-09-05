@@ -47,7 +47,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     self._params.Lock()
     self._channels = set()
 
-  def RegisterHandlers(self, on_message_fn, user_tracker):
+  def RegisterHandlers(self, on_message_fn, user_tracker, user_prefs):
     """Register handlers from the bot onto the interface.
 
     Allows the interface to communicate asynchronously to the bot when messages
@@ -57,10 +57,12 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
       on_message_fn: {callable(Channel, user, message)} Function that will be
         called in response to an incoming message.
       user_tracker: {UserTracker} Where to store results of Who/WhoAll requests.
+      user_prefs: {SyncedDict} Persistent user preferences.
     """
     self._channels = set()
     self._on_message_fn = on_message_fn
     self._user_tracker = user_tracker
+    self._user_prefs = user_prefs
 
   def Join(self, channel: types.Channel):
     """Bring the power of hype to the desired channel.
@@ -112,7 +114,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     """Request that all users be added to the user tracker."""
     raise NotImplementedError()
 
-  # TODO(someone): Eliminate Optional from the message type.
+  # TODO: Eliminate Optional from the message type.
   @abc.abstractmethod
   def SendMessage(self, channel: types.Channel,
                   message: Optional[types.Message]):
@@ -124,9 +126,9 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     """
     raise NotImplementedError()
 
-  # TODO(someone): Eliminate Optional from the message type.
+  # TODO: Eliminate Optional from the message type.
   @abc.abstractmethod
-  def Notice(self, channel: types.Channel, message: Text):
+  def Notice(self, channel: types.Channel, message: types.Message):
     """Send a notice to the channel.
 
     Some applications (IRC) support a different type of message to a channel.

@@ -269,41 +269,7 @@ message Gold {
   bool purchasable = 4;
 }
 
-//message InventoryDataStats {
-//PercentCritDamageMod	double
-//PercentSpellBlockMod	double
-//PercentHPRegenMod	double
-//PercentMovementSpeedMod	double
-//FlatSpellBlockMod	double
-//FlatCritDamageMod	double
-//FlatEnergyPoolMod	double
-//PercentLifeStealMod	double
-//FlatMPPoolMod	double
-//FlatMovementSpeedMod	double
-//PercentAttackSpeedMod	double
-//FlatBlockMod	double
-//PercentBlockMod	double
-//FlatEnergyRegenMod	double
-//PercentSpellVampMod	double
-//FlatMPRegenMod	double
-//PercentDodgeMod	double
-//FlatAttackSpeedMod	double
-//FlatArmorMod	double
-//FlatHPRegenMod	double
-//PercentMagicDamageMod	double
-//PercentMPPoolMod	double
-//FlatMagicDamageMod	double
-//PercentMPRegenMod	double
-//PercentPhysicalDamageMod	double
-//FlatPhysicalDamageMod	double
-//PercentHPPoolMod	double
-//PercentArmorMod	double
-//PercentCritChanceMod	double
-//PercentEXPBonus	double
-//FlatHPPoolMod	double
-//FlatCritChanceMod	double
-//FlatEXPBonus	double
-//}
+// TODO: Inventory Data Stats
 
 message Group {
   string max_group_ownable = 1;

@@ -32,6 +32,7 @@ from six import with_metaclass
 from hypebot.core import inflect_lib
 from hypebot.core import util_lib
 from hypebot.plugins import inventory_lib
+from hypebot.plugins.league import esports_lib
 from hypebot.protos import bet_pb2
 
 
@@ -201,43 +202,55 @@ class LCSGame(GameBase):
   def name(self):
     return 'lcs'
 
-  def _TimeBeforeMatchBlock(self, schedule, time):
-    """Checks that the current time occurs before the match block happening at
-    the given parameter 'time'. A match block is defined as a set of matches,
-    each of which is less than 6 hours apart from its successor."""
+  def _OpenForBets(self, match: esports_lib.Match) -> bool:
+    """Checks if match is open for bets.
 
+    Due to rito scheduling matches in blocks, where one match begins after
+    another ends, we can't trust the scheduled time. Therefore, we restrict bets
+    based on a block of matches within the same region. A block is defined as a
+    set of consecutive matches with all gaps less than or equal to 5 hours. This
+    is large enough to handle Bo5 series schedules. Bets for a match within a
+    block must be placed before the scheduled start of the first match in the
+    block.
+
+    Args:
+      match: Match to check if is open for bets.
+
+    Returns:
+      Whether the match accepts bets or not.
+    """
     now = arrow.utcnow()
-    if time <= now:
+    if match.time <= now or match.winner:
       return False
-    block_start = time
-    for match in reversed(schedule):
-      if block_start.shift(hours=-6) < match['time'] < block_start:
-        block_start = match['time']
+    block_start = match.time
+    for block_match in reversed(self._esports.schedule):
+      if block_match.bracket_id != match.bracket_id:
+        continue
+      if block_start.shift(hours=-5) <= block_match.time <= block_start:
+        block_start = block_match.time
     return now < block_start
 
   def TakeBet(self, bet):
     team_names = bet.target.split(' over ')
-    teams = [self._esports.FindTeam(name) for name in team_names]
+    teams = [self._esports.teams[name] for name in team_names]
     if not teams or None in teams:
       return False
     if len(teams) > 2:
       return 'Only 2 teams play in a match silly.'
-    teams = [t['acronym'] for t in teams]
+    teams = [t.team_id for t in teams]
 
     # Find next match for team(s) that hasn't started.
     schedule = self._esports.schedule
     for match in schedule:
-      match_teams = (match['blue'], match['red'])
-      if (self._TimeBeforeMatchBlock(schedule, match['time']) and
-          not match.get('winner', None) and
-          all([t in match_teams for t in teams])):
+      match_teams = (match.blue, match.red)
+      if (all([t in match_teams for t in teams]) and self._OpenForBets(match)):
         # Determine predicted winner.
         if len(teams) == 1:
           teams.append(
-              match['blue'] if teams[0] == match['red'] else match['red'])
+              match.blue if teams[0] == match.red else match.red)
         winner = teams[0] if bet.direction == bet_pb2.Bet.FOR else teams[1]
         loser = teams[1] if bet.direction == bet_pb2.Bet.FOR else teams[0]
-        bet.target = match['id']
+        bet.target = match.match_id
         lcs_data = bet_pb2.LCSData(winner=winner, loser=loser)
         bet.data.Pack(lcs_data)
         return True
@@ -263,15 +276,14 @@ class LCSGame(GameBase):
       for bet in user_bets:
         lcs_data = bet_pb2.LCSData()
         bet.data.Unpack(lcs_data)
-        match = self._esports.matches.get(bet.target, {})
+        match = self._esports.matches.get(bet.target, None)
         logging.info('Game time: %s', match)
-        winner = match.get('winner', None)
-        if winner:
+        if match and match.winner:
           logging.info('GambleLCS: %s bet %s for %s and %s won.', user,
-                       bet.amount, lcs_data.winner, winner)
+                       bet.amount, lcs_data.winner, match.winner)
           pool_value += bet.amount
-          if lcs_data.winner == winner:
-            winning_teams.append(winner)
+          if lcs_data.winner == match.winner:
+            winning_teams.append(match.winner)
             winners[user] += bet.amount * 2
             net_amount += bet.amount
           else:

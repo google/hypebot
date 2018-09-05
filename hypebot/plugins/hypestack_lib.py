@@ -60,9 +60,9 @@ class HypeStacks(object):
       new_value = int(int(stacks) * retention_factor)
       logging.info('\t%s: %s => %s (%.2f%% retention)', user, stacks, new_value,
                    100 * retention_factor)
-      self._store.SetValue(user, self._STACK_COUNT_SUBKEY, new_value)
+      self._store.SetValue(user, self._STACK_COUNT_SUBKEY, str(new_value))
       # Recent stack count is reset each day.
-      self._store.SetValue(user, self._RECENT_STACKS_SUBKEY, 0)
+      self._store.SetValue(user, self._RECENT_STACKS_SUBKEY, '0')
 
   def GetHypeStacks(self, user: str) -> int:
     """Returns the number of HypeStacks user currently has accumulated."""
@@ -97,7 +97,7 @@ class HypeStacks(object):
     """Purchases new HypeStacks for user based on info in purchase_details."""
     details = purchase_details['summary'].capitalize()
     num_stacks = purchase_details['num_stacks']
-    # TODO(someone): This should actually be in the same transaction as the call
+    # TODO: This should actually be in the same transaction as the call
     #   to _UpdateAllStacks if the storage engine can support that, e.g., Redis.
     if not self._bank.ProcessPayment(user, coin_lib.FEE_ACCOUNT,
                                      purchase_details['cost'], details,

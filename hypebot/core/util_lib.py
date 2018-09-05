@@ -86,11 +86,11 @@ def CanonicalizeName(raw_name: Text):
       x for x in unicode_norm if unicodedata.category(x) in ('Ll', 'Nl', 'Nd'))
 
 
-DECIMAL_POWERS = ('', 'k', 'M', 'B', 'T', 'Q', 'P')
+DECIMAL_POWERS = ('', 'k', 'm', 'b', 't', 'q', 'p')
 
 
 def UnformatHypecoins(value):
-  value = value.rstrip()
+  value = value.lower().rstrip()
 
   # Separate number and units.
   units = value.lstrip('0123456789eE-+.')
@@ -106,7 +106,7 @@ def UnformatHypecoins(value):
 
   scale = 0
   if units in DECIMAL_POWERS:
-    scale = DECIMAL_POWERS.index(units) * 1e3
+    scale = 1e3 ** DECIMAL_POWERS.index(units)
   if not scale:
     scale = 1
   return number * scale
@@ -137,7 +137,7 @@ def FormatHypecoins(amount, abbreviate=False):
       amount_str = '%d' % round(value)
   else:
     amount_str = '{:,d}'.format(amount)
-  return u'%s₡' % amount_str
+  return '%s₡' % amount_str
 
 
 def SafeCast(value, desired_type, default=None):
@@ -163,7 +163,7 @@ def TimeDeltaToHumanDuration(time_delta):
   """
   def _RoundToUnit(base_val, units):
     """Returns the rounded remainder (0 or 1) of base_val expressed in units."""
-    return round((base_val % units) / float(units))
+    return round((base_val % units) / units)
 
   # A bunch of constants for funsies, MONTH_IN_DAYS is approximate.
   # pylint: disable=invalid-name
@@ -297,9 +297,9 @@ def FuzzyBool(value):
 
 def Sparkline(values):
   """Returns an unicode sparkline representing values."""
-  unicode_values = u'▁▂▃▄▅▆▇█'
+  unicode_values = '▁▂▃▄▅▆▇█'
   if not values:
-    return u''
+    return ''
   elif len(values) == 1:
     # Special case a single value to always return the middle value instead of
     # the smallest one, which would always be the case otherwise
@@ -307,9 +307,9 @@ def Sparkline(values):
   min_value = min(values)
   # Really small offset used to ensure top bin includes max(values).
   value_range = max(values) - min_value + 1e-10
-  bucket_size = (value_range / float(len(unicode_values)))
+  bucket_size = value_range / len(unicode_values)
   bucketized_values = [int((v - min_value) / bucket_size) for v in values]
-  return u''.join(unicode_values[v] for v in bucketized_values)
+  return ''.join(unicode_values[v] for v in bucketized_values)
 
 
 class UserTracker(object):

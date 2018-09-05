@@ -27,13 +27,15 @@ from threading import Lock
 import time
 
 from absl import logging
-from typing import Any, Callable, Dict, List, Tuple, TYPE_CHECKING
 
+from hypebot import hypecore
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
 from hypebot.protos.channel_pb2 import Channel
 from hypebot.protos.user_pb2 import User
+
+from typing import Any, Callable, Dict, List, Text, Tuple
 
 
 class BaseCommand(object):
@@ -67,7 +69,10 @@ class BaseCommand(object):
     self._ratelimit_lock = Lock()
     self._spook_probs = []
 
-  def Handle(self, channel: Channel, user: str, message: str) -> None:
+  def Handle(self,
+             channel: Channel,
+             user: Text,
+             message: Text) -> hypecore.MessageType:
     """Attempt to handle the message.
 
     Compare message against all parsers. If one of them accepts the message,
@@ -77,6 +82,9 @@ class BaseCommand(object):
       channel: Where to send the reply.
       user: User who invoked the command.
       message: Raw message from application.
+
+    Returns:
+      Response message from command.
     """
     for parser in self._parsers:
       take, args, kwargs = parser(channel, user, message)
@@ -85,15 +93,10 @@ class BaseCommand(object):
           kwargs['target_user'] = self._ParseCommandTarget(
               user, kwargs['target_user'], message)
 
-        response = self._Ratelimit(channel, user, *args, **kwargs)
-        if response:
-          self._Reply(channel, response)
-        return  # Ensure we don't handle the same message twice.
+        # Ensure we don't handle the same message twice.
+        return self._Ratelimit(channel, user, *args, **kwargs)
 
-  def _Ratelimit(self,
-                 channel: Channel,
-                 user: str,
-                 *args, **kwargs):
+  def _Ratelimit(self, channel: Channel, user: Text, *args, **kwargs):
     """Ratelimits calls/responses from Handling the message.
 
     In general this, prevents the same user, channel, or global triggering a
@@ -147,8 +150,8 @@ class BaseCommand(object):
       self._last_called[scoped_channel.id][scoped_user] = t
       return response or self._Handle(channel, user, *args, **kwargs)
 
-  def _ParseCommandTarget(self, user: str, target_user: str,
-                          message: str) -> User:
+  def _ParseCommandTarget(self, user: Text, target_user: Text,
+                          message: Text) -> User:
     """Processes raw target_user into a User class, resolving 'me' to user."""
     target_user = util_lib.BuildUser(target_user)
     # An empty target_user defaults to the calling user
@@ -160,16 +163,14 @@ class BaseCommand(object):
   def _Reply(self, *args, **kwargs):
     return self._core.Reply(*args, **kwargs)
 
-  def _Spook(self, user: str) -> None:
+  def _Spook(self, user: Text) -> None:
     """Creates a spooky encounter with user."""
     logging.info('Spooking %s', user)
-    self._Reply(user, util_lib.GetWeightedChoice(messages.SPOOKY_STRINGS,
-                                                 self._spook_probs))
+    self._Reply(
+        user,
+        util_lib.GetWeightedChoice(messages.SPOOKY_STRINGS, self._spook_probs))
 
-  def _Handle(self,
-              channel: Channel,
-              user: str,
-              *args, **kwargs):
+  def _Handle(self, channel: Channel, user: Text, *args, **kwargs):
     """Internal method that handles the command.
 
     *args and **kwargs are the logical arguments returned by the parsers.
@@ -196,6 +197,7 @@ class BasePublicCommand(BaseCommand):
 
 def _AddParserInInit(cls, parser: Callable, has_prefix: bool = False) -> None:
   original_init = cls.__init__
+
   def NewInit(self, *args, **kwargs):
     original_init(self, *args, **kwargs)
     bound_parser = parser
@@ -215,7 +217,7 @@ def _ParseArgs(match):
   return args, kwargs
 
 
-def CommandRegexParser(pattern: str,
+def CommandRegexParser(pattern: Text,
                        flags: int = re.DOTALL,
                        reply_to_public: bool = True,
                        reply_to_private: bool = True):
@@ -234,8 +236,8 @@ def CommandRegexParser(pattern: str,
     Decorator that adds parser to class.
   """
 
-  def Parser(channel: Channel, unused_user: str, message: str,
-             command_prefix: str) -> Tuple[bool, List, Dict]:
+  def Parser(channel: Channel, unused_user: Text, message: Text,
+             command_prefix: Text) -> Tuple[bool, List, Dict]:
     """Determine if message should be handled.
 
     Args:
@@ -282,17 +284,15 @@ def RegexParser(pattern):
   """
   regex = re.compile(pattern)
 
-  def Parser(unused_channel: Channel,
-             unused_user: str,
-             message: str) -> Tuple[bool, List, Dict]:
+  def Parser(unused_channel: Channel, unused_user: Text,
+             message: Text) -> Tuple[bool, List, Dict]:
     """Determine if message should be handled.
 
     Args:
-      message: {string} message
+      message: Message to parse.
 
     Returns:
-      {tuple<boolean, *args, **kwargs} Whether to take message and parsed
-        args/kwargs.
+      Whether to take message and parsed args/kwargs.
     """
     match = regex.search(message)
     if match:
@@ -309,9 +309,9 @@ def RegexParser(pattern):
 
 def PublicParser(cls):
   """Parser that handles all public channels."""
-  def Parser(channel: Channel,
-             unused_user: str,
-             message: str) -> Tuple[bool, List[Any], Dict]:
+
+  def Parser(channel: Channel, unused_user: Text,
+             message: Text) -> Tuple[bool, List[Any], Dict]:
     if channel.visibility == Channel.PUBLIC:
       return True, [message], {}
     return False, [], {}
@@ -323,16 +323,18 @@ def PublicParser(cls):
 # === Handler Decorators ===
 # Put these decorators on _Handle to filter what is handled regardless of parser
 # triggering. Useful for ratelimiting or channel specific behavior.
-# TODO(someone): Make class decorators or conditional within command params. Left
+# TODO: Make class decorators or conditional within command params. Left
 # as similar to previous behavior for now.
 
 
 def PrivateOnly(fn):
   """Decorator to restrict handling to queries."""
+
   @wraps(fn)
-  def Wrapped(fn_self, channel: Channel, user: str, *args, **kwargs):
+  def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
     if channel.visibility == Channel.PRIVATE:
       return fn(fn_self, channel, user, *args, **kwargs)
+
   return Wrapped
 
 
@@ -353,11 +355,11 @@ def LimitPublicLines(max_lines: int = 6):
     """Decorator to restrict lines returned to a public channel."""
 
     @wraps(fn)
-    def Wrapped(fn_self, channel: Channel, user: str, *args, **kwargs):
+    def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
       msg = fn(fn_self, channel, user, *args, **kwargs)
       if channel.visibility == Channel.PUBLIC and isinstance(
           msg, list) and len(msg) > max_lines:
-        # TODO(someone): Switch to calling _core.interface.SendMessage.
+        # TODO: Switch to calling _core.interface.SendMessage.
         getattr(fn_self, '_core').Reply(user, msg)
         return u'It\'s long so I sent it privately.'
       return msg
@@ -365,16 +367,6 @@ def LimitPublicLines(max_lines: int = 6):
     return Wrapped
 
   return Decorator
-
-
-def DefaultMainChannelOnly(fn):
-  """Decorator to only handle if default channel is a main channel."""
-  @wraps(fn)
-  def Wrapped(fn_self, *args, **kwargs):
-    core_obj = getattr(fn_self, '_core')
-    if IsMainChannel(core_obj.default_channel, core_obj.params.main_channels):
-      return fn(fn_self, *args, **kwargs)
-  return Wrapped
 
 
 def IsMainChannel(channel, main_ids):
@@ -386,24 +378,31 @@ def IsMainChannel(channel, main_ids):
 
 def MainChannelOnly(fn):
   """Decorator to restrict handling to main channel or private channels."""
+
   @wraps(fn)
-  def Wrapped(fn_self, channel: Channel, user: str, *args, **kwargs):
+  def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
     if (channel.visibility == Channel.PRIVATE or
-        IsMainChannel(channel, getattr(fn_self, '_core').params.main_channels)):
+        IsMainChannel(channel,
+                      getattr(fn_self, '_core').params.main_channels)):
       return fn(fn_self, channel, user, *args, **kwargs)
+
   return Wrapped
 
 
 def HumansOnly(message='I\'m sorry %s, I\'m afraid I can\'t do that'):
   """Decorator to restrict handling to humans."""
+
   def Decorator(fn):
+
     @wraps(fn)
-    def Wrapped(fn_self, channel: Channel, user: str, *args, **kwargs):
+    def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
       if getattr(fn_self, '_core').user_tracker.IsBot(user):
-        getattr(fn_self, '_Reply')(channel, message % user)
+        return message % user
       else:
         return fn(fn_self, channel, user, *args, **kwargs)
+
     return Wrapped
+
   return Decorator
 
 
@@ -421,6 +420,7 @@ def RequireReady(obj_name):
 
   def Decorator(fn):
     """Actual decorator to require an object is ready."""
+
     @wraps(fn)
     def Wrapped(fn_self, *args, **kwargs):
       """The wrapped version of fn called in place of fn."""
@@ -430,31 +430,24 @@ def RequireReady(obj_name):
       if obj and obj.IsReady():
         return fn(fn_self, *args, **kwargs)
 
-      try:
-        channel = kwargs.get('channel') or args[0]
-      except IndexError:
-        # Not actually a _Handle function. Used for LCSGameCallback.
-        return
-      message_fn = getattr(fn_self, '_Reply')
-      if message_fn:
-        nick = getattr(fn_self, '_core').nick
-        if not obj:
-          message_fn(channel, '%s is not enabled for %s' % (obj_name, nick))
-        else:
-          message_fn(channel,
-                     '%s.%s is still loading data, please try again later.' %
-                     (nick, obj_name))
+      nick = getattr(fn_self, '_core').nick
+      if not obj:
+        return '%s is not enabled for %s' % (obj_name, nick)
+      else:
+        return '%s.%s is still loading data, please try again later.' % (
+            nick, obj_name)
 
     return Wrapped
+
   return Decorator
 
 
 class TextCommand(BaseCommand):
   """Randomly chooses a line from params.choices to say."""
 
-  DEFAULT_PARAMS = params_lib.MergeParams(BaseCommand.DEFAULT_PARAMS, {
-      'choices': ['Do not forget to override me.']
-  })
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      BaseCommand.DEFAULT_PARAMS,
+      {'choices': ['Do not forget to override me.']})
 
   def __init__(self, *args):
     super(TextCommand, self).__init__(*args)
@@ -469,4 +462,3 @@ class TextCommand(BaseCommand):
       if choice.startswith('/me '):
         choice = '\x01ACTION %s\x01' % choice[4:]
       return choice
-

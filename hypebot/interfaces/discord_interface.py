@@ -46,7 +46,7 @@ class DiscordInterface(interface_lib.BaseChatInterface):
     super(DiscordInterface, self).__init__(params)
     self._client = discord.Client()
 
-    # TODO(someone): It's a bit odd defining these within __init__, but
+    # TODO: It's a bit odd defining these within __init__, but
     # otherwise we don't have access to client during method decoration time.
     @self._client.event
     async def on_message(message):
@@ -126,8 +126,8 @@ class DiscordInterface(interface_lib.BaseChatInterface):
       if member:
         return member
 
-  def Notice(self, channel: types.Channel, message: Text):
-    pass
+  def Notice(self, channel: types.Channel, message: types.Message):
+    self.SendMessage(channel, message)
 
   def Topic(self, channel: types.Channel, new_topic: Text):
     self._client.loop.create_task(self._Topic(channel, new_topic))
@@ -148,7 +148,7 @@ class DiscordInterface(interface_lib.BaseChatInterface):
     # Aggregate all lines into a single response to avoid Discord ratelimits.
     text_messages = []
     for msg in message.messages:
-      # TODO(someone): Discord supports fancy messages.
+      # TODO: Discord supports fancy messages.
       if msg.WhichOneof('message') == 'card':
         text_messages.extend(msg.card.alternate_text)
       else:

@@ -22,8 +22,8 @@ from __future__ import unicode_literals
 import arrow
 from typing import Optional
 
-from hypebot.core import proxy_lib
 from hypebot.protos import weather_pb2
+from hypebot.proxies import proxy_lib
 
 # Free API allows up to 5k requests per month.
 _BASE_URL = 'https://api.apixu.com'

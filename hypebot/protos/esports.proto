@@ -1,0 +1,134 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Data model for esports.
+//
+// The hierarchy of the model is:
+//   League: e.g., NA-LCS, LCK
+//    ├─ Bracket: e.g., Regular Season, Playoffs
+//    │   ├─ Match
+//    │   │   └─ Game
+//    │   └─ TeamStanding
+//    └─ Team
+//        └─ Player
+//
+// This mimics Riot's model except we remove the Tournament between the League
+// and Bracket by only caring about the most recent/active tournament.
+//
+// TODO:
+// Objects currently include a local_id and a parent_id that allows traversal up
+// the tree. However, to ensure global uniqueness of local_ids, it would behoove
+// us to merge both ids together into a path-type id and provide wrapper
+// methods/classes to make traversal easier.  E.g., match_id =
+// 'nalcs/regular_season/NA1337-420-dank'.
+syntax = "proto3";
+
+package hypebot;
+
+message Player {
+  string summoner_name = 1;
+
+  string position = 2;
+
+  // Associated team id.
+  string team_id = 3;
+
+  bool is_substitute = 4;
+}
+
+message Team {
+  // Unique (within regions) abbreviated name. (ZLG)
+  string team_id = 1;
+
+  // Human readable name of team. (Zero Logic Gaming)
+  string name = 2;
+
+  // Associated league id.
+  string league_id = 3;
+
+  repeated Player players = 4;
+}
+
+// Things needed to fetch game from rito.
+message Game {
+  string game_id = 1;
+
+  string realm = 2;
+
+  string hash = 3;
+}
+
+message Match {
+  string match_id = 1;
+
+  // Associated bracket_id.
+  string bracket_id = 2;
+
+  // Team id of "red" team.
+  string red = 3;
+
+  // Team id of "blue" team.
+  string blue = 4;
+
+  // Seconds since epoch.
+  int64 timestamp = 5;
+
+  repeated Game games = 6;
+
+  // Team id of winning team or "TIE".
+  string winner = 7;
+}
+
+// Standing of a team within a single bracket.
+message TeamStanding {
+  Team team = 1;
+  int32 rank = 2;
+  int32 wins = 3;
+  int32 losses = 4;
+  int32 ties = 5;
+  int32 points = 6;
+}
+
+message Bracket {
+  string bracket_id = 1;
+
+  string name = 2;
+
+  // Associated league id.
+  string league_id = 3;
+
+  // Whether seeing matches from the bracket would spoil prior match results.
+  bool is_playoffs = 4;
+
+  // Static data about matches. E.g., game time and who is playing. Will not
+  // necessarily contain information about who wonnered the match.
+  repeated Match schedule = 5;
+
+  repeated TeamStanding standings = 6;
+}
+
+message League {
+  // Unique abbreviation for league. (CN)
+  string league_id = 1;
+
+  // Human readable name of league. (China)
+  string name = 2;
+
+  // Alternate names for the league. (LPL)
+  repeated string aliases = 3;
+
+  repeated Bracket brackets = 4;
+
+  repeated Team teams = 5;
+}

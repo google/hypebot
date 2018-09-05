@@ -24,7 +24,7 @@ from hypebot.commands import command_lib
 from hypebot.plugins import inventory_lib
 
 
-# TODO(someone): This should probably be moved to inflect_lib.
+# TODO: This should probably be moved to inflect_lib.
 def FormatStacks(item_params):
   if item_params['number'] > 1:
     return ' (x%d)' % item_params['number']
@@ -48,7 +48,7 @@ class InventoryList(command_lib.BaseCommand):
     for key, params in inventory.items():
       item = inventory_lib.Create(key, self._core, inventory_user, params)
       msgs.append('%s%s' % (item.human_name, FormatStacks(params)))
-    # TODO(someone): Worry about putting multiple items on a single line if
+    # TODO: Worry about putting multiple items on a single line if
     # inventories become large.
     return msgs
 

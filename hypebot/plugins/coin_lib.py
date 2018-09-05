@@ -31,6 +31,7 @@ from threading import RLock
 from absl import logging
 import arrow
 from google.protobuf import json_format
+import six
 
 from hypebot.core import schedule_lib
 from hypebot.core import util_lib
@@ -113,7 +114,7 @@ class Thievery(object):
     thief_alert = self._GetPDF('thief')[thief]
     victim_alert = self._GetPDF('victim')[victim]
     offset = self._BASE_BALANCE_PERCENT * (1 - thief_alert - victim_alert)
-    failure_chance = self._Sigmoid(float(amount) / victim_balance, offset)
+    failure_chance = self._Sigmoid(amount / victim_balance, offset)
 
     rob_attempt_score = random.random()
 
@@ -135,7 +136,7 @@ class Thievery(object):
         msg_fn(None, '%s is on high alert and caught %s.' % (victim, thief))
       return
 
-    # TODO(someone): Fold ProcessPayment into the UpdateScores tx.
+    # TODO: Fold ProcessPayment into the UpdateScores tx.
     # We don't worry about the victim having insufficient funds since there is a
     # 0% chance of stealing 100% of someone's money.
     if self._bank.ProcessPayment(victim, thief, amount,
@@ -170,7 +171,7 @@ class Thievery(object):
     """Gets probability density function of scores for collection."""
     scores = self._GetScores(collection)
     total_score = sum(scores.values())
-    pdf = {peep: float(score) / total_score
+    pdf = {peep: score / total_score
            for peep, score in scores.items()}
     return collections.defaultdict(float, pdf)
 
@@ -405,7 +406,7 @@ def IsSubAccount(user, account=None):
   return ':' in user
 
 
-# TODO(someone): Allow holds on accounts to ensure coins will exist for a
+# TODO: Allow holds on accounts to ensure coins will exist for a
 # ProcessPayment in the near future.
 class Bank(object):
   """Class for managing user balances of hypecoins in the HypeBank."""
@@ -501,7 +502,7 @@ class Bank(object):
       return random.randint(1, balance)
 
     def _MemeTeam(unused_match, unused_balance):
-      # TODO(someone): Determine a way to trigger commands at will.
+      # TODO: Determine a way to trigger commands at will.
       # self.Meme(channel, None, None)
       return 'ayyy'
 
@@ -532,7 +533,7 @@ class Bank(object):
     if amount is None:
       amount = 'Unrecognized amount.'
 
-    if isinstance(amount, str):
+    if isinstance(amount, six.string_types):
       msg_fn(None, amount)
       amount = None
 
@@ -565,12 +566,12 @@ class Bank(object):
       logging.error('ProcessPayment called with negative value: %s, %s -> %s',
                     num_coins, customer, merchants)
       return False
-    if isinstance(merchants, str):
+    if isinstance(merchants, six.string_types):
       merchants = [merchants]
     if merchant_weights is None:
       merchant_weights = [1] * len(merchants)
     total_weight = sum(merchant_weights)
-    merchant_weights = [float(w) / total_weight for w in merchant_weights]
+    merchant_weights = [w / total_weight for w in merchant_weights]
 
     amount_paid = 0
     success = True
@@ -622,7 +623,7 @@ class Bank(object):
       msg_fn(user, '%s deposited into your account. (%s)' %
              (util_lib.FormatHypecoins(num_coins),
               tx_details.get('details', '')))
-    # TODO(someone): Maybe fix returns now that RunInTransaction can throw.
+    # TODO: Maybe fix returns now that RunInTransaction can throw.
     return True
 
   def _Withdraw(self, user, num_coins, tx_details, msg_fn, can_overdraft=False):
@@ -645,7 +646,7 @@ class Bank(object):
       logging.error('Withdraw called with negative value: %s, %s', user,
                     num_coins)
       return False
-    # TODO(someone): This should really be a transaction.
+    # TODO: This should really be a transaction.
     with self._withdraw_lock:
       balance = self.GetBalance(user)
       if balance < num_coins and not can_overdraft:
@@ -668,7 +669,7 @@ class Bank(object):
         msg_fn(user, '%s withdrawn from your account. (%s)' %
                (util_lib.FormatHypecoins(num_coins),
                 tx_details.get('details', '')))
-    # TODO(someone): Maybe fix returns now that RunInTransaction can throw.
+    # TODO: Maybe fix returns now that RunInTransaction can throw.
     return True
 
   def _BankTransaction(self, user, delta, tx_details, tx=None):

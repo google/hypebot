@@ -24,6 +24,7 @@ from functools import partial
 from absl import app
 from absl import flags
 from absl import logging
+import grpc
 
 from hypebot import basebot
 from hypebot.commands import command_lib
@@ -51,10 +52,7 @@ class HypeBot(basebot.BaseBot):
           'api_key': '',
       },
       # Channel to announce betting results.
-      'lcs_channel': {
-          'name': '#lcs',
-          'id': '421671076385521664',
-      },
+      'lcs_channel': {'name': '#lcs', 'id': '421671076385521664'},
       # Where to play trivia.
       'trivia_channels': [
           {'name': '#trivia', 'id': '421675055878242305'}
@@ -92,18 +90,33 @@ class HypeBot(basebot.BaseBot):
           'TriviaAddCommand': {},
           'TriviaAnswerCommand': {},
       },
+      'subscriptions': {
+          'lcs_match': [
+              {'id': '418098011445395462', 'name': '#dev'},
+              {'id': '421671076385521664', 'name': '#lcs'},
+          ],
+          'lcs_match_playoffs': [
+              {'id': '418098011445395462', 'name': '#dev'},
+              {'id': '421671076385521664', 'name': '#lcs'},
+          ],
+      },
   })
 
   def __init__(self, params):
     super(HypeBot, self).__init__(params)
-    api_key = (self._params.riot.api_key or
-               self._core.store.GetValue('api_key', 'key'))
-    if not api_key:
-      logging.fatal('api_key failed to load')
+    for chan in self._params.trivia_channels:
+      channel = Channel(visibility=Channel.PUBLIC, **chan)
+      self._core.trivia.MakeNewChannel(channel)
 
-    self._core.rito = rito_lib.RitoLib(self._core.proxy,
-                                       self._params.riot.api_address)
-    self._core.rito.api_key = api_key
+    # Place LCS gambling first, so it beats Stock to taking the game.
+    self._lcs_game = vegas_game_lib.LCSGame(self._core.esports)
+    self._core.betting_games.insert(0, self._lcs_game)
+    # Give _esports a chance at loading before trying to resolve LCS bets
+    self._core.scheduler.FixedRate(5 * 60, 30 * 60, self._LCSGameCallback)
+
+  def _InitCore(self):
+    super(HypeBot, self)._InitCore()
+    self._core.rito = self._GetRitoLib()
     self._core.game = game_lib.GameLib(self._core.rito)
     self._core.summoner = summoner_lib.SummonerLib(self._core.rito,
                                                    self._core.game)
@@ -113,23 +126,13 @@ class HypeBot(basebot.BaseBot):
         self._core.proxy, self._core.executor, self._core.game,
         self._core.timezone)
     self._core.items = items_lib.ItemsLib(self._core.rito)
-
+    self._core.lcs_channel = Channel(visibility=Channel.PUBLIC,
+                                     **self._params.lcs_channel.AsDict())
     # Trivia can probably be self contained once multiple parsers exist.
     self._core.trivia = trivia_lib.TriviaMaster(self._core.game,
                                                 self._OnNewTriviaQuestion,
                                                 self._OnTriviaQuestionDone,
                                                 self._OnTriviaLeaderboard)
-    for chan in self._params.trivia_channels:
-      channel = Channel(visibility=Channel.PUBLIC, **chan)
-      self._core.trivia.MakeNewChannel(channel)
-
-    self._core.lcs_channel = Channel(visibility=Channel.PUBLIC,
-                                     **self._params.lcs_channel.AsDict())
-    # Place LCS gambling first, so it beats Stock to taking the game.
-    self._lcs_game = vegas_game_lib.LCSGame(self._core.esports)
-    self._core.betting_games.insert(0, self._lcs_game)
-    # Give _esports a chance at loading before trying to resolve LCS bets
-    self._core.scheduler.FixedRate(5 * 60, 30 * 60, self._LCSGameCallback)
 
   ########################
   ### Trivia callbacks ###
@@ -152,6 +155,14 @@ class HypeBot(basebot.BaseBot):
   ##############################
   ### Private helper methods ###
   ##############################
+
+  def _GetRitoLib(self):
+    api_key = (self._params.riot.api_key or
+               self._core.store.GetValue('api_key', 'key'))
+    if not api_key:
+      logging.fatal('Rito API key failed to load.')
+    channel = grpc.insecure_channel(self._params.riot.api_address)
+    return rito_lib.RitoLib(self._core.proxy, channel, api_key)
 
   @command_lib.RequireReady('_core.esports')
   def _LCSGameCallback(self):

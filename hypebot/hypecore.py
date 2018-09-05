@@ -28,7 +28,6 @@ from typing import Any, Callable, Dict, List, Optional, Text, Union
 
 from hypebot import types
 from hypebot.core import async_lib
-from hypebot.core import proxy_lib
 from hypebot.core import schedule_lib
 from hypebot.core import util_lib
 from hypebot.core import zombie_lib
@@ -38,11 +37,13 @@ from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
 from hypebot.plugins import inventory_lib
 from hypebot.protos.channel_pb2 import Channel
+from hypebot.proxies import proxy_factory
 from hypebot.stocks import stock_factory
 from hypebot.storage import storage_factory
+from hypebot.storage import storage_lib
 
 
-# TODO(someone): Remove and replace usage with direct dependency on types lib.
+# TODO: Remove and replace usage with direct dependency on types lib.
 _MessageType = Union[
     Text,
     List[Text]]
@@ -167,6 +168,83 @@ class OutputUtil(object):
     self._output_fn(channel, message)
 
 
+class UserPreferences(object):
+  """Manages users preferences and stores them across bot reloads."""
+
+  # Master list of useable preferences. Dict of pref => default value.
+  _PREFS = {
+      'location': 'MTV',
+      'temperature_unit': 'F',
+      'stocks': 'GOOG,GOOGL',
+      '_dynamite_dm': None,
+      # Maps 'user/####' to '$ldap'.
+      '_dynamite_ldap': None,
+  }
+  _SUBKEY = 'preferences:'
+
+  def __init__(self, store: storage_lib.HypeStore):
+    self._store = store
+
+  def IsValid(self, pref: Text) -> bool:
+    """Returns if a preference is recognized.
+
+    Args:
+      pref: The name of the preference.
+
+    Returns:
+      True if the preference is recognized.
+    """
+    return pref in self._PREFS
+
+  def Get(self, user: Text, pref: Text) -> Text:
+    """Get user's preference value.
+
+    Args:
+      user: The user for which to look up the preference.
+      pref: The preference of the user.
+
+    Returns:
+      The user's preference or the default value for the preferenece. Returns
+      None if the preference is invalid.
+    """
+    if not self.IsValid(pref):
+      logging.warning('Tried to access an invalid pref: %s', pref)
+      return None
+
+    user_prefs = self.GetAll(user)
+    return user_prefs.get(pref, self._PREFS[pref])
+
+  def Set(self, user: Text, pref: Text, value: Text) -> None:
+    """Set user's preference to value.
+
+    If preference is invalid, nothing happens.
+
+    Args:
+      user: The user.
+      pref: Name of preference.
+      value: Value to set preference.
+    """
+    if not self.IsValid(pref):
+      return
+    self._store.RunInTransaction(self._Set, user, pref, value)
+
+  def _Set(self,
+           user: Text,
+           pref: Text,
+           value: Text,
+           tx: storage_lib.HypeTransaction) -> None:
+    """See Set(...) for details."""
+    user_prefs = self._store.GetJsonValue(user, self._SUBKEY, tx) or {}
+    if not value:
+      del user_prefs[pref]
+    else:
+      user_prefs[pref] = value
+    self._store.SetJsonValue(user, self._SUBKEY, user_prefs, tx)
+
+  def GetAll(self, user: Text) -> Dict[Text, Text]:
+    return self._store.GetJsonValue(user, self._SUBKEY) or {}
+
+
 class Core(object):
   """The core of hypebot.
 
@@ -186,8 +264,6 @@ class Core(object):
         this reason, you should only call Join/Part and potentially Notice/Topic
         on this interface.  Don't call SendMessage or else it can send messages
         never intended for human consumption.
-      hypeletter_callback: brcooley get rid of this when migrating hypeletter to
-          its own command.
     """
     self.params = params
     self.nick = self.params.name.lower()
@@ -205,13 +281,14 @@ class Core(object):
       self.cached_store = self.store
 
     self.user_tracker = util_lib.UserTracker()
+    self.user_prefs = UserPreferences(self.cached_store)
     self.timezone = self.params.time_zone
     self.scheduler = schedule_lib.HypeScheduler(self.timezone)
     self.executor = futures.ThreadPoolExecutor(max_workers=8)
     self.runner = async_lib.AsyncRunner(self.executor)
     self.inventory = inventory_lib.InventoryManager(self.store)
-    self.proxy = proxy_lib.Proxy(self.store)
-    self.zombie_manager = zombie_lib.ZombieManager(self.Reply)
+    self.proxy = proxy_factory.Create(self.params.proxy.type, self.store)
+    self.zombie_manager = zombie_lib.ZombieManager()
     self.request_tracker = RequestTracker(self.Reply)
     self.bank = coin_lib.Bank(self.store, self.nick)
     self.bets = coin_lib.Bookie(self.store, self.bank, self.inventory)
@@ -282,6 +359,27 @@ class Core(object):
             channel, _MakeMessage(msg[:max_public_lines] + ['...']))
     else:
       self.interface.SendMessage(channel, _MakeMessage(msg))
+
+  def SendNotification(self, topic: Text, msg: MessageType) -> None:
+    """Sends a message to the channels subscribed to a topic.
+
+    Args:
+      topic: Name of the topic on which to publish the message.
+      msg: The message to send.
+    """
+    if not msg:
+      return
+    if not topic:
+      logging.warning('Attempted to send notification with no topic: %s', msg)
+      return
+    channels = self.params.subscriptions.get(topic, [])
+    if not channels:
+      logging.info('No subscriptions for topic %s, dropping: %s', topic, msg)
+      return
+    message = _MakeMessage(msg)
+    for channel in channels:
+      channel = Channel(visibility=Channel.PUBLIC, **channel)
+      self.interface.Notice(channel, message)
 
   def ReloadData(self) -> bool:
     """Asynchronous reload of all data on core.

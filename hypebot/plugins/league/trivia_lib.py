@@ -118,8 +118,8 @@ class TriviaChannel(object):
     self._leaderboard_callback = leaderboard_callback
 
     # number of pending questions to do. do a question if this > 0.
-    # TODO(gxing): there is a potential race condition on this number if not for
-    # the global interpreter lock
+    # TODO: there is a potential race condition on this number if not
+    # for the global interpreter lock
     self._num_questions_remaining = 0
     # The Question to currently be answered.
     self._current_question = None

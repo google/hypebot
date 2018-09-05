@@ -11,6 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-load("@io_bazel_rules_go//go:def.bzl", "go_prefix")
+"""Creates desired proxy."""
 
-go_prefix("github.com/google/hypebot")
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
+from hypebot.core import factory_lib
+from hypebot.proxies import proxy_lib
+
+# pylint: disable=unused-import
+from hypebot.proxies import requests_proxy
+# pylint: enable=unused-import
+
+_factory = factory_lib.Factory(proxy_lib.Proxy)
+# Creates a proxy instance for the registered name.
+Create = _factory.Create  # pylint: disable=invalid-name

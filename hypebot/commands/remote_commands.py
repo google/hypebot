@@ -24,6 +24,7 @@ from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import weather_lib
+from hypebot.stocks import stock_lib
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
@@ -52,11 +53,13 @@ class StocksCommand(command_lib.BaseCommand):
   @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
-              unused_user: str,
+              user: str,
               symbols: str):
-    symbols = symbols or 'GOOG,GOOGL'
+    symbols = symbols or self._core.user_prefs.Get(user, 'stocks')
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
+    if 'HYPE' in symbols:
+      quotes['HYPE'] = stock_lib.StockQuote(1337.0, 4.2, 0.315)
     if not quotes:
       if symbols[0].upper() == self._core.nick.upper():
         return ('You can\'t buy a sentient AI for some vague promise of future '
@@ -71,6 +74,8 @@ class StocksCommand(command_lib.BaseCommand):
           'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
           self._core.nick)
     histories = self._core.stocks.History(symbols)
+    if 'HYPE' in symbols:
+      histories['HYPE'] = [1, 2, 4, 8]
     for symbol, quote in list(quotes.items())[:5]:
       history = histories.get(symbol)
       change_str = '%0.2f (%0.2f%%)' % (quote.change, quote.percent)
@@ -104,12 +109,12 @@ class WeatherCommand(command_lib.BaseCommand):
   @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
-              unused_user: str,
+              user: str,
               unit: str,
               location: str):
-    unit = unit or 'F'
+    unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()
-    location = location or 'mountain view'
+    location = location or self._core.user_prefs.Get(user, 'location')
     # Override airport code from pacific.
     if location.lower() == 'mtv':
       location = 'mountain view'

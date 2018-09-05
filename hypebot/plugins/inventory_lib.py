@@ -21,7 +21,7 @@ registered via the Registrar class.
 Inventory items are stored as a pickled dictionary, since each item can itself
 be associated with data.
 
-TODO(someone): !use [item] on [pleb]
+TODO: !use [item] on [pleb]
 
 Currently convention of register requires that you register with the same name
 as the class. Unless we need to create from params, we should probably spin a

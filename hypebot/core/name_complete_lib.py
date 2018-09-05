@@ -48,8 +48,12 @@ class NameComplete(object):
         as long as the word is unique among the list.
       dankify: Whether to make all things dank.
     """
-    self._alias_to_name = alias_map.copy()
-    self._name_to_thing = name_map
+    self._alias_to_name = {
+        util_lib.CanonicalizeName(alias): util_lib.CanonicalizeName(name)
+        for alias, name in alias_map.items()
+    }
+    self._name_to_thing = {util_lib.CanonicalizeName(name): thing
+                           for name, thing in name_map.items()}
     aliases_from_display_names = self._GetAliasesFromDisplayNames(display_names)
     for alias, name in aliases_from_display_names.items():
       self._alias_to_name[alias] = name
@@ -84,6 +88,15 @@ class NameComplete(object):
         if word != name:
           aliases_map[word] = name
     return aliases_map
+
+  def __getitem__(self, key):
+    return self.GuessThing(key)
+
+  def __contains__(self, key):
+    return self.__getitem__(key) is not None
+
+  def __iter__(self):
+    return iter(self._name_to_thing)
 
   def GuessThing(self, name):
     """Guesses the object from alias or name and autocompletes."""

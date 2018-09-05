@@ -78,8 +78,9 @@ class Factory(object):
   """Allows creation of magical goodness from strings."""
 
   def __init__(self, base_class, register_internal_nodes=False):
+    self._base_class = base_class
+    self._register_internal_nodes = register_internal_nodes
     self._registrar = {}
-    self._Register(base_class, register_internal_nodes)
 
   def _Register(self, klass, register_internal_nodes):
     """Recursively register all valid subclasses of the klass."""
@@ -91,7 +92,10 @@ class Factory(object):
 
   def Create(self, name: Text, *args, **kwargs):
     if name not in self._registrar:
-      raise ValueError('Name %s does not exist in the registrar.' % name)
+      # Last minute re-registration to avoid import order issues.
+      self._Register(self._base_class, self._register_internal_nodes)
+      if name not in self._registrar:
+        raise ValueError('Name %s does not exist in the registrar.' % name)
     return self._registrar[name](*args, **kwargs)
 
   def CreateFromParams(self,
@@ -139,4 +143,3 @@ class Factory(object):
     params = params_lib.HypeParams(params)
     params.Override(subclass_params)
     return self.Create(name, params, *args, **kwargs)
-

@@ -32,7 +32,7 @@ Message = message_pb2.MessageList
 
 Channel = channel_pb2.Channel
 
-# TODO(someone): Get rid of this since we are python3?
+# TODO: Get rid of this since we are python3?
 HypeStr = Union[Text, bytes]
 
 User = Text

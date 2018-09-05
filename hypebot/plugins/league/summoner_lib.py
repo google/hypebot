@@ -56,6 +56,9 @@ GAME_MODES = {
     'ODIN': 'Dominion',
     'ONEFORALL': 'One For All',
     'SIEGE': 'Nexus Siege',
+    'GAMEMODEX': {
+        constants_pb2.QueueType.NEXUS_BLITZ: 'Blitz',
+    },
 }
 
 

@@ -55,18 +55,18 @@ class BaseBot(object):
       # Restrict some responses to only these channels.
       'main_channels': ['.*'],
       # The default channel for announcements and discussion.
-      'default_channel': {
-          'id': '418098011445395462',
-          'name': '#dev',
-      },
+      'default_channel': {'id': '418098011445395462', 'name': '#dev'},
       # Default time zone for display.
       'time_zone': 'America/Los_Angeles',
+      'proxy': {'type': 'RequestsProxy'},
       'storage': {'type': 'RedisStore'},
       'stocks': {'type': 'IEXStock'},
       'execution_mode': {
           # If this bot is being run for development. Points to non-prod data
           # and changes the command prefix.
           'dev': True,
+          # If the bot is running on deployed architecture.
+          'deployed': False,
       },
       # List of commands for the bot to create.
       'commands': {
@@ -93,6 +93,8 @@ class BaseBot(object):
           'MemeCommand': {},
           'MissingPingCommand': {},
           'OrRiotCommand': {},
+          'PreferencesCommand': {},
+          'PrideAndAccomplishmentCommand': {},
           'RageCommand': {},
           'RatelimitCommand': {},
           'RaiseCommand': {},
@@ -101,6 +103,8 @@ class BaseBot(object):
           'SameCommand': {},
           'SayCommand': {},
           'ScrabbleCommand': {},
+          'SetPreferenceCommand': {},
+          'ShruggieCommand': {},
           'SticksCommand': {},
           'StocksCommand': {},
           'StoryCommand': {},
@@ -127,7 +131,10 @@ class BaseBot(object):
           'JoinCommand': {},
           'LeaveCommand': {},
       },
-      'version': '4.20.0'
+      'subscriptions': {
+          'lottery': [{'id': '418098011445395462', 'name': '#dev'}],
+      },
+      'version': '4.20.0',
   })
 
   def __init__(self, params):
@@ -142,13 +149,13 @@ class BaseBot(object):
     # outgoing communication. It may be swapped out on the fly, e.g., to handle
     # nested callbacks.
     self.interface = interface_factory.CreateFromParams(self._params.interface)
-    self._core = hypecore.Core(self._params, self.interface)
+    self._InitCore()
+    self.interface.RegisterHandlers(
+        self.HandleMessage, self._core.user_tracker, self._core.user_prefs)
 
-    self.interface.RegisterHandlers(self.HandleMessage, self._core.user_tracker)
+    # TODO: Factory built code change listener.
 
-    # TODO(someone): Factory built code change listener.
-
-    # TODO(someone): Should betting on stocks be encapsulated into a
+    # TODO: Should betting on stocks be encapsulated into a
     # `command` so that it can be loaded on demand?
     self._stock_game = vegas_game_lib.StockGame(self._core.stocks)
     self._core.betting_games.append(self._stock_game)
@@ -161,6 +168,17 @@ class BaseBot(object):
         for name, params in self._params.commands.AsDict().items()
         if params not in (None, False)
     ]
+
+  def _InitCore(self):
+    """Initialize hypecore.
+
+    Broken out from __init__ so that subclasses can ensure the core is
+    initialized before dependent things (e.g., commands) are constructed.
+
+    We define initialization as the instantiation of all objects attached to
+    core. However, the objects don't need to be fully loaded.
+    """
+    self._core = hypecore.Core(self._params, self.interface)
 
   def HandleMessage(self, channel, user, msg):
     """Handle an incoming message from the interface."""
@@ -176,7 +194,7 @@ class BaseBot(object):
 
     for command in self._commands:
       try:
-        command.Handle(channel, user, msg)
+        self._core.Reply(channel, command.Handle(channel, user, msg))
       except Exception:
         self._core.Reply(user, 'Exception handling: %s' % msg,
                          log=True, log_level=logging.ERROR)
@@ -188,7 +206,7 @@ class BaseBot(object):
     return alias_lib.ExpandAliases(self._core.cached_store, user, msg)
 
   NESTED_PATTERN = re.compile(r'\$\(([^\(\)]+'
-                              # TODO(someone): Actually tokenize input
+                              # TODO: Actually tokenize input
                               # instead of relying on cheap hacks
                               r'(?:[^\(\)]*".*?"[^\(\)]*)*)\)')
 

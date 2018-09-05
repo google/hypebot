@@ -128,15 +128,16 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
   def _UpdateValue(self, key: HypeStr, subkey: HypeStr, delta: int,
                    tx: HypeTransaction) -> None:
     """Internal version of UpdateValue which requires a transaction."""
-    cur_value = self.GetValue(key, subkey, tx) or 0
+    cur_value = self.GetValue(key, subkey, tx) or '0'
+    cur_type = type(cur_value)
     try:
       cur_value = int(cur_value)
     except Exception as e:
       logging.error(
           'Can\'t call UpdateValue on (%s, %s), value %s isn\'t an int [%s]',
-          key, subkey, cur_value, type(cur_value))
+          key, subkey, cur_value, cur_type)
       raise e
-    new_value = cur_value + delta
+    new_value = cur_type(cur_value + delta)
     self.SetValue(key, subkey, new_value, tx)
 
   @abc.abstractmethod
@@ -352,7 +353,7 @@ class SyncedDict(dict):
   """A "synced" version of a dict which is persisted to a store.
 
   When a SyncedDict is constructed, it loads contents from the store, allowing
-  users to  treat it like a normal dict, but have items persisted across process
+  users to treat it like a normal dict, but have items persisted across process
   restarts. SyncedDict does not stay synchronized across concurrently running
   objects or processes. If you need to see the changes made from another copy
   with the same storage_key, you must first call Sync().

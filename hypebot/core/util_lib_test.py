@@ -28,6 +28,12 @@ from hypebot.core import util_lib
 
 class UtilLibTest(unittest.TestCase):
 
+  def testUnformatHypecoins(self):
+    self.assertEqual(420, util_lib.UnformatHypecoins('420'))
+    self.assertEqual(1234, util_lib.UnformatHypecoins('1.234k'))
+    self.assertEqual(1000000, util_lib.UnformatHypecoins('1M'))
+    self.assertEqual(2500000, util_lib.UnformatHypecoins('2.5M'))
+
   def testArrowTime(self):
     midnight_in_utc = util_lib.ArrowTime()
     raw_arrow_time = arrow.utcnow().replace(hour=0, minute=0, second=0,

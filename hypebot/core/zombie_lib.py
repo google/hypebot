@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 
 from collections import namedtuple
 from threading import Lock
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, Text
 
 from hypebot.protos.channel_pb2 import Channel
 
@@ -33,8 +33,7 @@ class ZombieManager(object):
 
   _ZOMBIE_VERBS = ('crawls', 'lumbers', 'shambles', 'lurches', 'careens')
 
-  def __init__(self, reply_fn: Any) -> None:
-    self._reply_fn = reply_fn
+  def __init__(self) -> None:
     self._channel_to_corpse = {}
     self._channel_to_corpse_lock = Lock()
 
@@ -59,25 +58,23 @@ class ZombieManager(object):
     self.channel_to_corpse[channel.id] = _ZombieRecord(
         5, name, channel.visibility == Channel.PRIVATE)
 
-  def AnimateCorpse(self, channel: Channel) -> None:
+  def AnimateCorpse(self, channel: Channel) -> Text:
     """Outputs a message about the new zombie, or exhaustion of the corpse."""
     zombie = self.channel_to_corpse[channel.id]
     if zombie.fragments > 0:
       self.channel_to_corpse[channel.id] = _ZombieRecord(
           zombie.fragments - 1, zombie.name, zombie.is_private)
-      zombie_target = channel.id
-      # Special case for when a user is the zombie in their  to HypeBot.
+      zombie_target = channel.name
+      # Special case for when a user is the zombie in their DM to HypeBot.
       if channel.name == zombie.name:
         zombie_target = 'a mirror'
       elif zombie.is_private:
         zombie_target = 'you'
-      self._reply_fn(channel, u'[¬º-°]¬ %s %s towards %s [¬º-°]¬' %
-                     (zombie.name, self._ZOMBIE_VERBS[zombie.fragments - 1],
-                      zombie_target))
+      return u'[¬º-°]¬ %s %s towards %s [¬º-°]¬' % (
+          zombie.name, self._ZOMBIE_VERBS[zombie.fragments - 1], zombie_target)
     else:
       del self.channel_to_corpse[channel.id]
-      self._reply_fn(channel,
-                     '%s has run out of matter to reanimate.' % zombie.name)
+      return '%s has run out of matter to reanimate.' % zombie.name
 
   def RemoveCorpse(self, channel):
     if channel.id in self.channel_to_corpse:

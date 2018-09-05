@@ -24,7 +24,9 @@ from functools import partial
 
 from absl import logging
 import arrow
+import six
 
+# pylint: disable=g-bad-import-order
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import params_lib
@@ -33,6 +35,7 @@ from hypebot.data import messages
 from hypebot.plugins import coin_lib
 from hypebot.protos.bet_pb2 import Bet
 from hypebot.protos.channel_pb2 import Channel
+# pylint: enable=g-bad-import-order
 
 _HC_PREFIX = r'(?:h(?:ype)?c(?:oins?)?|₡)(?:\:(\w+))?'
 
@@ -52,9 +55,8 @@ class HCBalanceCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, account, balance_user):
     balance_user = balance_user or user
     if balance_user == 'me':
-      self._core.last_command = partial(self._Handle,
-                                        account=account,
-                                        balance_user=balance_user)
+      self._core.last_command = partial(
+          self._Handle, account=account, balance_user=balance_user)
       balance_user = user
     balance_user = _GetUserAccount(balance_user, account)
 
@@ -91,15 +93,16 @@ class HCBetCommand(command_lib.BaseCommand):
     if direction == 'on':
       direction = 'for'
 
-    bet = Bet(user=user,
-              amount=amount,
-              resolver=self._core.nick,
-              direction=Bet.Direction.Value(direction.upper()),
-              target=bet_target.lower())
+    bet = Bet(
+        user=user,
+        amount=amount,
+        resolver=self._core.nick,
+        direction=Bet.Direction.Value(direction.upper()),
+        target=bet_target.lower())
     for game in self._core.betting_games:
       taken = game.TakeBet(bet)
       if taken:
-        if isinstance(taken, str):
+        if isinstance(taken, six.string_types):
           details = '%s Please do not waste my time.' % taken
           self._core.bets.FineUser(user, 1, details, msg_fn)
           return
@@ -131,9 +134,9 @@ class HCBetsCommand(command_lib.BaseCommand):
         users.add(_GetUserAccount(user, account))
       else:
         users.add(_GetUserAccount(user_or_game, account))
-    query_name = '%s%s%s' % (', '.join(users),
-                             ' - ' if users and desired_games else '',
-                             ', '.join([g.name for g in desired_games]))
+    query_name = '%s%s%s' % (', '.join(users), ' - '
+                             if users and desired_games else '', ', '.join(
+                                 [g.name for g in desired_games]))
 
     # Default behaviors if not specified.
     if not users:
@@ -162,13 +165,15 @@ class HCBetsCommand(command_lib.BaseCommand):
       query_str = '%s has n' % query_name if query_name else 'N'
       return '%so current bets. Risk aversion is unbecoming' % query_str
 
-    responses = ['%s current bets [%s, %s]' %
-                 (query_name or 'All', inflect_lib.Plural(len(bets), 'bet'),
-                  util_lib.FormatHypecoins(bet_total))]
+    responses = [
+        '%s current bets [%s, %s]' % (query_name or 'All',
+                                      inflect_lib.Plural(len(bets), 'bet'),
+                                      util_lib.FormatHypecoins(bet_total))
+    ]
     if (len(bets) > self._params.num_bets and
         channel.visibility == Channel.PUBLIC):
-      responses.append('Only showing %d bets, addiction is no joke.' %
-                       self._params.num_bets)
+      responses.append(
+          'Only showing %d bets, addiction is no joke.' % self._params.num_bets)
       bets = bets[:self._params.num_bets]
 
     responses.extend(bets)
@@ -182,9 +187,9 @@ class HCCirculationCommand(command_lib.BaseCommand):
   def _Handle(self, channel, unused_user, account):
     num_users, coins_in_circulation = self._core.bank.GetBankStats(
         plebs_only=True, account=account)
-    return ('There is %s circulating among %s.' % (
-        util_lib.FormatHypecoins(coins_in_circulation),
-        inflect_lib.Plural(num_users, 'pleb')))
+    return ('There is %s circulating among %s.' %
+            (util_lib.FormatHypecoins(coins_in_circulation),
+             inflect_lib.Plural(num_users, 'pleb')))
 
 
 @command_lib.CommandRegexParser(r'%s forbes(?: (.+))?' % _HC_PREFIX)
@@ -196,9 +201,8 @@ class HCForbesCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, account, forbes_user):
     if forbes_user:
       if forbes_user == 'me':
-        self._core.last_command = partial(self._Handle,
-                                          account=account,
-                                          forbes_user=forbes_user)
+        self._core.last_command = partial(
+            self._Handle, account=account, forbes_user=forbes_user)
         forbes_user = user
       forbes_user = _GetUserAccount(forbes_user, account)
       balance = self._core.bank.GetBalance(forbes_user)
@@ -206,13 +210,13 @@ class HCForbesCommand(command_lib.BaseCommand):
         game_bets = self._core.bets.LookupBets(game.name, forbes_user)
         for bet in game_bets.get(forbes_user, []):
           balance += bet.amount
-      return ('%s has a net worth of %s' % (
-          forbes_user, util_lib.FormatHypecoins(balance, abbreviate=True)))
+      return ('%s has a net worth of %s' %
+              (forbes_user, util_lib.FormatHypecoins(balance, abbreviate=True)))
 
     # Top 4 plebs by net worth.
     pleb_balances = defaultdict(int)
-    pleb_balances.update(self._core.bank.GetUserBalances(plebs_only=True,
-                                                         account=account))
+    pleb_balances.update(
+        self._core.bank.GetUserBalances(plebs_only=True, account=account))
     for game in self._core.betting_games:
       game_bets = self._core.bets.LookupBets(game.name)
       for pleb, pleb_bets in game_bets.items():
@@ -240,9 +244,9 @@ class HCForbesCommand(command_lib.BaseCommand):
 NICK_RE = r'()([a-zA-Z_]\w*)'
 
 
-# TODO(someone): Make .*++ not handle on dev.
-@command_lib.CommandRegexParser(r'(?:%s )?(?:gift|give) (.+?) (.+?)' %
-                                _HC_PREFIX)
+# TODO: Make .*++ not handle on dev.
+@command_lib.CommandRegexParser(
+    r'(?:%s )?(?:gift|give) (.+?) (.+?)' % _HC_PREFIX)
 @command_lib.RegexParser(r'%s(?:\+\+|\s+rocks)(?:[\s,.!?]|$)' % NICK_RE)
 @command_lib.RegexParser(r'(?i)gg <3 %s' % NICK_RE)
 class HCGiftCommand(command_lib.BaseCommand):
@@ -250,7 +254,7 @@ class HCGiftCommand(command_lib.BaseCommand):
   # Normalized recipients that cannot receive gifts accidentally. E.g., c++
   # should not trigger a gift. Can still give them when specified through the
   # CommandRegex (e.g., !hc gift c 1).
-  # TODO(someone): The second part of this comment is currently a lie. You can
+  # TODO: The second part of this comment is currently a lie. You can
   # never gift these recipients.
   _UNGIFTABLE = frozenset(['c'])
 
@@ -260,10 +264,11 @@ class HCGiftCommand(command_lib.BaseCommand):
     if (account or coin_lib.IsSubAccount(user) or
         coin_lib.IsSubAccount(recipient)):
       return 'You cannot gift to/from sub-accounts.'
-    self._core.last_command = partial(self._Handle,
-                                      account=account,
-                                      recipient=recipient,
-                                      amount_str=amount_str)
+    self._core.last_command = partial(
+        self._Handle,
+        account=account,
+        recipient=recipient,
+        amount_str=amount_str)
 
     if user in coin_lib.HYPECENTS:
       return '%s is not a candy machine.' % user
@@ -283,8 +288,7 @@ class HCGiftCommand(command_lib.BaseCommand):
     if normalized_recipient in self._UNGIFTABLE:
       return
 
-    if self._core.bank.ProcessPayment(
-        user, recipient, amount, 'Gift', msg_fn):
+    if self._core.bank.ProcessPayment(user, recipient, amount, 'Gift', msg_fn):
       return '%s gave %s %s' % (user, recipient,
                                 util_lib.FormatHypecoins(amount))
     else:
@@ -296,25 +300,36 @@ class HCResetCommand(command_lib.BaseCommand):
 
   # We ratelimit this to 20h per user to prevent unwise fiscal policies.
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS,
-      {'ratelimit': {
-          'interval': 60 * 60 * 20
-      }})
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'ratelimit': {
+              'interval': 60 * 60 * 20
+          },
+          'bailout_amount': 5500
+      })
 
   @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self, channel, user, account):
     if account or coin_lib.IsSubAccount(user):
       return 'You cannot reset sub-accounts.'
+
     cur_balance = self._core.bank.GetBalance(user)
-    if cur_balance > 5000:
+    if cur_balance > self._params.bailout_amount:
       return ('Surprisingly, I don\'t like to steal hypecoins. '
               'Your balance remains %s') % util_lib.FormatHypecoins(cur_balance)
+
+    bet_potential = 0
+    for game in self._core.betting_games:
+      game_bets = self._core.bets.LookupBets(game.name, user)
+      for bet in game_bets.get(user, []):
+        bet_potential += bet.amount * 2
+    if cur_balance + bet_potential > self._params.bailout_amount:
+      return 'You have great potential with your current bets.'
+
     if cur_balance <= 0:
-      self._Reply(
-          channel,
-          '%s has been foolish and unwise with their HypeCoins.' % user)
-    bailout_amount = 5000 - cur_balance
+      self._Reply(channel,
+                  '%s has been foolish and unwise with their HypeCoins.' % user)
+    bailout_amount = self._params.bailout_amount - (cur_balance + bet_potential)
     if not self._core.bank.ProcessPayment(
         coin_lib.MINT_ACCOUNT, user, bailout_amount, 'Bailout', self._Reply):
       return messages.HYPECOIN_MINT_EXHAUSTION_STR
@@ -326,11 +341,8 @@ class HCRobCommand(command_lib.BaseCommand):
 
   def __init__(self, *args):
     super(HCRobCommand, self).__init__(*args)
-    self._robbin_hood = coin_lib.Thievery(
-        self._core.store,
-        self._core.bank,
-        self._core.nick,
-        self._core.timezone)
+    self._robbin_hood = coin_lib.Thievery(self._core.store, self._core.bank,
+                                          self._core.nick, self._core.timezone)
 
   @command_lib.MainChannelOnly
   @command_lib.HumansOnly('%s is not a crook.')
@@ -380,8 +392,7 @@ class HCTransactionsCommand(command_lib.BaseCommand):
       time_str = util_lib.TimeDeltaToHumanDuration(
           time_delta) if time_delta else '??'
 
-      tx_description = base_tx_description % (
-          util_lib.FormatHypecoins(tx['amount']), time_str,
-          tx.get('details', 'Unknown'))
+      tx_description = base_tx_description % (util_lib.FormatHypecoins(
+          tx['amount']), time_str, tx.get('details', 'Unknown'))
       responses.append(tx_description)
     return responses

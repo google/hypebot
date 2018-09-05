@@ -36,6 +36,7 @@ from __future__ import unicode_literals
 from absl import logging
 from google.protobuf import text_format
 import grpc
+import six
 
 from hypebot.protos.riot import platform_pb2
 from hypebot.protos.riot.v3 import champion_mastery_pb2
@@ -68,12 +69,10 @@ PLATFORM_IDS = {
 class RitoLib(object):
   """Class for fetching various data from Riot API."""
 
-  def __init__(self, proxy, riot_api_address):
-    self.api_key = None
-
+  def __init__(self, proxy, channel, api_key):
     self._proxy = proxy
+    self.api_key = api_key
 
-    channel = grpc.insecure_channel(riot_api_address)
     self._champion_mastery_service = (
         champion_mastery_pb2_grpc.ChampionMasteryServiceStub(channel))
     self._league_service = league_pb2_grpc.LeagueServiceStub(channel)
@@ -104,7 +103,7 @@ class RitoLib(object):
                 ('platform-id', self._GetPlatformMetadata(region)))
     rpc_action = lambda: method(request, metadata=metadata).SerializeToString()
     request_plain_text = text_format.MessageToString(
-        request, as_utf8=True, as_one_line=True)
+        request, as_utf8=not six.PY2, as_one_line=True)
     method_name = method._method.decode('utf8')
     key = ':'.join((region, method_name, request_plain_text))
     # Handle RPC exceptions outside of the proxy fetch so temporary errors are

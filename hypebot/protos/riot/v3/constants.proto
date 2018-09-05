@@ -127,6 +127,8 @@ message QueueType {
     ASSASSINATE_5x5 = 600;
     // Dark Star games
     DARKSTAR_3x3 = 610;
+    // Nexus Blitz!
+    NEXUS_BLITZ = 1200;
   }
 }
 

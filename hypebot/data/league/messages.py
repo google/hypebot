@@ -17,6 +17,8 @@
 Please keep sorted by alpabetical order of variable names.
 """
 
+from __future__ import unicode_literals
+
 # pylint: disable=anomalous-backslash-in-string
 _DANK_MEMES = [
     'One does not simply win weekend tourneys.',
@@ -61,7 +63,7 @@ _DANK_MEMES = [
     'MikeYeung HYPE!',
     ('I\'m not allowed to disclose the numbers but trust me, it wasn\'t a '
      'close race.'),
-    ['gl hf', 'ya nerds'],
+    '👹 You look familiar.',
 ]
 _TEAM_MEMES = [
     '#{team}Hype!',
