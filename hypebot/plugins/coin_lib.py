@@ -467,7 +467,14 @@ class Bank(object):
     num_coins_to_mint = max(
         5000, int(math.log(coins_in_circulation, 2) * num_users * 1000))
     logging.info('Minting %s', util_lib.FormatHypecoins(num_coins_to_mint))
-    if not self._Deposit(MINT_ACCOUNT, num_coins_to_mint, 'Minting', None):
+    tx_details = {
+        'source': 'Ether',
+        'destination': MINT_ACCOUNT,
+        'amount': num_coins_to_mint,
+        'details': 'Minting',
+        'ts': arrow.utcnow().timestamp,
+    }
+    if not self._Deposit(MINT_ACCOUNT, num_coins_to_mint, tx_details, None):
       logging.error('Minting %s failed',
                     util_lib.FormatHypecoins(num_coins_to_mint))
 
