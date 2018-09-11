@@ -296,7 +296,7 @@ class GameLib(object):
 
     # Make passives more dank.
     passive_name = util_lib.Dankify(passive.name)
-    tooltip = util_lib.Dankify(passive.sanitized_description)
+    tooltip = util_lib.Dankify(self._Sanitize(passive.description))
 
     passive_strs = []
 
@@ -346,7 +346,7 @@ class GameLib(object):
 
     # Make skills more dank.
     skill_name = util_lib.Dankify(skill.name)
-    tooltip = util_lib.Dankify(skill.sanitized_tooltip)
+    tooltip = util_lib.Dankify(self._Sanitize(skill.tooltip))
 
     skill_title = '{} {}: {}'.format(champ.name, skill_button, skill_name)
     skill_strs = []
@@ -548,3 +548,6 @@ class GameLib(object):
       result[-1] = result[-1][:split_index + 1]
       result.append(extras)
     return result
+
+  def _Sanitize(self, raw: Text) -> Text:
+    return re.sub(r'<.*?>', '', raw)
