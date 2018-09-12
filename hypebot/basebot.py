@@ -51,16 +51,28 @@ class BaseBot(object):
       # Human readable name to call bot. Will be normalized before most uses.
       'name': 'BaseBot',
       # Chat application interface.
-      'interface': {'type': 'DiscordInterface'},
+      'interface': {
+          'type': 'DiscordInterface'
+      },
       # Restrict some responses to only these channels.
       'main_channels': ['.*'],
       # The default channel for announcements and discussion.
-      'default_channel': {'id': '418098011445395462', 'name': '#dev'},
+      'default_channel': {
+          'id': '418098011445395462',
+          'name': '#dev'
+      },
       # Default time zone for display.
       'time_zone': 'America/Los_Angeles',
-      'proxy': {'type': 'RequestsProxy'},
-      'storage': {'type': 'RedisStore'},
-      'stocks': {'type': 'IEXStock'},
+      'proxy': {
+          'type': 'RequestsProxy'
+      },
+      'storage': {
+          'type': 'RedisStore',
+          'cached_type': 'ReadCacheRedisStore'
+      },
+      'stocks': {
+          'type': 'IEXStock'
+      },
       'execution_mode': {
           # If this bot is being run for development. Points to non-prod data
           # and changes the command prefix.
@@ -132,7 +144,10 @@ class BaseBot(object):
           'LeaveCommand': {},
       },
       'subscriptions': {
-          'lottery': [{'id': '418098011445395462', 'name': '#dev'}],
+          'lottery': [{
+              'id': '418098011445395462',
+              'name': '#dev'
+          }],
       },
       'version': '4.20.0',
   })
