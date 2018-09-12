@@ -271,8 +271,7 @@ class Core(object):
     self.output_util = OutputUtil(self.Reply)
 
     self.store = storage_factory.CreateFromParams(self.params.storage)
-    cached_type = self.params.storage.get(self.params.storage.type, {}).get(
-        'cached_type')
+    cached_type = self.params.storage.get('cached_type')
     if cached_type:
       self.cached_store = storage_factory.Create(
           cached_type, self.params.storage.get(self.params.storage.type))

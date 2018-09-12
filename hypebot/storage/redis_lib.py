@@ -25,7 +25,8 @@ from typing import Any, List, Optional, Tuple
 from absl import logging
 import redis
 
-from hypebot.types import HypeStr, JsonType
+from hypebot.types import HypeStr, JsonType  # pylint: disable=g-multiple-import
+from hypebot.core import cache_lib
 from hypebot.core import params_lib
 from hypebot.storage import storage_lib
 
@@ -131,15 +132,17 @@ class RedisStore(storage_lib.HypeStore):
   DEFAULT_PARAMS = params_lib.MergeParams(
       storage_lib.HypeStore.DEFAULT_PARAMS, {
           'host': '127.0.0.1',
-          'port': 6379
+          'port': 6379,
+          'auth_key': None
       })
 
   def __init__(self, params: Any, *args, **kwargs):
-    self._params = self.DEFAULT_PARAMS
-    self._params.Override(params)
-    self._params.Lock()
-    self._redis = redis.StrictRedis(self._params.host, self._params.port,
-                                    decode_responses=True)
+    super(RedisStore, self).__init__(params, *args, **kwargs)
+    self._redis = redis.StrictRedis(
+        self._params.host,
+        self._params.port,
+        password=self._params.auth_key,
+        decode_responses=True)
 
   @property
   def engine(self) -> HypeStr:
@@ -255,9 +258,56 @@ class RedisStore(storage_lib.HypeStore):
       subkey: HypeStr,
       tx: Optional[RedisTransaction] = None) -> Tuple[
           Optional[HypeStr], HypeStr]:
-    """Builds the full key for Redis from the key and subkey."""
+    """Builds the full key for Redis from the key and subkey.
+
+    Note, this function either adds a type lookup to the transaction, or makes
+    a call to the redis server to fetch type information for the key. This is
+    done to ensure other operations (such as a GetValue on a key that stores
+    historic values) can be delegated to the right underlying calls to redis (in
+    this example, an lindex).
+
+    Args:
+      key: The primary key used to build the full_key.
+      subkey: The subkey used to build the full_key.
+      tx: Optional transaction to run the type lookup within.
+
+    Returns:
+      A (key_type, full_key) tuple, where key_type is None if the full_key
+      doesn't exist in the database.
+    """
     full_key = '%s:%s' % (subkey, key)
-    datatype = tx.type(full_key) if tx else self._redis.type(full_key)
-    if datatype == 'none':
-      datatype = None
-    return (datatype, full_key)
+    key_type = tx.type(full_key) if tx else self._redis.type(full_key)
+    if key_type == 'none':
+      key_type = None
+    return (key_type, full_key)
+
+
+class ReadCacheRedisStore(RedisStore):
+  """A version of RedisStore which maintains a cache for lookups.
+
+  Note the cache is not kept coherent between bots (writes for a cached key are
+  not propagated to other caches), and as such this class should only be used
+  when QPS to redis is of concern.
+  """
+
+  def __init__(self, params, cache_max_age=30, cache_max_items=128):
+    super(ReadCacheRedisStore, self).__init__(params)
+    self._cache = cache_lib.LRUCache(cache_max_items, max_age=cache_max_age)
+    logging.info('RCRedisStore params =>\n%s', self._params.AsDict())
+
+  def SetValue(self, key, subkey, value, tx=None):
+    full_key = '%s:%s' % (subkey, key)
+    # Short-circut if we try to store the same value again
+    if self._cache.Get(full_key) == value:
+      return
+    self._cache.Put(full_key, value)
+    super(ReadCacheRedisStore, self).SetValue(key, subkey, value, tx)
+
+  def GetValue(self, key, subkey, tx=None):
+    # Check the cache before delegating to the base class
+    full_key = '%s:%s' % (subkey, key)
+    value = self._cache.Get(full_key)
+    if value is None:
+      value = super(ReadCacheRedisStore, self).GetValue(key, subkey, tx)
+      self._cache.Put(full_key, value)
+    return value
