@@ -23,6 +23,7 @@ from hypebot import types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
+from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
 from hypebot.stocks import stock_lib
 
@@ -49,6 +50,28 @@ class KittiesSalesCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'stocks?(?: (.*))?')
 class StocksCommand(command_lib.BaseCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS,
+      {
+          'enable_betting': True,
+      })
+
+  def __init__(self, *args):
+    super(StocksCommand, self).__init__(*args)
+    if self._params.enable_betting:
+      self._game = vegas_game_lib.StockGame(self._core.stocks)
+      self._core.betting_games.append(self._game)
+
+      self._core.scheduler.DailyCallback(
+          util_lib.ArrowTime(16, 0, 30, 'America/New_York'),
+          self._BetCallback)
+
+  def _BetCallback(self):
+    notifications = self._core.bets.SettleBets(
+        self._game, self._core.nick, self._Reply)
+    if notifications:
+      self._core.SendNotification('stocks', notifications)
 
   @command_lib.MainChannelOnly
   def _Handle(self,

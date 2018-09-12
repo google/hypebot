@@ -78,6 +78,7 @@ class GameBase(with_metaclass(abc.ABCMeta)):
     Returns:
       winners: array of tuples (user, amount) of winners.
       unused_bets: dict of bets that were not processed.
+      notifications: List of messages to send as notifications.
     """
 
 
@@ -118,9 +119,9 @@ class StockGame(GameBase):
 
     logging.info('Starting stock gamble, quotes: %s pool: %s', quotes, pool)
     pool_value = sum(x.amount for user_bets in pool.values() for x in user_bets)
-    msg_fn(None, 'The trading day is closed! %s bet %s on stock' %
-           (inflect_lib.Plural(len(pool), 'pleb'),
-            util_lib.FormatHypecoins(pool_value)))
+    notifications = ['The trading day is closed! %s bet %s on stock' %
+                     (inflect_lib.Plural(len(pool), 'pleb'),
+                      util_lib.FormatHypecoins(pool_value))]
 
     winners = defaultdict(int)
     for user, users_bets in pool.items():
@@ -181,15 +182,14 @@ class StockGame(GameBase):
             'up' if net_amount > 0 else 'down',
             util_lib.FormatHypecoins(abs(net_amount)))
 
-      user_message = '%s was %s%s%s' % (user, right_snippet, wrong_snippet,
-                                        summary_snippet)
+      notifications.append('%s was %s%s%s' % (
+          user, right_snippet, wrong_snippet, summary_snippet))
       if user in winners:
         msg_fn(user, ('You\'ve won %s thanks to your ability to predict the '
                       'whims of hedge fund managers!') %
                util_lib.FormatHypecoins(winners[user]))
-      msg_fn(None, user_message)
 
-    return (winners.items(), {})
+    return (winners.items(), {}, notifications)
 
 
 class LCSGame(GameBase):
@@ -308,14 +308,15 @@ class LCSGame(GameBase):
                                           summary_snippet)
         msgs.append(user_message)
 
+    notifications = []
     if msgs:
-      msg_fn(None, 'LCS match results in! %s bet %s.' %
-             (inflect_lib.Plural(len(msgs), 'pleb'),
-              util_lib.FormatHypecoins(pool_value)))
-    for msg in msgs:
-      msg_fn(None, msg)
+      notifications = [
+          'LCS match results in! %s bet %s.' % (
+              inflect_lib.Plural(len(msgs), 'pleb'),
+              util_lib.FormatHypecoins(pool_value))
+      ] + msgs
 
-    return (winners.items(), unused_bets)
+    return (winners.items(), unused_bets, notifications)
 
 
 class LotteryGame(GameBase):
@@ -360,10 +361,10 @@ class LotteryGame(GameBase):
     # The lotto is global, so there should only be a single bet for each user
     pool_value = sum(user_bets[0].amount for user_bets in pool.values())
     if not pool_value:
-      return ([], {})
-    msg_fn(None, 'All 7-11s are closed! %s bet %s on the lottery' %
-           (inflect_lib.Plural(len(pool), 'pleb'),
-            util_lib.FormatHypecoins(pool_value)))
+      return ([], {}, [])
+    notifications = ['All 7-11s are closed! %s bet %s on the lottery' %
+                     (inflect_lib.Plural(len(pool), 'pleb'),
+                      util_lib.FormatHypecoins(pool_value))]
 
     coins, item = self.ComputeCurrentJackpot(pool)
     winning_number = random.randint(1, pool_value)
@@ -378,11 +379,11 @@ class LotteryGame(GameBase):
             ('We\'ve always been such close friends. Can I borrow some money '
              'for rent?')
         ])
-        msg_fn(None, '%s won %s and a(n) %s in the lottery!' % (
+        notifications.append('%s won %s and a(n) %s in the lottery!' % (
             user, util_lib.FormatHypecoins(coins), item.human_name))
-        return ([(user, coins), (user, item)], {})
+        return ([(user, coins), (user, item)], {}, notifications)
 
-    return ([], {})
+    return ([], {}, [])
 
   def ComputeCurrentJackpot(self, pool):
     pool_value = 0

@@ -314,15 +314,15 @@ class Bookie(object):
       game: The game to settle bets for.
       resolver: The bot trying to settle bets. Used to filter out bets placed by
           other bots which this bot shouldn't resolve.
-      msg_fn: {callable(channel, msg)} function to send messages.
+      msg_fn: {callable(channel, msg)} function to send user messages.
       *args: Additional positional arguments to pass to settlement_fn.
       **kwargs: Additional keyword arguments to pass to settlement_fn.
 
     Returns:
-      None.
+      List of messages to send as notifications of settling bets.
     """
-    self._store.RunInTransaction(self._SettleBets, game, resolver, msg_fn,
-                                 *args, **kwargs)
+    return self._store.RunInTransaction(self._SettleBets, game, resolver,
+                                        msg_fn, *args, **kwargs)
 
   def _SettleBets(self, game, resolver, msg_fn, *args, **kwargs):
     """Internal version of SettleBets to be run with a transaction."""
@@ -330,12 +330,12 @@ class Bookie(object):
       tx = kwargs.get('tx')
       if not tx:
         logging.error('_SettleBets can only be called with a transaction.')
-        return
+        return []
       bets = self._GetBets(game.name, tx)
       if not bets:
         logging.warning('Tried to settle bets for %s, but no bets were found',
                         game.name)
-        return
+        return []
       # Filter out bets with 'resolver' set and != the current bot
       unresolved_bets = collections.defaultdict(list)
       filtered_bets = collections.defaultdict(list)
@@ -348,10 +348,10 @@ class Bookie(object):
 
       if not filtered_bets:
         logging.info('No bets found for resolver %s', resolver)
-        return
+        return []
 
-      winner_info, unused_bets = game.SettleBets(filtered_bets, msg_fn, *args,
-                                                 **kwargs)
+      winner_info, unused_bets, notifications = game.SettleBets(
+          filtered_bets, msg_fn, *args, **kwargs)
       # Merge bets that were filtered out of the pool with bets unused by the
       # game itself. We can't use a raw update here since we need to merge the
       # lists of bets for users with bets in both dicts.
@@ -370,6 +370,7 @@ class Bookie(object):
                         game.name)
       else:
         self._inventory.AddItem(winner, winnings)
+    return notifications
 
   def FineUser(self, user, amount, details, msg_fn):
     return self._bank.ProcessPayment(user, BOOKIE_ACCOUNT, amount,

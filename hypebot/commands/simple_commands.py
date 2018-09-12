@@ -117,9 +117,10 @@ class JackpotCommand(command_lib.BaseCommand):
     return responses
 
   def _LotteryCallback(self):
-    logging.info('Running lottery callback.')
-    msg_fn = partial(self._Reply, default_channel=self._core.default_channel)
-    self._core.bets.SettleBets(self._game, self._core.nick, msg_fn)
+    notifications = self._core.bets.SettleBets(
+        self._game, self._core.nick, self._Reply)
+    if notifications:
+      self._core.SendNotification('lottery', notifications)
 
   def _LotteryWarningCallback(self, remaining=None):
     logging.info('Running lottery warning callback.')
