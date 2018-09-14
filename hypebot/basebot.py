@@ -23,7 +23,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from functools import partial
 import re
 
 from absl import app
@@ -34,10 +33,8 @@ import arrow
 from hypebot import hypecore
 from hypebot.commands import command_factory
 from hypebot.core import params_lib
-from hypebot.core import util_lib
 from hypebot.interfaces import interface_factory
 from hypebot.plugins import alias_lib
-from hypebot.plugins import vegas_game_lib
 from hypebot.protos.channel_pb2 import Channel
 
 FLAGS = flags.FLAGS
@@ -51,16 +48,28 @@ class BaseBot(object):
       # Human readable name to call bot. Will be normalized before most uses.
       'name': 'BaseBot',
       # Chat application interface.
-      'interface': {'type': 'DiscordInterface'},
+      'interface': {
+          'type': 'DiscordInterface'
+      },
       # Restrict some responses to only these channels.
       'main_channels': ['.*'],
       # The default channel for announcements and discussion.
-      'default_channel': {'id': '418098011445395462', 'name': '#dev'},
+      'default_channel': {
+          'id': '418098011445395462',
+          'name': '#dev'
+      },
       # Default time zone for display.
       'time_zone': 'America/Los_Angeles',
-      'proxy': {'type': 'RequestsProxy'},
-      'storage': {'type': 'RedisStore'},
-      'stocks': {'type': 'IEXStock'},
+      'proxy': {
+          'type': 'RequestsProxy'
+      },
+      'storage': {
+          'type': 'RedisStore',
+          'cached_type': 'ReadCacheRedisStore'
+      },
+      'stocks': {
+          'type': 'IEXStock'
+      },
       'execution_mode': {
           # If this bot is being run for development. Points to non-prod data
           # and changes the command prefix.
@@ -132,7 +141,14 @@ class BaseBot(object):
           'LeaveCommand': {},
       },
       'subscriptions': {
-          'lottery': [{'id': '418098011445395462', 'name': '#dev'}],
+          'lottery': [{
+              'id': '418098011445395462',
+              'name': '#dev'
+          }],
+          'stocks': [{
+              'id': '418098011445395462',
+              'name': '#dev'
+          }],
       },
       'version': '4.20.0',
   })
@@ -154,14 +170,6 @@ class BaseBot(object):
         self.HandleMessage, self._core.user_tracker, self._core.user_prefs)
 
     # TODO: Factory built code change listener.
-
-    # TODO: Should betting on stocks be encapsulated into a
-    # `command` so that it can be loaded on demand?
-    self._stock_game = vegas_game_lib.StockGame(self._core.stocks)
-    self._core.betting_games.append(self._stock_game)
-    self._core.scheduler.DailyCallback(
-        util_lib.ArrowTime(16, 0, 30, 'America/New_York'),
-        self._StockCallback)
 
     self._commands = [
         command_factory.Create(name, params, self._core)
@@ -244,11 +252,6 @@ class BaseBot(object):
       self._core.cached_store.SetValue(user, 'lastseen', str(utc_now))
     except Exception as e:
       logging.error('Error recording user activity: %s', e)
-
-  def _StockCallback(self):
-    msg_fn = partial(self._core.Reply,
-                     default_channel=self._core.default_channel)
-    self._core.bets.SettleBets(self._stock_game, self._core.nick, msg_fn)
 
 
 def main(argv):

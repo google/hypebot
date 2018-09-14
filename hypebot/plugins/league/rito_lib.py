@@ -13,6 +13,9 @@
 # limitations under the License.
 """rito_lib is a wrapper around Riot API v3.
 
+Due to the deprecation of the static data API, we use data dragon and mimic the
+old response from the static-data-api.
+
 usage:
   # setup
   import rito_lib
@@ -34,8 +37,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from absl import logging
+from google.protobuf import json_format
 from google.protobuf import text_format
 import grpc
+import os
 import six
 
 from hypebot.protos.riot import platform_pb2
@@ -46,7 +51,6 @@ from hypebot.protos.riot.v3 import league_pb2_grpc
 from hypebot.protos.riot.v3 import match_pb2
 from hypebot.protos.riot.v3 import match_pb2_grpc
 from hypebot.protos.riot.v3 import static_data_pb2
-from hypebot.protos.riot.v3 import static_data_pb2_grpc
 from hypebot.protos.riot.v3 import summoner_pb2
 from hypebot.protos.riot.v3 import summoner_pb2_grpc
 
@@ -66,6 +70,58 @@ PLATFORM_IDS = {
 }
 
 
+class DataDragonLib(object):
+  """Wraps ddragon to mimic old static-data-api."""
+
+  _BASE_URL = 'https://ddragon.leagueoflegends.com'
+
+  def __init__(self, proxy):
+    self._proxy = proxy
+
+  def _EndpointUrl(self, endpoint, realm='na'):
+    response = self._proxy.FetchJson(
+        os.path.join(self._BASE_URL, 'realms', '%s.json' % realm))
+    version = response.get('v')
+    return os.path.join(self._BASE_URL, 'cdn', version, 'data/en_US',
+                        '%s.json' % endpoint)
+
+  def ListChampions(self):
+    """Use undocumented endpoint to list champions."""
+    response = self._proxy.FetchJson(self._EndpointUrl('championFull'))
+    # Fix differences between static-data and ddragon.
+    for _, champ in response['data'].items():
+      tmp = champ['id']
+      champ['id'] = champ['key']
+      champ['key'] = tmp
+
+      for spell in champ['spells']:
+        spell['effectBurn'][0] = ''
+        for var in spell['vars']:
+          if not isinstance(var['coeff'], list):
+            var['coeff'] = [var['coeff']]
+
+    return json_format.ParseDict(
+        response,
+        static_data_pb2.ListChampionsResponse(),
+        ignore_unknown_fields=True)
+
+  def ListItems(self):
+    response = self._proxy.FetchJson(self._EndpointUrl('item'))
+    return json_format.ParseDict(
+        response,
+        static_data_pb2.ListItemsResponse(),
+        ignore_unknown_fields=True)
+
+  def ListReforgedRunePaths(self):
+    response = self._proxy.FetchJson(self._EndpointUrl('runesReforged'))
+    return json_format.ParseDict(
+        {
+            'paths': response
+        },  # ddragon pls.
+        static_data_pb2.ListReforgedRunePathsResponse(),
+        ignore_unknown_fields=True)
+
+
 class RitoLib(object):
   """Class for fetching various data from Riot API."""
 
@@ -77,9 +133,9 @@ class RitoLib(object):
         champion_mastery_pb2_grpc.ChampionMasteryServiceStub(channel))
     self._league_service = league_pb2_grpc.LeagueServiceStub(channel)
     self._match_service = match_pb2_grpc.MatchServiceStub(channel)
-    self._static_data_service = static_data_pb2_grpc.StaticDataServiceStub(
-        channel)
     self._summoner_service = summoner_pb2_grpc.SummonerServiceStub(channel)
+
+    self._ddragon = DataDragonLib(self._proxy)
 
   def _GetPlatformMetadata(self, region):
     return platform_pb2.PlatformId.Name(
@@ -96,11 +152,12 @@ class RitoLib(object):
       request: The RPC request.
       region: The Riot API region.
       use_storage: If True, permanently store the result.
+
     Returns:
       The data or None if the RPC failed.
     """
-    metadata = (('api-key', self.api_key),
-                ('platform-id', self._GetPlatformMetadata(region)))
+    metadata = (('api-key', self.api_key), ('platform-id',
+                                            self._GetPlatformMetadata(region)))
     rpc_action = lambda: method(request, metadata=metadata).SerializeToString()
     request_plain_text = text_format.MessageToString(
         request, as_utf8=not six.PY2, as_one_line=True)
@@ -117,35 +174,31 @@ class RitoLib(object):
                     e)
 
   def GetSummoner(self, region, summoner_name):
-    return self._CallApi(
-        self._summoner_service.GetSummoner,
-        summoner_pb2.GetSummonerRequest(name=summoner_name),
-        region)
+    return self._CallApi(self._summoner_service.GetSummoner,
+                         summoner_pb2.GetSummonerRequest(name=summoner_name),
+                         region)
 
   def GetSummonerById(self, region, summoner_id):
-    return self._CallApi(
-        self._summoner_service.GetSummoner,
-        summoner_pb2.GetSummonerRequest(id=summoner_id),
-        region)
+    return self._CallApi(self._summoner_service.GetSummoner,
+                         summoner_pb2.GetSummonerRequest(id=summoner_id),
+                         region)
 
   def ListLeaguePositions(self, region, summoner_id):
     return self._CallApi(
         self._league_service.ListLeaguePositions,
-        league_pb2.ListLeaguePositionsRequest(summoner_id=summoner_id),
-        region)
+        league_pb2.ListLeaguePositionsRequest(summoner_id=summoner_id), region)
 
   def ListChampionMasteries(self, region, summoner_id):
     return self._CallApi(
         self._champion_mastery_service.ListChampionMasteries,
         champion_mastery_pb2.ListChampionMasteriesRequest(
-            summoner_id=summoner_id),
-        region)
+            summoner_id=summoner_id), region)
 
   def GetChampionMastery(self, region, summoner_id, champ_id):
-    return self._CallApi(self._champion_mastery_service.GetChampionMastery,
-                         champion_mastery_pb2.GetChampionMasteryRequest(
-                             summoner_id=summoner_id, champion_id=champ_id),
-                         region)
+    return self._CallApi(
+        self._champion_mastery_service.GetChampionMastery,
+        champion_mastery_pb2.GetChampionMasteryRequest(
+            summoner_id=summoner_id, champion_id=champ_id), region)
 
   def ListRecentMatches(self, region, account_id):
     return self._CallApi(
@@ -161,20 +214,10 @@ class RitoLib(object):
         use_storage=True)
 
   def ListItems(self):
-    return self._CallApi(
-        self._static_data_service.ListItems,
-        static_data_pb2.ListItemsRequest(tags=['gold', 'sanitizedDescription']),
-        'na')
+    return self._ddragon.ListItems()
 
   def ListChampions(self):
-    return self._CallApi(
-        self._static_data_service.ListChampions,
-        static_data_pb2.ListChampionsRequest(
-            tags=['image', 'lore', 'stats', 'spells', 'passive']),
-        'na')
+    return self._ddragon.ListChampions()
 
   def ListReforgedRunePaths(self):
-    return self._CallApi(
-        self._static_data_service.ListReforgedRunePaths,
-        static_data_pb2.ListReforgedRunePathsRequest(),
-        'na')
+    return self._ddragon.ListReforgedRunePaths()

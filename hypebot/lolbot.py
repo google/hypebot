@@ -19,8 +19,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from functools import partial
-
 from absl import app
 from absl import flags
 from absl import logging
@@ -91,6 +89,10 @@ class HypeBot(basebot.BaseBot):
           'TriviaAnswerCommand': {},
       },
       'subscriptions': {
+          'lcs_bets': [
+              {'id': '418098011445395462', 'name': '#dev'},
+              {'id': '421671076385521664', 'name': '#lcs'},
+          ],
           'lcs_match': [
               {'id': '418098011445395462', 'name': '#dev'},
               {'id': '421671076385521664', 'name': '#lcs'},
@@ -167,8 +169,10 @@ class HypeBot(basebot.BaseBot):
   @command_lib.RequireReady('_core.esports')
   def _LCSGameCallback(self):
     self._core.esports.UpdateEsportsMatches()
-    msg_fn = partial(self._core.Reply, default_channel=self._core.lcs_channel)
-    self._core.bets.SettleBets(self._lcs_game, self._core.nick, msg_fn)
+    notifications = self._core.bets.SettleBets(
+        self._lcs_game, self._core.nick, self._Reply)
+    if notifications:
+      self._core.SendNotification('lcs_bets', notifications)
 
 
 def main(argv):
