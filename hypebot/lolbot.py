@@ -170,7 +170,7 @@ class HypeBot(basebot.BaseBot):
   def _LCSGameCallback(self):
     self._core.esports.UpdateEsportsMatches()
     notifications = self._core.bets.SettleBets(
-        self._lcs_game, self._core.nick, self._Reply)
+        self._lcs_game, self._core.nick, self._core.Reply)
     if notifications:
       self._core.SendNotification('lcs_bets', notifications)
 
