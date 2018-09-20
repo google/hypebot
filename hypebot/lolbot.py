@@ -172,7 +172,7 @@ class HypeBot(basebot.BaseBot):
     notifications = self._core.bets.SettleBets(
         self._lcs_game, self._core.nick, self._core.Reply)
     if notifications:
-      self._core.SendNotification('lcs_bets', notifications)
+      self._core.PublishMessage('lcs_bets', notifications)
 
 
 def main(argv):

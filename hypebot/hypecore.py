@@ -359,17 +359,21 @@ class Core(object):
     else:
       self.interface.SendMessage(channel, _MakeMessage(msg))
 
-  def SendNotification(self, topic: Text, msg: MessageType) -> None:
+  def PublishMessage(self,
+                     topic: Text,
+                     msg: MessageType,
+                     notice: bool = False) -> None:
     """Sends a message to the channels subscribed to a topic.
 
     Args:
       topic: Name of the topic on which to publish the message.
       msg: The message to send.
+      notice: If true, use interface.Notice instead of interface.SendMessage.
     """
     if not msg:
       return
     if not topic:
-      logging.warning('Attempted to send notification with no topic: %s', msg)
+      logging.warning('Attempted to publish message with no topic: %s', msg)
       return
     channels = self.params.subscriptions.get(topic, [])
     if not channels:
@@ -378,7 +382,10 @@ class Core(object):
     message = _MakeMessage(msg)
     for channel in channels:
       channel = Channel(visibility=Channel.PUBLIC, **channel)
-      self.interface.Notice(channel, message)
+      if notice:
+        self.interface.Notice(channel, message)
+      else:
+        self.interface.SendMessage(channel, message)
 
   def ReloadData(self) -> bool:
     """Asynchronous reload of all data on core.

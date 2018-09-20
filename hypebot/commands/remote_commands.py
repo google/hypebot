@@ -71,7 +71,7 @@ class StocksCommand(command_lib.BaseCommand):
     notifications = self._core.bets.SettleBets(
         self._game, self._core.nick, self._Reply)
     if notifications:
-      self._core.SendNotification('stocks', notifications)
+      self._core.PublishMessage('stocks', notifications)
 
   @command_lib.MainChannelOnly
   def _Handle(self,

@@ -177,7 +177,7 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
       livestream_str = 'Watch at %s' % livestream_link
       self._core.interface.Topic(
           self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
-    self._core.SendNotification(
+    self._core.PublishMessage(
         topic, u'%s is starting soon. %s and get #Hyped!' %
         (match_name, livestream_str))
 

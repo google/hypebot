@@ -120,7 +120,7 @@ class JackpotCommand(command_lib.BaseCommand):
     notifications = self._core.bets.SettleBets(
         self._game, self._core.nick, self._Reply)
     if notifications:
-      self._core.SendNotification('lottery', notifications)
+      self._core.PublishMessage('lottery', notifications)
 
   def _LotteryWarningCallback(self, remaining=None):
     logging.info('Running lottery warning callback.')
@@ -132,7 +132,7 @@ class JackpotCommand(command_lib.BaseCommand):
     coins, item = self._game.ComputeCurrentJackpot(pool)
     warning_str += 'Current jackpot is %s and a(n) %s' % (
         util_lib.FormatHypecoins(coins), item.human_name)
-    self._core.SendNotification('lottery', warning_str)
+    self._core.PublishMessage('lottery', warning_str)
 
 
 @command_lib.CommandRegexParser(r'mains?')
