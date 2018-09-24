@@ -568,6 +568,9 @@ class EsportsLib(object):
         #              'CN', 'lpl-china', aliases=['LPL', 'China']),
         RitoProvider(self._proxy, 'LCK', 'lck', aliases=['LCK', 'Korea', 'KR'],
                      stats_enabled=True),
+        RitoProvider(self._proxy, 'IN', 'worlds',
+                     aliases=['International', 'Worlds'],
+                     stats_enabled=True),
     ]
 
     self._lock = RLock()
