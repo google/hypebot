@@ -34,6 +34,7 @@ import hypebot.commands.league.lcs_commands
 import hypebot.commands.league.lol_commands
 import hypebot.commands.league.summoner_commands
 import hypebot.commands.league.trivia_commands
+import hypebot.commands.minigame_commands
 import hypebot.commands.preference_commands
 import hypebot.commands.public_commands
 import hypebot.commands.remote_commands

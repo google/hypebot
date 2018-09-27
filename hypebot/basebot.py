@@ -93,6 +93,7 @@ class BaseBot(object):
           'GreetingsCommand': {},
           'GrepCommand': {},
           'HypeCommand': {},
+          'HypeJackCommand': {},
           'HypeStackBalanceCommand': {},
           'InventoryList': {},
           'InventoryUse': {},
