@@ -279,16 +279,12 @@ class RitoProvider(TournamentProvider):
                 red=match_teams[1])
             self._matches[m.match_id] = m
 
-            game_id_mappings = self._FetchEsportsData(
-                'matchDetails', (tournament['id'], m.match_id),
-                use_storage=True).get('gameIdMappings')
             for game in match['games'].values():
               if 'id' not in game:
                 continue
               m.games.add(game_id=game.get('gameId'),
                           realm=game.get('gameRealm'),
-                          hash=([i['gameHash'] for i in game_id_mappings
-                                 if i['id'] == game['id']] or [None])[0])
+                          hash=game['id'])
 
             if 'standings' in match:
               top_group = match['standings']['result'][0]
@@ -296,6 +292,13 @@ class RitoProvider(TournamentProvider):
                 m.winner = 'TIE'
               elif len(top_group) == 1:
                 m.winner = self._rosters[top_group[0]['roster']].team_id
+
+              game_id_mappings = self._FetchEsportsData(
+                  'matchDetails', (tournament['id'], m.match_id),
+                  use_storage=True).get('gameIdMappings')
+              for game in m.games:
+                game.hash = ([i['gameHash'] for i in game_id_mappings
+                              if i['id'] == game.hash] or [None])[0]
 
           # Go back and fetch match time, because rito :^).
           schedule_data = self._FetchEsportsData(
