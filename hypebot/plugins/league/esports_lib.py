@@ -282,6 +282,8 @@ class RitoProvider(TournamentProvider):
             for game in match['games'].values():
               if 'id' not in game:
                 continue
+              # Rito has 2 different ids for the game, we temporarily store the
+              # one needed to find the hash as the hash field.
               m.games.add(game_id=game.get('gameId'),
                           realm=game.get('gameRealm'),
                           hash=game['id'])
@@ -297,8 +299,11 @@ class RitoProvider(TournamentProvider):
                   'matchDetails', (tournament['id'], m.match_id),
                   use_storage=True).get('gameIdMappings')
               for game in m.games:
-                game.hash = ([i['gameHash'] for i in game_id_mappings
-                              if i['id'] == game.hash] or [None])[0]
+                game_id = game.hash
+                game.ClearField('hash')
+                for mapping in game_id_mappings:
+                  if mapping['id'] == game_id:
+                    game.hash = mapping['gameHash']
 
           # Go back and fetch match time, because rito :^).
           schedule_data = self._FetchEsportsData(
