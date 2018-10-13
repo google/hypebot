@@ -284,8 +284,12 @@ class LCSGame(GameBase):
           pool_value += bet.amount
           if lcs_data.winner == match.winner:
             winning_teams.append(match.winner)
-            winners[user] += bet.amount * 2
-            net_amount += bet.amount
+            winnings = bet.amount * 2
+            # HypeBookie takes a 5% cut (rounded down) of all bets over 100.
+            if bet.amount > 100:
+              winnings -= int(bet.amount * 0.05)
+            winners[user] += winnings
+            net_amount += winnings - bet.amount
           else:
             losing_teams.append(lcs_data.winner)
             net_amount -= bet.amount
