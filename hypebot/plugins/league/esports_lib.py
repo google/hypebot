@@ -556,7 +556,7 @@ class GrumbleProvider(TournamentProvider):
 
 
 class EsportsLib(object):
-  """Electronic Sports Library"""
+  """Electronic Sports Library."""
 
   def __init__(self, proxy, executor, game_lib, rito_tz):
     self._proxy = proxy
@@ -569,7 +569,7 @@ class EsportsLib(object):
         GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
         RitoProvider(self._proxy, 'NA', 'na-lcs', aliases=['North America'],
                      stats_enabled=True),
-        RitoProvider(self._proxy, 'EU', 'eu-lcs', aliases=['Europe'],
+        RitoProvider(self._proxy, 'EU', 'lec', aliases=['Europe'],
                      stats_enabled=True),
         # China is broken right now.
         # RitoProvider(self._proxy,
