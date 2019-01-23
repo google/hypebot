@@ -567,7 +567,7 @@ class EsportsLib(object):
     self._providers = [
         GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
         GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
-        RitoProvider(self._proxy, 'NA', 'na-lcs', aliases=['North America'],
+        RitoProvider(self._proxy, 'NA', 'lcs', aliases=['North America'],
                      stats_enabled=True),
         RitoProvider(self._proxy, 'EU', 'lec', aliases=['Europe'],
                      stats_enabled=True),
