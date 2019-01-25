@@ -16,14 +16,12 @@ syntax = "proto3";
 package hypebot.riot.v3;
 
 service StaticDataService {
-  rpc ListChampions(ListChampionsRequest) returns (ListChampionsResponse) {
-  }
+  rpc ListChampions(ListChampionsRequest) returns (ListChampionsResponse) {}
   /*
   rpc GetChampion(GetChampionRequest) returns (Champion) {
   }
   */
-  rpc ListItems(ListItemsRequest) returns (ListItemsResponse) {
-  }
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse) {}
   /*
   rpc GetItem(GetItemRequest) returns (Item) {
   }
@@ -35,8 +33,7 @@ service StaticDataService {
   rpc ListMaps(ListMapsRequest) returns (ListMapsResponse) {
   }
   */
-  rpc ListMasteries(ListMasteriesRequest) returns (ListMasteriesResponse) {
-  }
+  rpc ListMasteries(ListMasteriesRequest) returns (ListMasteriesResponse) {}
   /*
   rpc GetMastery(GetMasteryRequest) returns (Mastery) {
   }
@@ -46,8 +43,7 @@ service StaticDataService {
   }
   */
   rpc ListReforgedRunePaths(ListReforgedRunePathsRequest)
-      returns (ListReforgedRunePathsResponse) {
-  }
+      returns (ListReforgedRunePathsResponse) {}
   /*
   rpc GetReforgedRunePath(GetReforgedRunePathRequest)
       returns (ReforgedRunePath) {
@@ -154,7 +150,7 @@ message Skin {
 
 message Passive {
   Image image = 1;
-  string sanitized_description = 2;
+  string sanitized_description = 2 [deprecated = true];
   string name = 3;
   string description = 4;
 }
@@ -187,9 +183,9 @@ message ChampionSpell {
   repeated SpellVars vars = 4;
   string cost_type = 5;
   Image image = 6;
-  string sanitized_description = 7;
-  string sanitized_tooltip = 8;
-  //repeated repeated double effect = 9;
+  string sanitized_description = 7 [deprecated = true];
+  string sanitized_tooltip = 8 [deprecated = true];
+  // repeated repeated double effect = 9;
   string tooltip = 10;
   int32 maxrank = 11;
   string cost_burn = 12;
@@ -243,7 +239,7 @@ message Item {
   bool in_store = 4;
   repeated string into = 5;
   int32 id = 6;
-  //InventoryDataStats stats = 7;
+  // InventoryDataStats stats = 7;
   string colloq = 8;
   map<string, bool> maps = 9;
   int32 special_recipe = 10;
@@ -257,7 +253,7 @@ message Item {
   bool consume_on_full = 18;
   string name = 19;
   bool consumed = 20;
-  string sanitized_description = 21;
+  string sanitized_description = 21 [deprecated = true];
   int32 depth = 22;
   int32 stacks = 23;
 }
@@ -316,7 +312,7 @@ message Mastery {
   string name = 3;
   int32 ranks = 4;
   Image image = 5;
-  repeated string sanitized_description = 6;
+  repeated string sanitized_description = 6 [deprecated = true];
   int32 id = 7;
   repeated string description = 8;
 }

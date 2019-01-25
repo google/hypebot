@@ -29,6 +29,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import re
+
 from hypebot.core import name_complete_lib
 
 
@@ -94,7 +96,7 @@ class ItemsLib(object):
     # Then Get Item Description
     if item:
       line = '{} ({} gold):'.format(item.name, item.gold.total)
-      response = self._CleanItemWrap(item.sanitized_description)
+      response = self._CleanItemWrap(self._Sanitize(item.description))
       response[0] = line + ' ' + response[0]
       return response
     else:
@@ -125,3 +127,6 @@ class ItemsLib(object):
       description = description[:description.rfind('(')].strip()
     result.append(description)
     return result
+
+  def _Sanitize(self, raw: Text) -> Text:
+    return re.sub(r'<.*?>', '', raw)
