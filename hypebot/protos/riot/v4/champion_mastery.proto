@@ -1,0 +1,66 @@
+// Copyright 2018 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot.riot.v4;
+
+service ChampionMasteryService {
+  rpc ListChampionMasteries(ListChampionMasteriesRequest)
+      returns (ListChampionMasteriesResponse) {
+  }
+  rpc GetChampionMastery(GetChampionMasteryRequest) returns (ChampionMastery) {
+  }
+  rpc GetChampionMasteryScore(GetChampionMasteryScoreRequest)
+      returns (ChampionMasteryScore) {
+  }
+}
+
+message ListChampionMasteriesRequest {
+  string encrypted_summoner_id = 1;
+}
+
+message ListChampionMasteriesResponse {
+  repeated ChampionMastery champion_masteries = 1;
+}
+
+message GetChampionMasteryRequest {
+  string encrypted_summoner_id = 1;
+  int64 champion_id = 2;
+}
+
+message ChampionMastery {
+  // Encrypted.
+  string summoner_id = 1;
+
+  int64 champion_id = 2;
+  int32 champion_level = 3;
+  int32 champion_points = 4;
+
+  int64 last_play_time = 5;
+
+  int64 champion_points_until_next_level = 6;
+  int64 champion_points_since_last_level = 7;
+
+  bool chest_granted = 8;
+
+  int32 tokens_earned = 9;
+}
+
+message GetChampionMasteryScoreRequest {
+  string encrypted_summoner_id = 1;
+}
+
+message ChampionMasteryScore {
+  int32 score = 1;
+}
