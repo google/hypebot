@@ -50,12 +50,6 @@ _MessageType = Union[
 MessageType = Optional[_MessageType]
 
 
-def _MakeMessage(response: _MessageType) -> types.Message:
-  msg = types.Message()
-  _AppendToMessage(msg, response)
-  return msg
-
-
 def _GetAlternateTextList(value: Union[Text, List[Text]]) -> List[Text]:
   if isinstance(value, Text):
     return value.split('\n')
@@ -71,6 +65,15 @@ def _AppendToMessage(msg: types.Message, response: _MessageType):
     assert isinstance(response, list)
     for line in response:
       _AppendToMessage(msg, line)
+
+
+class MessageUtil(object):
+  """Swappable utility for making the Message proto from the internal type."""
+
+  def MakeMessage(self, response: _MessageType) -> types.Message:
+    msg = types.Message()
+    _AppendToMessage(msg, response)
+    return msg
 
 
 class RequestTracker(object):
@@ -269,6 +272,7 @@ class Core(object):
     self.nick = self.params.name.lower()
     self.interface = interface
     self.output_util = OutputUtil(self.Reply)
+    self.message_util = MessageUtil()
 
     self.store = storage_factory.CreateFromParams(self.params.storage)
     cached_type = self.params.storage.get('cached_type')
@@ -348,16 +352,18 @@ class Core(object):
         isinstance(msg, list) and len(msg) > max_public_lines):
       if user:
         self.interface.SendMessage(
-            channel, _MakeMessage('It\'s long so I sent it privately.'))
+            channel,
+            self.message_util.MakeMessage('It\'s long so I sent it privately.'))
         self.interface.SendMessage(
             Channel(id=user, visibility=Channel.PRIVATE, name=user),
-            _MakeMessage(msg))
+            self.message_util.MakeMessage(msg))
       else:
         # If there is no user, just truncate and send to channel.
         self.interface.SendMessage(
-            channel, _MakeMessage(msg[:max_public_lines] + ['...']))
+            channel,
+            self.message_util.MakeMessage(msg[:max_public_lines] + ['...']))
     else:
-      self.interface.SendMessage(channel, _MakeMessage(msg))
+      self.interface.SendMessage(channel, self.message_util.MakeMessage(msg))
 
   def PublishMessage(self,
                      topic: Text,
@@ -379,7 +385,7 @@ class Core(object):
     if not channels:
       logging.info('No subscriptions for topic %s, dropping: %s', topic, msg)
       return
-    message = _MakeMessage(msg)
+    message = self.message_util.MakeMessage(msg)
     for channel in channels:
       channel = Channel(visibility=Channel.PUBLIC, **channel)
       if notice:
