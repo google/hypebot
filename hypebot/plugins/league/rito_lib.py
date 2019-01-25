@@ -23,7 +23,7 @@ usage:
 
   # wrappers for api calls.
   s.GetSummoner(region, summoner_name)
-  s.GetSummonerById(region, summoner_id)
+  s.GetSummonerBySummonerId(region, summoner_id)
   s.ListLeaguePositions(region, summoner_id)
   s.ListChampionMasteries(region, summoner_id)
   s.GetChampionMastery(region, summoner_id, champ_id)
@@ -178,9 +178,14 @@ class RitoLib(object):
                          summoner_pb2.GetSummonerRequest(name=summoner_name),
                          region)
 
-  def GetSummonerById(self, region, summoner_id):
+  def GetSummonerBySummonerId(self, region, summoner_id):
     return self._CallApi(self._summoner_service.GetSummoner,
                          summoner_pb2.GetSummonerRequest(id=summoner_id),
+                         region)
+
+  def GetSummonerByAccountId(self, region, account_id):
+    return self._CallApi(self._summoner_service.GetSummoner,
+                         summoner_pb2.GetSummonerRequest(account_id=account_id),
                          region)
 
   def ListLeaguePositions(self, region, summoner_id):
