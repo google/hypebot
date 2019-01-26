@@ -104,8 +104,8 @@ class SummonerLib(object):
     region = summoner.get('region', DEFAULT_REGION)
     summoner_data['region'] = region
 
-    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
-    encrypted_account_id = int(summoner.get('encrypted_account_id', ''))
+    encrypted_summoner_id = summoner.get('encrypted_summoner_id', '')
+    encrypted_account_id = summoner.get('encrypted_account_id', '')
 
     r = self._rito.GetSummoner(region, summoner['summoner'])
     if r:
@@ -168,7 +168,7 @@ class SummonerLib(object):
 
   def Champs(self, summoner):
     """Gets and formats champion mastery data for summoner."""
-    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
+    encrypted_summoner_id = summoner.get('encrypted_summoner_id', '')
     region = summoner.get('region', DEFAULT_REGION)
     r = self._rito.ListChampionMasteries(region, encrypted_summoner_id)
     if r:
@@ -215,7 +215,7 @@ class SummonerLib(object):
       return 'Champion "%s" not found.' % champ_name
     champ_display_name = self._game.GetChampDisplayName(champ_name)
 
-    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
+    encrypted_summoner_id = summoner.get('encrypted_summoner_id', '')
     region = summoner.get('region', DEFAULT_REGION)
     r = self._rito.GetChampionMastery(region, encrypted_summoner_id, champ_id)
     if r:
@@ -234,7 +234,7 @@ class SummonerLib(object):
 
   def Chimps(self, summoner):
     """Gets and formats Chimp mastery data for summoner."""
-    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
+    encrypted_summoner_id = summoner.get('encrypted_summoner_id', '')
     region = summoner.get('region', DEFAULT_REGION)
     # Wukong is Champ ID 62
     r = self._rito.GetChampionMastery(region, encrypted_summoner_id, 62)
