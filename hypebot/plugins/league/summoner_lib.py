@@ -28,8 +28,8 @@ from absl import logging
 import arrow
 
 from hypebot.core import inflect_lib
-from hypebot.protos.riot.v3 import constants_pb2
-from hypebot.protos.riot.v3 import league_pb2
+from hypebot.protos.riot.v4 import constants_pb2
+from hypebot.protos.riot.v4 import league_pb2
 
 DEFAULT_REGION = 'na'
 GAME_MODES = {
@@ -73,10 +73,10 @@ class SummonerLib(object):
     self._rito = rito
     self._game = game
 
-  def _GetMatchParticipant(self, account_id, match_ref, match):
+  def _GetMatchParticipant(self, encrypted_account_id, match_ref, match):
     participant_ids = [
         p.participant_id for p in match.participant_identities
-        if p.player.current_account_id == account_id
+        if p.player.current_account_id == encrypted_account_id
     ]
     participant = None
     if participant_ids:
@@ -104,14 +104,14 @@ class SummonerLib(object):
     region = summoner.get('region', DEFAULT_REGION)
     summoner_data['region'] = region
 
-    summoner_id = int(summoner.get('summoner_id', 0))
-    account_id = int(summoner.get('account_id', 0))
+    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
+    encrypted_account_id = int(summoner.get('encrypted_account_id', ''))
 
     r = self._rito.GetSummoner(region, summoner['summoner'])
     if r:
       summoner_data['profile_icon_id'] = r.profile_icon_id
 
-    r = self._rito.ListRecentMatches(region, account_id)
+    r = self._rito.ListRecentMatches(region, encrypted_account_id)
     last_game_ref = None
     last_game = None
     participant = None
@@ -119,8 +119,8 @@ class SummonerLib(object):
       last_game_ref = r.matches[0]
       last_game = self._rito.GetMatch(region, last_game_ref.game_id)
       if last_game:
-        participant = self._GetMatchParticipant(account_id, last_game_ref,
-                                                last_game)
+        participant = self._GetMatchParticipant(encrypted_account_id,
+                                                last_game_ref, last_game)
 
     if last_game_ref and last_game and participant:
       # Champion played
@@ -151,7 +151,7 @@ class SummonerLib(object):
 
     # Find dynamic queue rank
     rank = None
-    r = self._rito.ListLeaguePositions(region, summoner_id)
+    r = self._rito.ListLeaguePositions(region, encrypted_summoner_id)
     if r:
       leagues = r.positions
       for league in leagues:
@@ -168,12 +168,12 @@ class SummonerLib(object):
 
   def Champs(self, summoner):
     """Gets and formats champion mastery data for summoner."""
-    summoner_id = int(summoner.get('summoner_id', 0))
+    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
     region = summoner.get('region', DEFAULT_REGION)
-    r = self._rito.ListChampionMasteries(region, summoner_id)
+    r = self._rito.ListChampionMasteries(region, encrypted_summoner_id)
     if r:
-      logging.info('Got champ mastery data for %s/%d [%s]', region, summoner_id,
-                   summoner['summoner'])
+      logging.info('Got champ mastery data for %s/%s [%s]', region,
+                   encrypted_summoner_id, summoner['summoner'])
       # Calculate total number of chests received
       total_chests = sum(1 for x in r.champion_masteries if x.chest_granted)
 
@@ -215,12 +215,12 @@ class SummonerLib(object):
       return 'Champion "%s" not found.' % champ_name
     champ_display_name = self._game.GetChampDisplayName(champ_name)
 
-    summoner_id = int(summoner.get('summoner_id', 0))
+    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
     region = summoner.get('region', DEFAULT_REGION)
-    r = self._rito.GetChampionMastery(region, summoner_id, champ_id)
+    r = self._rito.GetChampionMastery(region, encrypted_summoner_id, champ_id)
     if r:
-      logging.info('Got single champ mastery data for %s/%d [%s] on Champ %s',
-                   region, summoner_id, summoner['summoner'],
+      logging.info('Got single champ mastery data for %s/%s [%s] on Champ %s',
+                   region, encrypted_summoner_id, summoner['summoner'],
                    champ_display_name)
       champ_level = r.champion_level
       points = r.champion_points
@@ -228,26 +228,26 @@ class SummonerLib(object):
           summoner['summoner'], champ_level, champ_display_name, points))
     else:
       logging.info(
-          'Got chimp mastery data for %s/%d [%s] on Champ %s (no data)', region,
-          summoner_id, summoner['summoner'], champ_display_name)
+          'Got chimp mastery data for %s/%s [%s] on Champ %s (no data)', region,
+          encrypted_summoner_id, summoner['summoner'], champ_display_name)
       return '%s does not play %s.' % (summoner['summoner'], champ_display_name)
 
   def Chimps(self, summoner):
     """Gets and formats Chimp mastery data for summoner."""
-    summoner_id = int(summoner.get('summoner_id', 0))
+    encrypted_summoner_id = int(summoner.get('encrypted_summoner_id', ''))
     region = summoner.get('region', DEFAULT_REGION)
     # Wukong is Champ ID 62
-    r = self._rito.GetChampionMastery(region, summoner_id, 62)
+    r = self._rito.GetChampionMastery(region, encrypted_summoner_id, 62)
     if r:
-      logging.info('Got chimp mastery data for %s/%d [%s]', region, summoner_id,
-                   summoner['summoner'])
+      logging.info('Got chimp mastery data for %s/%s [%s]', region,
+                   encrypted_summoner_id, summoner['summoner'])
       champ_level = r.champion_level
       points = r.champion_points
-      return ('%s is a L%d Wukong player with %d mastery points.' % (
-          summoner['summoner'], champ_level, points))
+      return ('%s is a L%d Wukong player with %d mastery points.' %
+              (summoner['summoner'], champ_level, points))
     else:
-      logging.info('Got chimp mastery data for %s/%d [%s] (no data)', region,
-                   summoner_id, summoner['summoner'])
+      logging.info('Got chimp mastery data for %s/%s [%s] (no data)', region,
+                   encrypted_summoner_id, summoner['summoner'])
       return '%s is not a fan of monkeys.' % summoner['summoner']
 
   def _ComputeFantasyPoints(self, stats):
@@ -299,8 +299,12 @@ class SummonerTracker(object):
       A list of summoner_info dicts with the following fields:
         - username: Unused for now
         - summoner: The parsed summoner name
-        - summoner_id: The rito summoner_id, which is useful for other API calls
-        - account_id: The rito account_id, which is useful for other API calls
+        - encrypted_summoner_id: The encrypted rito summoner id, which is useful
+            for other API calls
+        - encrypted_account_id: The encrypted rito account id, which is useful
+            for other API calls
+        - encrypted_puuid: The encrypted rito PUUID, which is useful for other
+            API calls
         - region: The given or inferred region for which this summoner is valid
     """
     lookup_all = smurfs is not None
@@ -325,8 +329,9 @@ class SummonerTracker(object):
           return summoners
         summoners.append({'username': None,
                           'summoner': summoner_names[0],
-                          'summoner_id': r.id,
-                          'account_id': r.account_id,
+                          'encrypted_summoner_id': r.id,
+                          'encrypted_account_id': r.account_id,
+                          'encrypted_puuid': r.puuid,
                           'region': region})
       else:
         if lookup_all:
@@ -336,14 +341,16 @@ class SummonerTracker(object):
     elif name in self._summoners:
       known_region = self._summoners[name]['region'].lower()
       if region and region != known_region:
-        # Same summoner as a tracked user, but different region. Need correct ID.
+        # Same summoner as a tracked user, but different region. Need correct
+        # ID.
         r = self._rito.GetSummoner(region, name)
         if not r:
           return summoners
         summoners.append({'username': None,
                           'summoner': r.name,
-                          'summoner_id': r.id,
-                          'account_id': r.account_id,
+                          'encrypted_summoner_id': r.id,
+                          'encrypted_account_id': r.account_id,
+                          'encrypted_puuid': r.puuid,
                           'region': region})
       else:
         summoners.append(self._summoners[name])
@@ -356,7 +363,8 @@ class SummonerTracker(object):
         return summoners
       summoners.append({'username': None,
                         'summoner': r.name,
-                        'summoner_id': r.id,
-                        'account_id': r.account_id,
+                        'encrypted_summoner_id': r.id,
+                        'encrypted_account_id': r.account_id,
+                        'encrypted_puuid': r.puuid,
                         'region': region})
     return summoners
