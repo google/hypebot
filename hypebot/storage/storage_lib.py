@@ -54,7 +54,7 @@ class HypeTransaction(with_metaclass(abc.ABCMeta)):
     """Commits this transaction to the backing store.
 
     Raises:
-      CommitAbortException if the transaction committing raised an exception.
+      CommitAbortError if the transaction committing raised an exception.
       This indicates that committing the transaction could be retried and might
       succeed.
 
@@ -116,6 +116,75 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       None.
     """
 
+  @abc.abstractmethod
+  def GetSubkey(self, subkey: HypeStr,
+                tx: Optional[HypeTransaction] = None) -> List[
+                    Tuple[HypeStr, HypeStr]]:
+    """Returns (key, value) tuples for all keys with a value for subkey."""
+
+  @abc.abstractmethod
+  def GetHistoricalValues(
+      self,
+      key: HypeStr,
+      subkey: HypeStr,
+      num_past_values: int,
+      tx: Optional[HypeTransaction] = None) -> List[JsonType]:
+    """Like GetJsonValue, but allows for getting past values for key/subkey.
+
+    Args:
+      key: The primary key used to find the entry.
+      subkey: The subkey used to find the entry.
+      num_past_values: The maximum number of historical values to return. If
+        fewer values are found (including 0 values), only that many values will
+        be returned.
+      tx: Optional transaction to run the underlying storage call within.
+
+    Raises:
+      If an error occurs during fetching the values from the store. This will
+      abort any transaction GetHistoricalValues is called with.
+
+    Returns:
+      A list of the values found in reverse chronological order (newest values
+      first). When no values are found, returns an empty list.
+    """
+
+  @abc.abstractmethod
+  def PrependValue(self,
+                   key: HypeStr,
+                   subkey: HypeStr,
+                   new_value: JsonType,
+                   max_length: Optional[int] = None,
+                   tx: Optional[HypeTransaction] = None) -> None:
+    """Like SetJsonValue, but keeps past values upto an optional max_length.
+
+    Args:
+      key: The primary key used to find the entry.
+      subkey: The subkey used to find the entry.
+      new_value: The new value to add to the entry.
+      max_length: The maximum number of past values to keep. Note that not all
+        storage engines will respect this value, so it may be set to None.
+      tx: Optional transaction to run the underlying storage call within.
+
+    Raises:
+      If an error occurs during setting the value from the store. This will
+      abort any transaction PrependValue is called with.
+
+    Returns:
+      None.
+    """
+
+  @abc.abstractmethod
+  def NewTransaction(self, tx_name: HypeStr) -> HypeTransaction:
+    """Returns a new concrete transaction.
+
+    Args:
+      tx_name: Short description for this transaction, used in logging to
+        clarify what operations are attempted within this transaction.
+
+    Returns:
+      An implementation-specific subclass of HypeTransaction.
+    """
+
   def UpdateValue(self, key: HypeStr, subkey: HypeStr, delta: int,
                   tx: Optional[HypeTransaction] = None) -> None:
     """Reads the current value for key/subkey and adds delta, atomically."""
@@ -139,12 +208,6 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       raise e
     new_value = cur_type(cur_value + delta)
     self.SetValue(key, subkey, new_value, tx)
-
-  @abc.abstractmethod
-  def GetSubkey(self, subkey: HypeStr,
-                tx: Optional[HypeTransaction] = None) -> List[
-                    Tuple[HypeStr, HypeStr]]:
-    """Returns (key, value) tuples for all keys with a value for subkey."""
 
   def GetJsonValue(self, key: HypeStr, subkey: HypeStr,
                    tx: Optional[HypeTransaction] = None) -> (
@@ -223,69 +286,6 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     self.SetJsonValue(key, subkey, raw_structure, tx)
     return success
 
-  @abc.abstractmethod
-  def GetHistoricalValues(
-      self,
-      key: HypeStr,
-      subkey: HypeStr,
-      num_past_values: int,
-      tx: Optional[HypeTransaction] = None) -> List[JsonType]:
-    """Like GetJsonValue, but allows for getting past values for key/subkey.
-
-    Args:
-      key: The primary key used to find the entry.
-      subkey: The subkey used to find the entry.
-      num_past_values: The maximum number of historical values to return. If
-        fewer values are found (including 0 values), only that many values will
-        be returned.
-      tx: Optional transaction to run the underlying storage call within.
-
-    Raises:
-      If an error occurs during fetching the values from the store. This will
-      abort any transaction GetHistoricalValues is called with.
-
-    Returns:
-      A list of the values found in reverse chronological order (newest values
-      first). When no values are found, returns an empty list.
-    """
-
-  @abc.abstractmethod
-  def PrependValue(self,
-                   key: HypeStr,
-                   subkey: HypeStr,
-                   new_value: JsonType,
-                   max_length: Optional[int] = None,
-                   tx: Optional[HypeTransaction] = None) -> None:
-    """Like SetJsonValue, but keeps past values upto an optional max_length.
-
-    Args:
-      key: The primary key used to find the entry.
-      subkey: The subkey used to find the entry.
-      new_value: The new value to add to the entry.
-      max_length: The maximum number of past values to keep. Note that not all
-        storage engines will respect this value, so it may be set to None.
-      tx: Optional transaction to run the underlying storage call within.
-
-    Raises:
-      If an error occurs during setting the value from the store. This will
-      abort any transaction PrependValue is called with.
-
-    Returns:
-      None.
-    """
-
-  @abc.abstractmethod
-  def NewTransaction(self, tx_name: HypeStr) -> HypeTransaction:
-    """Returns a new concrete transaction.
-
-    Args:
-      tx_name: Short description for this transaction, used in logging to
-        clarify what operations are attempted within this transaction.
-
-    Returns:
-      An implementation-specific subclass of HypeTransaction.
-    """
-
   @retrying.retry(stop_max_attempt_number=6, wait_exponential_multiplier=200)
   def RunInTransaction(self, fn: Callable, *args, **kwargs) -> Any:
     """Retriably attemps to execute fn within a single transaction.
@@ -313,7 +313,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       **kwargs: Keyword arguments to pass to fn. Will always include "tx".
 
     Raises:
-      If tx.Commit raises any exception other than CommitAbortException,
+      If tx.Commit raises any exception other than CommitAbortError,
       this function will not retry, and re-raise that exception.
 
     Returns:
@@ -335,7 +335,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
 
     try:
       tx.Commit()
-    except CommitAbortException as e:
+    except CommitAbortError as e:
       logging.warning('%s Commit failed! Retrying', tx)
       raise e
     except Exception:
@@ -345,7 +345,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     return return_value
 
 
-class CommitAbortException(RuntimeError):
+class CommitAbortError(RuntimeError):
   """Exception indicating a transaction commit failed, but can be retried."""
 
 

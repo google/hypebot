@@ -116,7 +116,7 @@ class RedisTransaction(storage_lib.HypeTransaction):
       return status
     except Exception:
       logging.info('%s Commit aborted, due to watch failure, raising', self)
-      raise storage_lib.CommitAbortException
+      raise storage_lib.CommitAbortError
 
 
 class RedisStore(storage_lib.HypeStore):
