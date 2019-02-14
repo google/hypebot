@@ -25,11 +25,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from typing import List, Optional, Tuple, Union
-
-from hypebot.types import HypeStr, JsonType
 from hypebot.core import cache_lib
 from hypebot.storage import storage_lib
+from hypebot.types import JsonType
+
+from typing import AnyStr, List, Optional, Tuple, Union
 
 
 class MemTransaction(storage_lib.HypeTransaction):
@@ -53,15 +53,20 @@ class MemStore(storage_lib.HypeStore):
   def engine(self):
     return 'memstore'
 
-  def GetValue(self, key: HypeStr, subkey: HypeStr,
-               tx: Optional[MemTransaction] = None) -> Optional[HypeStr]:
+  def GetValue(self,
+               key: AnyStr,
+               subkey: AnyStr,
+               tx: Optional[MemTransaction] = None) -> Optional[AnyStr]:
     return self._memory.Get('%s:%s' % (key, subkey))
 
-  def SetValue(self, key: HypeStr, subkey: HypeStr, value: Union[int, HypeStr],
+  def SetValue(self,
+               key: AnyStr,
+               subkey: AnyStr,
+               value: Union[int, AnyStr],
                tx: Optional[MemTransaction] = None) -> None:
     self._memory.Put('%s:%s' % (key, subkey), value)
 
-  def GetSubkey(self, subkey: HypeStr,
+  def GetSubkey(self, subkey: AnyStr,
                 tx: Optional[MemTransaction] = None) -> List[Tuple]:
     items = []
     for cache_key, value in self._memory.Iterate():
@@ -70,24 +75,23 @@ class MemStore(storage_lib.HypeStore):
         items.append((parts[0], value))
     return items
 
-  def GetHistoricalValues(
-      self,
-      key: HypeStr,
-      subkey: HypeStr,
-      num_past_values: int,
-      tx: Optional[MemTransaction] = None):
+  def GetHistoricalValues(self,
+                          key: AnyStr,
+                          subkey: AnyStr,
+                          num_past_values: int,
+                          tx: Optional[MemTransaction] = None):
     value = self.GetJsonValue(key, subkey, tx)
     if value is not None:
       return [value]
     return []
 
   def PrependValue(self,
-                   key: HypeStr,
-                   subkey: HypeStr,
+                   key: AnyStr,
+                   subkey: AnyStr,
                    new_value: JsonType,
                    max_length: Optional[int] = None,
                    tx: Optional[MemTransaction] = None) -> None:
     self.SetJsonValue(key, subkey, new_value, tx)
 
-  def NewTransaction(self, tx_name: HypeStr) -> MemTransaction:
+  def NewTransaction(self, tx_name: AnyStr) -> MemTransaction:
     return MemTransaction(tx_name)

@@ -27,10 +27,11 @@ import json
 from absl import logging
 from six import with_metaclass
 import retrying
-from typing import Any, Callable, List, Optional, Tuple, Union
 
-from hypebot.types import HypeStr, JsonType
 from hypebot.core import params_lib
+from hypebot.types import JsonType
+
+from typing import Any, AnyStr, Callable, List, Optional, Tuple, Union
 
 
 class HypeTransaction(with_metaclass(abc.ABCMeta)):
@@ -39,14 +40,14 @@ class HypeTransaction(with_metaclass(abc.ABCMeta)):
   HypeTransactions are NOT thread-safe.
   """
 
-  def __init__(self, tx_name: HypeStr):
+  def __init__(self, tx_name: AnyStr):
     self._name = tx_name
 
-  def __str__(self) -> HypeStr:
+  def __str__(self) -> AnyStr:
     return '[TX %s]' % self.name
 
   @property
-  def name(self) -> HypeStr:
+  def name(self) -> AnyStr:
     return self._name
 
   @abc.abstractmethod
@@ -80,8 +81,10 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     """The name of the backing engine. Should be all lowercase."""
 
   @abc.abstractmethod
-  def GetValue(self, key: HypeStr, subkey: HypeStr,
-               tx: Optional[HypeTransaction] = None) -> Optional[HypeStr]:
+  def GetValue(self,
+               key: AnyStr,
+               subkey: AnyStr,
+               tx: Optional[HypeTransaction] = None) -> Optional[AnyStr]:
     """Fetch the value for key and subkey.
 
     Args:
@@ -98,7 +101,10 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     """
 
   @abc.abstractmethod
-  def SetValue(self, key: HypeStr, subkey: HypeStr, value: Union[int, HypeStr],
+  def SetValue(self,
+               key: AnyStr,
+               subkey: AnyStr,
+               value: Union[int, AnyStr],
                tx: Optional[HypeTransaction] = None) -> None:
     """Replaces the current value (if any) for key and subkey with value.
 
@@ -117,16 +123,15 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     """
 
   @abc.abstractmethod
-  def GetSubkey(self, subkey: HypeStr,
-                tx: Optional[HypeTransaction] = None) -> List[
-                    Tuple[HypeStr, HypeStr]]:
+  def GetSubkey(self, subkey: AnyStr, tx: Optional[HypeTransaction] = None
+               ) -> List[Tuple[AnyStr, AnyStr]]:
     """Returns (key, value) tuples for all keys with a value for subkey."""
 
   @abc.abstractmethod
   def GetHistoricalValues(
       self,
-      key: HypeStr,
-      subkey: HypeStr,
+      key: AnyStr,
+      subkey: AnyStr,
       num_past_values: int,
       tx: Optional[HypeTransaction] = None) -> List[JsonType]:
     """Like GetJsonValue, but allows for getting past values for key/subkey.
@@ -150,8 +155,8 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
 
   @abc.abstractmethod
   def PrependValue(self,
-                   key: HypeStr,
-                   subkey: HypeStr,
+                   key: AnyStr,
+                   subkey: AnyStr,
                    new_value: JsonType,
                    max_length: Optional[int] = None,
                    tx: Optional[HypeTransaction] = None) -> None:
@@ -174,7 +179,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     """
 
   @abc.abstractmethod
-  def NewTransaction(self, tx_name: HypeStr) -> HypeTransaction:
+  def NewTransaction(self, tx_name: AnyStr) -> HypeTransaction:
     """Returns a new concrete transaction.
 
     Args:
@@ -185,16 +190,23 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       An implementation-specific subclass of HypeTransaction.
     """
 
-  def UpdateValue(self, key: HypeStr, subkey: HypeStr, delta: int,
+  def UpdateValue(self,
+                  key: AnyStr,
+                  subkey: AnyStr,
+                  delta: int,
                   tx: Optional[HypeTransaction] = None) -> None:
     """Reads the current value for key/subkey and adds delta, atomically."""
     if tx:
       self._UpdateValue(key, subkey, delta, tx)
     else:
-      self.RunInTransaction(self._UpdateValue, key, subkey, delta,
-                            tx_name='%s/%s += %s' % (key, subkey, delta))
+      self.RunInTransaction(
+          self._UpdateValue,
+          key,
+          subkey,
+          delta,
+          tx_name='%s/%s += %s' % (key, subkey, delta))
 
-  def _UpdateValue(self, key: HypeStr, subkey: HypeStr, delta: int,
+  def _UpdateValue(self, key: AnyStr, subkey: AnyStr, delta: int,
                    tx: HypeTransaction) -> None:
     """Internal version of UpdateValue which requires a transaction."""
     cur_value = self.GetValue(key, subkey, tx) or '0'
@@ -209,9 +221,11 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     new_value = cur_type(cur_value + delta)
     self.SetValue(key, subkey, new_value, tx)
 
-  def GetJsonValue(self, key: HypeStr, subkey: HypeStr,
-                   tx: Optional[HypeTransaction] = None) -> (
-                       Optional[JsonType]):
+  def GetJsonValue(self,
+                   key: AnyStr,
+                   subkey: AnyStr,
+                   tx: Optional[HypeTransaction] = None
+                  ) -> (Optional[JsonType]):
     """Gets and deserializes the JSON object for key and subkey."""
     value = None
     try:
@@ -223,7 +237,10 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       logging.error('Error fetching JSON value for %s/%s:', key, subkey)
       raise e
 
-  def SetJsonValue(self, key: HypeStr, subkey: HypeStr, json_value: JsonType,
+  def SetJsonValue(self,
+                   key: AnyStr,
+                   subkey: AnyStr,
+                   json_value: JsonType,
                    tx: Optional[HypeTransaction] = None) -> None:
     """Serializes and stores json_value as a string."""
     try:
@@ -235,8 +252,8 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       raise e
 
   def UpdateJson(self,
-                 key: HypeStr,
-                 subkey: HypeStr,
+                 key: AnyStr,
+                 subkey: AnyStr,
                  transform_fn: Callable[[JsonType], Any],
                  success_fn: Callable[[JsonType], bool],
                  is_set: bool = False,
@@ -265,15 +282,18 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     if tx:
       return self._UpdateJson(key, subkey, transform_fn, success_fn, is_set, tx)
     tx_name = 'UpdateJson on %s/%s' % (key, subkey)
-    return self.RunInTransaction(self._UpdateJson, key, subkey, transform_fn,
-                                 success_fn, is_set, tx_name=tx_name)
+    return self.RunInTransaction(
+        self._UpdateJson,
+        key,
+        subkey,
+        transform_fn,
+        success_fn,
+        is_set,
+        tx_name=tx_name)
 
-  def _UpdateJson(self,
-                  key: HypeStr,
-                  subkey: HypeStr,
+  def _UpdateJson(self, key: AnyStr, subkey: AnyStr,
                   transform_fn: Callable[[JsonType], Any],
-                  success_fn: Callable[[JsonType], bool],
-                  is_set: bool,
+                  success_fn: Callable[[JsonType], bool], is_set: bool,
                   tx: HypeTransaction) -> bool:
     """Internal version of UpdateJson, requiring a transaction."""
     raw_structure = self.GetJsonValue(key, subkey, tx) or {}
