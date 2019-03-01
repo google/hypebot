@@ -1,0 +1,25 @@
+syntax = "proto2";
+
+package hypebot;
+
+message Quote {
+  optional string symbol = 1;
+
+  // Official open price.
+  optional float open = 2;
+
+  // Official close price.
+  optional float close = 3;
+
+  // Potentially time delayed market price during trading hours.
+  optional float price = 4;
+  // price - previous_close.
+  optional float change = 5;
+  // (price - previous_close) / previous_close.
+  optional float change_percent = 6;
+
+  // Potentially time delayed market price outside of trading hours.
+  optional float extended_price = 7;
+  optional float extended_change = 8;
+  optional float extended_change_percent = 9;
+}

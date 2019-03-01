@@ -25,7 +25,9 @@ from __future__ import unicode_literals
 from typing import Dict, List, Text
 
 from hypebot.core import params_lib
+from hypebot.protos import stock_pb2
 from hypebot.stocks import stock_lib
+
 
 class IEXStock(stock_lib.StockLib):
   """Data provided for free by IEX."""
@@ -41,7 +43,7 @@ class IEXStock(stock_lib.StockLib):
     self._proxy = proxy
 
   def Quotes(self,
-             symbols: List[Text]) -> Dict[Text, stock_lib.StockQuote]:
+             symbols: List[Text]) -> Dict[Text, stock_pb2.Quote]:
     """See StockLib.Quotes for details."""
     request_params = {
         'symbols': ','.join(symbols),
@@ -51,12 +53,21 @@ class IEXStock(stock_lib.StockLib):
     response = self._proxy.FetchJson(self._params.base_url,
                                      params=request_params,
                                      force_lookup=True)
+
     stock_info = {}
     for symbol, data in response.items():
-      stock_info[symbol] = stock_lib.StockQuote(
-          price=data['quote'].get('latestPrice', 0),
-          change=data['quote'].get('change', 0),
-          percent=data['quote'].get('changePercent', 0))
+      quote = data['quote']
+
+      stock_info[symbol] = stock_pb2.Quote(
+          symbol=symbol,
+          open=quote.get('open', 0),
+          close=quote.get('close', 0),
+          price=quote.get('latestPrice', 0),
+          change=quote.get('change', 0),
+          change_percent=quote.get('changePercent', 0),
+          extended_price=quote.get('extendedPrice', 0),
+          extended_change=quote.get('extendedChange', 0),
+          extended_change_percent=quote.get('extendedChangePercent', 0))
     return stock_info
 
   def History(self,

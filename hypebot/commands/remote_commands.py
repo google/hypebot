@@ -25,7 +25,7 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
-from hypebot.stocks import stock_lib
+from hypebot.protos import stock_pb2
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
@@ -82,7 +82,11 @@ class StocksCommand(command_lib.BaseCommand):
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
     if 'HYPE' in symbols:
-      quotes['HYPE'] = stock_lib.StockQuote(1337.0, 4.2, 0.315)
+      quotes['HYPE'] = stock_pb2.Quote(
+          symbol='HYPE',
+          price=13.37,
+          change=4.2,
+          change_percent=45.80)
     if not quotes:
       if symbols[0].upper() == self._core.nick.upper():
         return ('You can\'t buy a sentient AI for some vague promise of future '
@@ -101,16 +105,25 @@ class StocksCommand(command_lib.BaseCommand):
       histories['HYPE'] = [1, 2, 4, 8]
     for symbol, quote in list(quotes.items())[:5]:
       history = histories.get(symbol)
-      change_str = '%0.2f (%0.2f%%)' % (quote.change, quote.percent)
-      if quote.change > 0:
-        change_str = util_lib.Colorize(u'⬆ %s' % change_str, 'green')
-      elif quote.change < 0:
-        change_str = util_lib.Colorize(u'⬇ %s' % change_str, 'red')
+      change_str = self._FormatChangeStr(quote.change, quote.change_percent)
+      response = 'One share of %s is currently worth %0.2f %s' % (
+          symbol, quote.price, change_str)
+      if quote.extended_change:
+        ext_change_str = self._FormatChangeStr(
+            quote.extended_change, quote.extended_change_percent)
+        response += ' [ext: %0.2f %s]' % (quote.extended_price, ext_change_str)
       if history:
-        change_str += ' %s' % util_lib.Sparkline(history)
-      responses.append('One share of %s is currently worth %0.2f [%s]' %
-                       (symbol, quote.price, change_str))
+        response += ' %s' % util_lib.Sparkline(history)
+      responses.append(response)
     return responses
+
+  def _FormatChangeStr(self, change, percent):
+    change_str = '%0.2f (%0.2f%%)' % (change, percent)
+    if change > 0:
+      change_str = util_lib.Colorize('⬆%s' % change_str, 'green')
+    elif change < 0:
+      change_str = util_lib.Colorize('⬇%s' % change_str, 'red')
+    return change_str
 
 
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')
@@ -186,9 +199,9 @@ class WeatherCommand(command_lib.BaseCommand):
       color = 'orange'
 
     if unit == 'C':
-      raw_str = u'%.1f°C' % ((temp_f - 32) * 5 / 9)
+      raw_str = '%.1f°C' % ((temp_f - 32) * 5 / 9)
     elif unit == 'K':
-      raw_str = u'%.1fK' % ((temp_f - 32) * 5 / 9 + 273.15)
+      raw_str = '%.1fK' % ((temp_f - 32) * 5 / 9 + 273.15)
     else:
-      raw_str = u'%.1f°F' % temp_f
+      raw_str = '%.1f°F' % temp_f
     return util_lib.Colorize(raw_str, color)
