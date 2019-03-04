@@ -245,6 +245,7 @@ class Bookie(object):
 
     return bets
 
+  # TODO: PlaceBet needs to be fixed to throw on error.
   def PlaceBet(self, game, bet, msg_fn, more=False):
     """Places a bet for game on behalf of user.
 
@@ -263,7 +264,7 @@ class Bookie(object):
     return self._store.RunInTransaction(self._PlaceBet, game, bet, more, msg_fn)
 
   def _PlaceBet(self, game, bet, more, msg_fn, *unused_args, **kwargs):
-    """Internal version of SettleBets to be run with a transaction."""
+    """Internal version of PlaceBet to be run with a transaction."""
     bet.game = game.name
     with self._ledger_lock:
       tx = kwargs.get('tx')

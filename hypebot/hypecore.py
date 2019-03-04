@@ -183,7 +183,7 @@ class UserPreferences(object):
       # Maps 'user/####' to '$ldap'.
       '_dynamite_ldap': None,
   }
-  _SUBKEY = 'preferences:'
+  _SUBKEY = 'preferences'
 
   def __init__(self, store: storage_lib.HypeStore):
     self._store = store

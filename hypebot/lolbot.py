@@ -160,7 +160,7 @@ class HypeBot(basebot.BaseBot):
 
   def _GetRitoLib(self):
     api_key = (self._params.riot.api_key or
-               self._core.store.GetValue('api_key', 'key'))
+               self._core.store.GetValue('riot_api_key', 'api_key'))
     if not api_key:
       logging.fatal('Rito API key failed to load.')
     channel = grpc.insecure_channel(self._params.riot.api_address)

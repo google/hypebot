@@ -55,14 +55,14 @@ class HypeTransaction(with_metaclass(abc.ABCMeta)):
     """Commits this transaction to the backing store.
 
     Raises:
-      CommitAbortError if the transaction committing raised an exception.
-      This indicates that committing the transaction could be retried and might
-      succeed.
+      Subclass-specific errors if committing the transaction failed in a way
+      that can't be retried. Implementation should take care to catch Exceptions
+      they can handle and retry them internally, as anything raised here will
+      lead to a permanent transaction abort, and bubble up to the caller.
 
     Returns:
       If the transaction was successfully committed or not. False indicates that
-      something went wrong and the transaction will never be successfully
-      committed.
+      something went wrong and the transaction should be retried.
     """
 
 
@@ -306,7 +306,6 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     self.SetJsonValue(key, subkey, raw_structure, tx)
     return success
 
-  @retrying.retry(stop_max_attempt_number=6, wait_exponential_multiplier=200)
   def RunInTransaction(self, fn: Callable, *args, **kwargs) -> Any:
     """Retriably attemps to execute fn within a single transaction.
 
@@ -333,40 +332,44 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       **kwargs: Keyword arguments to pass to fn. Will always include "tx".
 
     Raises:
-      If tx.Commit raises any exception other than CommitAbortError,
-      this function will not retry, and re-raise that exception.
+      If fn or tx.Commit raises any exception, this function will not retry and
+      will re-raise that exception.
 
     Returns:
-      The return value of fn if fn does not raise an Exception. If fn does
-      raise, the transaction is aborted, RunInTransaction is not retried, and
-      returns False.
+      If fn does not raise an Exception and the transaction (eventually) commits
+      successfully. Note that fn's return value is ignored, as there is no
+      simple way to pass this value back to the caller in all storage
+      implementations.
     """
-    tx = kwargs.get('tx')
-    if not tx:
-      tx_name = kwargs.pop('tx_name', '%s: %s %s' % (fn.__name__, args, kwargs))
-      tx = self.NewTransaction(tx_name)
+    # For py2 this needs to be a mutable object, in py3 we could just use the
+    # `nonlocal` keyword on a raw reference.
+    fn_return_val = {'value': None}
+
+    @retrying.retry(
+        retry_on_result=lambda commit_retval: commit_retval,
+        retry_on_exception=lambda exc: False,
+        stop_max_attempt_number=6,
+        wait_exponential_multiplier=200)
+    def _Internal(tx):
       kwargs['tx'] = tx
-    try:
-      return_value = fn(*args, **kwargs)
-    except Exception:
-      logging.exception('Transactional function %s threw, aborting %s:',
-                        fn.__name__, tx)
-      return False
+      fn_return_val['value'] = fn(*args, **kwargs)
+      return tx.Commit()  # Must return True/False to indicate success or retry
 
+    tx_name = kwargs.pop('tx_name', '%s: %s %s' % (fn.__name__, args, kwargs))
+    tx = self.NewTransaction(tx_name)
+    # If your storage engine needs retries done a different way than simply
+    # calling _Internal again when the transaction fails to commit, you'll need
+    # to override this function and add your own retrying logic here.
     try:
-      tx.Commit()
-    except CommitAbortError as e:
-      logging.warning('%s Commit failed! Retrying', tx)
-      raise e
+      _Internal(tx)
     except Exception:
-      logging.exception('Unknown error, aborting %s:', tx)
-      return False
-
-    return return_value
+      logging.error('%s threw, aborting %s:', fn.__name__, tx)
+      raise
+    return fn_return_val['value']
 
 
 class CommitAbortError(RuntimeError):
-  """Exception indicating a transaction commit failed, but can be retried."""
+  """Exception indicating a transaction commit aborted, permanently failing."""
 
 
 class SyncedDict(dict):
@@ -380,7 +383,7 @@ class SyncedDict(dict):
   """
 
   _POP_SENTINEL = object()
-  _DEFAULT_SUBKEY = 'synced_object:'
+  _DEFAULT_SUBKEY = 'synced_object'
 
   def __init__(self, store, storage_key, storage_subkey=None):
     super(SyncedDict, self).__init__()

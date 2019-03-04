@@ -24,6 +24,7 @@ from typing import Any, AnyStr, List, Optional, Tuple
 
 from absl import logging
 import redis
+from redis.exceptions import WatchError
 
 from hypebot.core import cache_lib
 from hypebot.core import params_lib
@@ -86,9 +87,8 @@ class RedisTransaction(storage_lib.HypeTransaction):
                    len(self._command_buffer))
       self._pipe.multi()
       if not all(cmd() for cmd in self._command_buffer):
-        logging.info('%s Failed to set a value, commit aborting', self)
-        return False
-      return True
+        raise storage_lib.CommitAbortError(
+            '%s Failed to set a value, commit aborting' % self)
 
   def _TryBuffer(self, full_key: AnyStr, command: partial) -> bool:
     """Returns if a mutating command was buffered for future execution."""
@@ -107,15 +107,17 @@ class RedisTransaction(storage_lib.HypeTransaction):
     self.watch(full_key)
 
   def Commit(self):
-    if not self._ApplyBufferedCommands():
-      return False
+    self._ApplyBufferedCommands()
     try:
       status = self._pipe.execute()
       self._pipe.reset()
-      return status
-    except Exception:
-      logging.info('%s Commit aborted, due to watch failure, raising', self)
-      raise storage_lib.CommitAbortError
+      # status is a list of return values from the redis server. It's possible
+      # one of them actually demonstrates a failure, but most failures either
+      # raise or end up with an empty status, so we just return that.
+      return status is not None
+    except WatchError:
+      logging.info('%s Commit failed due to watch failure, retrying', self)
+      return False
 
 
 class RedisStore(storage_lib.HypeStore):
