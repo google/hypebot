@@ -85,6 +85,10 @@ class JackpotCommand(command_lib.BaseCommand):
       {
           # Time to settle lottery [hour, minute, second].
           'lottery_time': [12, 0, 0],
+          # A maximum number of seconds to randomly offset the actual lottery
+          # settle time. Note that this number is added or subtracted from the
+          # lottery_time above.
+          'max_jitter_secs': 5,
           # Warning times in seconds before lottery_time.
           'warnings': [60, 3600],
       })
@@ -97,7 +101,7 @@ class JackpotCommand(command_lib.BaseCommand):
     lotto_time = util_lib.ArrowTime(*self._params.lottery_time,
                                     tz=self._core.timezone)
     self._core.scheduler.DailyCallback(
-        lotto_time, self._LotteryCallback, _jitter=10)
+        lotto_time, self._LotteryCallback, _jitter=self._params.max_jitter_secs)
     for warning_sec in self._params.warnings:
       warning_offset = timedelta(seconds=warning_sec)
       warning_time = lotto_time - warning_offset
