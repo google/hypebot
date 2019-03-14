@@ -182,9 +182,8 @@ class RitoProvider(TournamentProvider):
         'teams': 'v1/teams?slug=%s&tournament=%s'
     }
     full_url = base_esports_url + endpoint_urls[api_endpoint] % (api_id or '')
-    return self._proxy.FetchJson(full_url,
-                                 force_lookup=force_lookup,
-                                 use_storage=use_storage)
+    return self._proxy.FetchJson(
+        full_url, force_lookup=force_lookup, use_storage=use_storage)
 
   def LoadData(self):
     with self._lock:
@@ -203,6 +202,7 @@ class RitoProvider(TournamentProvider):
         team_id = str(team['id'])
         self._teams[team_id] = esports_pb2.Team(
             team_id=team['acronym'],
+            abbreviation=team['acronym'],
             name=team['name'],
             league_id=self.league_id)
 
@@ -214,8 +214,10 @@ class RitoProvider(TournamentProvider):
           if 'team' in roster:
             t = self._teams[roster['team']]
             self._rosters[roster_id] = t
-            team = ([x for x in league_data['teams']
-                     if str(x['id']) == roster['team']] or [None])[0]
+            team = ([
+                x for x in league_data['teams']
+                if str(x['id']) == roster['team']
+            ] or [None])[0]
             if t.players or not team:
               continue
             team_data = self._FetchEsportsData(
@@ -232,9 +234,11 @@ class RitoProvider(TournamentProvider):
             # It's a player at All-Stars.
             self._rosters[roster_id] = esports_pb2.Team(
                 team_id=roster['name'],
+                abbreviation=roster['name'],
                 name=roster['name'])
 
         for bracket in tournament['brackets'].values():
+
           def _ExtractStandings(record, rank=None):
             return esports_pb2.TeamStanding(
                 rank=rank,
@@ -262,11 +266,10 @@ class RitoProvider(TournamentProvider):
                 if record:
                   b.standings.extend([_ExtractStandings(record, rank)])
           else:
-            b.standings.extend([
-                _ExtractStandings(r) for r in league_data['highlanderRecords']
-                if (r['tournament'] == tournament['id'] and r['bracket'] ==
-                    bracket['id'])
-            ])
+            for record in league_data['highlanderRecords']:
+              if (record['tournament'] == tournament['id'] and
+                  record['bracket'] == bracket['id']):
+                b.standings.append(_ExtractStandings(record))
 
           for match in bracket['matches'].values():
             match_teams = self._ExtractMatchTeams(match)
@@ -284,9 +287,10 @@ class RitoProvider(TournamentProvider):
                 continue
               # Rito has 2 different ids for the game, we temporarily store the
               # one needed to find the hash as the hash field.
-              m.games.add(game_id=game.get('gameId'),
-                          realm=game.get('gameRealm'),
-                          hash=game['id'])
+              m.games.add(
+                  game_id=game.get('gameId'),
+                  realm=game.get('gameRealm'),
+                  hash=game['id'])
 
             if 'standings' in match:
               top_group = match['standings']['result'][0]
@@ -319,8 +323,8 @@ class RitoProvider(TournamentProvider):
   def UpdateMatches(self):
     updated_matches = []
     with self._lock:
-      league_data = self._FetchEsportsData('leagues', self._league,
-                                           force_lookup=True)
+      league_data = self._FetchEsportsData(
+          'leagues', self._league, force_lookup=True)
       if not league_data or 'leagues' not in league_data:
         return []
 
@@ -380,11 +384,114 @@ class RitoProvider(TournamentProvider):
     return match_teams
 
 
-class GrumbleProvider(TournamentProvider):
-  """Provide tournament informationg for a Grumble division."""
+class BattlefyProvider(TournamentProvider):
+  """Uses unofficial Battlefy APIs to provide tournament data."""
 
-  _BASE_URL = (
-      'http://goog-lol-tournaments.appspot.com/rest/%s/grumble-2018/')
+  _BASE_URL = 'https://dtmwra1jsgyb0.cloudfront.net'
+
+  def __init__(self, proxy, league_id, alias='CEA', **kwargs):
+    super(BattlefyProvider, self).__init__(**kwargs)
+    self._proxy = proxy
+    self._league_id = league_id
+    self._alias = alias
+
+    self._teams = {}
+    self._brackets = {}
+
+    self._lock = RLock()
+
+  @property
+  def league_id(self):
+    return self._league_id
+
+  @property
+  def name(self):
+    return 'CEA'
+
+  @property
+  def aliases(self):
+    return [self._alias]
+
+  @property
+  def brackets(self):
+    with self._lock:
+      return self._brackets.values()
+
+  @property
+  def teams(self):
+    with self._lock:
+      return self._teams.values()
+
+  def _LoadTeams(self):
+    """Load teams."""
+    with self._lock:
+      teams = self._proxy.FetchJson(
+          '/'.join([self._BASE_URL, 'tournaments', self.league_id, 'teams']),
+          force_lookup=True)
+      for team in teams:
+        self._teams[team['_id']] = esports_pb2.Team(
+            team_id=team['_id'],
+            name=team['name'],
+            # Battlefy does not provide team abbreviations, so we make our best
+            # guess by using the first letter of each word. There may be
+            # collisions, and not all names produce desirable/informative
+            # abbreviations.  E.g., Adobe #FF0000 -> A#. Poor abbreviations may
+            # require using the full team name for auto-complete.
+            abbreviation=''.join(
+                [word[0] for word in team['name'].split()]).upper(),
+            league_id=team['tournamentID'])
+        for player in team['players']:
+          rank = '%s%s' % (util_lib.Access(player, 'stats.tier', 'N')[0],
+                           util_lib.Access(player, 'stats.rank', 'A'))
+          self._teams[team['_id']].players.add(
+              summoner_name=player['inGameName'],
+              team_id=team['_id'],
+              position=rank)
+
+  def _LoadStage(self, stage_id):
+    """Loads a single stage (bracket)."""
+    with self._lock:
+      stage = self._proxy.FetchJson(
+          '/'.join([self._BASE_URL, 'stages', stage_id]), force_lookup=True)
+      bracket = esports_pb2.Bracket(
+          bracket_id=self._MakeBracketId(stage_id),
+          name=stage['name'],
+          league_id=self.league_id,
+          is_playoffs='playoff' in stage['name'])
+      self._brackets[bracket.bracket_id] = bracket
+
+      matches = self._proxy.FetchJson(
+          '/'.join([self._BASE_URL, 'stages', stage_id, 'matches']),
+          force_lookup=True)
+      for match in matches:
+        bracket.schedule.add(
+            match_id=match['_id'],
+            bracket_id=bracket.bracket_id,
+            red=match['top']['teamID'],
+            blue=match['bottom']['teamID'],
+            timestamp=arrow.get(stage['startTime']).timestamp)
+
+  def LoadData(self):
+    with self._lock:
+      self._teams = {}
+      self._brackets = {}
+
+      response = self._proxy.FetchJson(
+          '/'.join([self._BASE_URL, 'tournaments', self.league_id]),
+          force_lookup=True)
+      for stage_id in response['stageIDs']:
+        self._LoadStage(stage_id)
+
+      self._LoadTeams()
+
+  def UpdateMatches(self):
+    return []
+
+
+class GrumbleProvider(TournamentProvider):
+  """Provide tournament information for a Grumble division."""
+
+  _BASE_URL = ('http://goog-lol-tournaments.appspot.com/rest/%s/grumble-2018/')
 
   def __init__(self, proxy, division='D1', realm='NA1', **kwargs):
     super(GrumbleProvider, self).__init__(**kwargs)
@@ -428,17 +535,18 @@ class GrumbleProvider(TournamentProvider):
         for match in week['matches']:
           match_count += 1
           m = bracket.schedule.add(
-              match_id='%s-%s-%s' % (
-                  self.league_id, bracket.bracket_id, match_count),
+              match_id='%s-%s-%s' %
+              (self.league_id, bracket.bracket_id, match_count),
               bracket_id=bracket.bracket_id,
               blue=util_lib.Access(match, 'team1.ref.id', 'TBD'),
               red=util_lib.Access(match, 'team2.ref.id', 'TBD'),
               timestamp=match['timestampSec'])
           self._matches[m.match_id] = m
           for game in match['games']:
-            m.games.add(game_id=str(util_lib.Access(game, 'ref.gameId')),
-                        realm=self._realm,
-                        hash=util_lib.Access(game, 'ref.tournamentCode'))
+            m.games.add(
+                game_id=str(util_lib.Access(game, 'ref.gameId')),
+                realm=self._realm,
+                hash=util_lib.Access(game, 'ref.tournamentCode'))
 
           for team in [match['team1'], match['team2']]:
             team_id = util_lib.Access(team, 'ref.id')
@@ -447,6 +555,7 @@ class GrumbleProvider(TournamentProvider):
             if team_id not in self._teams:
               self._teams[team_id] = esports_pb2.Team(
                   team_id=team_id,
+                  abbreviation=team_id,
                   name=team['ref']['displayName'],
                   league_id=self.league_id)
             if team_id not in standings:
@@ -464,8 +573,8 @@ class GrumbleProvider(TournamentProvider):
               standings[team_id].points += 1
             else:
               standings[team_id].losses += 1
-      standings = sorted(standings.values(), key=lambda x: x.points,
-                         reverse=True)
+      standings = sorted(
+          standings.values(), key=lambda x: x.points, reverse=True)
       rank = 1
       cur_points = -1
       for i, team in enumerate(standings):
@@ -502,8 +611,8 @@ class GrumbleProvider(TournamentProvider):
       self._ParseSchedule(response['schedule'], self._brackets['playoffs'])
 
       for team_id, team in self._teams.items():
-        response = self._proxy.FetchJson(
-            '/'.join([self._BASE_URL % 'team', self._division, team_id]))
+        response = self._proxy.FetchJson('/'.join(
+            [self._BASE_URL % 'team', self._division, team_id]))
         if not response:
           continue
         for player in response['players']:
@@ -520,8 +629,8 @@ class GrumbleProvider(TournamentProvider):
       for week in schedule:
         for match in week['matches']:
           match_count += 1
-          match_id = '%s-%s-%s' % (
-              self.league_id, bracket.bracket_id, match_count)
+          match_id = '%s-%s-%s' % (self.league_id, bracket.bracket_id,
+                                   match_count)
           old_match = self._matches.get(match_id)
           if not old_match or old_match.winner:
             continue
@@ -565,6 +674,7 @@ class EsportsLib(object):
     self._timezone = rito_tz
 
     self._providers = [
+        BattlefyProvider(self._proxy, '5c4cc9914e0e0803348dae2c', 'CEA'),
         GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
         GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
         RitoProvider(self._proxy, 'IN', 'worlds',
@@ -670,15 +780,16 @@ class EsportsLib(object):
           match = Match(match)
           matches[match.match_id] = match
           if match.winner and league.stats_enabled:
-            self._ScrapePickBanData(
-                league, match, champ_stats, player_stats, num_games)
+            self._ScrapePickBanData(league, match, champ_stats, player_stats,
+                                    num_games)
       for team in league.teams:
         teams[team.team_id] = team
 
     with self._lock:
-      self._teams = name_complete_lib.NameComplete(
-          {team.name: team_id for team_id, team in teams.items()},
-          teams)
+      team_aliases = {team.name: team_id for team_id, team in teams.items()}
+      team_aliases.update(
+          {team.abbreviation: team_id for team_id, team in teams.items()})
+      self._teams = name_complete_lib.NameComplete(team_aliases, teams)
       self._schedule = sorted(matches.values(), key=lambda x: x.timestamp)
       self._matches = matches
       self._brackets = brackets
@@ -688,13 +799,11 @@ class EsportsLib(object):
       for league in leagues.values():
         for alias in league.aliases:
           league_aliases[alias] = league.league_id
-      self._leagues = name_complete_lib.NameComplete(
-          league_aliases, leagues)
+      self._leagues = name_complete_lib.NameComplete(league_aliases, leagues)
 
       self._champ_stats = champ_stats
       self._player_stats = name_complete_lib.NameComplete(
-          nicknames.LCS_PLAYER_NICKNAME_MAP,
-          player_stats,
+          nicknames.LCS_PLAYER_NICKNAME_MAP, player_stats,
           [x['name'] for x in player_stats.values()])
       self._num_games = num_games
 
@@ -724,11 +833,14 @@ class EsportsLib(object):
   def GetSchedule(self, subcommand, include_playoffs, num_games=5):
     """Get the schedule for the specified region or team."""
     qualifier = 'All'
+    display_qualifier = 'All'
     with self._lock:
       if subcommand in self.teams:
         qualifier = self.teams[subcommand].team_id
+        display_qualifier = self.teams[subcommand].abbreviation
       if subcommand in self.leagues:
         qualifier = self.leagues[subcommand].league_id
+        display_qualifier = self.leagues[subcommand].name
 
     now = arrow.utcnow()
 
@@ -749,13 +861,16 @@ class EsportsLib(object):
           if match.match_id in livestream_links:
             date_time += ' - %s' % livestream_links[match.match_id]
         else:
-          date_time = 'LIVE - ' + (livestream_links.get(match.match_id) or
-                                   messages.FALLBACK_LIVESTREAM_LINK)
+          date_time = 'LIVE - ' + (
+              livestream_links.get(match.match_id) or
+              messages.FALLBACK_LIVESTREAM_LINK)
         num_games_str = ''
         if match.games:
           num_games_str = 'Bo%s - ' % len(match.games)
-        blue_team = util_lib.Colorize('{:3}'.format(match.blue), 'blue')
-        red_team = util_lib.Colorize('{:3}'.format(match.red), 'red')
+        blue_team = util_lib.Colorize(
+            '{:3}'.format(self.teams[match.blue].abbreviation), 'blue')
+        red_team = util_lib.Colorize(
+            '{:3}'.format(self.teams[match.red].abbreviation), 'red')
         schedule.append('{} v {}: {}{}'.format(blue_team, red_team,
                                                num_games_str, date_time))
         if len(schedule) >= num_games:
@@ -764,7 +879,8 @@ class EsportsLib(object):
     if not schedule:
       schedule = [messages.SCHEDULE_NO_GAMES_STRING]
       qualifier = 'No'
-    return schedule[:num_games], qualifier
+      display_qualifier = 'No'
+    return schedule[:num_games], display_qualifier
 
   def GetResults(self, subcommand, num_games=5):
     """Get the results of past games for the specified region or team."""
@@ -772,7 +888,7 @@ class EsportsLib(object):
     is_team = False
     with self._lock:
       if subcommand in self.teams:
-        qualifier = self.teams[subcommand].team_id
+        qualifier = self.teams[subcommand].abbreviation
         is_team = True
       if subcommand in self.leagues:
         qualifier = self.leagues[subcommand].league_id
@@ -815,15 +931,16 @@ class EsportsLib(object):
 
       teams = sorted(bracket.standings, key=lambda x: x.rank)
       has_ties = any([team.ties for team in teams])
-      standings.append(['%s-%s Standings (%s)' % (
-          league.name, bracket.name,
-          'W-L-D, Pts' if has_ties else 'W-L')])
+      standings.append([
+          '%s-%s Standings (%s)' %
+          (league.name, bracket.name, 'W-L-D, Pts' if has_ties else 'W-L')
+      ])
       for team in teams:
         format_str = '{0.wins}-{0.losses}'
         if has_ties:
           format_str += '-{0.ties}, {0.points}'
-        standings.append(
-            ('{0.rank:2}: {0.team.team_id:3} (%s)' % format_str).format(team))
+        standings.append(('{0.rank:2}: {0.team.abbreviation:3} (%s)' %
+                          format_str).format(team))
 
     return standings
 
@@ -840,8 +957,9 @@ class EsportsLib(object):
     pick_ban_data = self._champ_stats[champ_id]
 
     summed_pick_ban_data = Counter()
-    for region_data in [v for k, v in pick_ban_data.items() if
-                        region in ('all', k)]:
+    for region_data in [
+        v for k, v in pick_ban_data.items() if region in ('all', k)
+    ]:
       summed_pick_ban_data.update(region_data)
     summed_pick_ban_data['num_games'] = sum(
         v for k, v in self._num_games.items() if region in ('all', k))
@@ -852,8 +970,7 @@ class EsportsLib(object):
     """Returns champ statistics for LCS player."""
     player_info = self._player_stats[query]
     if not player_info:
-      logging.info('%s is ambiguous or doesn\'t map to any known player',
-                   query)
+      logging.info('%s is ambiguous or doesn\'t map to any known player', query)
       return None, None
 
     player_data = {}
@@ -881,8 +998,8 @@ class EsportsLib(object):
         if region in ('all', r):
           champs_to_flattened_data[champ_name].update(pb_data)
 
-    num_games = sum(v for k, v in self._num_games.items()
-                    if region in ('all', k))
+    num_games = sum(
+        v for k, v in self._num_games.items() if region in ('all', k))
 
     # First filter out champs who were picked in fewer than 5% of games
     filtered_champs = [
@@ -900,14 +1017,17 @@ class EsportsLib(object):
     return num_games, sorted_champs[:5]
 
   def GetUniqueChampCount(self, region):
+    """Calculates how many unique champs have been picked/banned."""
     with self._lock:
       if region in self.leagues:
         region = self.leagues[region].league_id
-    unique = set([self._game.GetChampNameFromId(k)
-                  for k, c in self._champ_stats.items()
-                  if region == 'all' or region in c.keys()])
-    num_games = sum(v for k, v in self._num_games.items()
-                    if region in ('all', k))
+    unique = set([
+        self._game.GetChampNameFromId(k)
+        for k, c in self._champ_stats.items()
+        if region == 'all' or region in c.keys()
+    ])
+    num_games = sum(
+        v for k, v in self._num_games.items() if region in ('all', k))
     return len(unique), num_games
 
   def _MatchIsInteresting(self, match, qualifier, now, include_playoffs):
@@ -922,14 +1042,14 @@ class EsportsLib(object):
             (include_playoffs or not bracket.is_playoffs))
 
   def _ResultIsInteresting(self, match, qualifier):
-    region_and_teams = (
-        self.brackets[match.bracket_id].league_id, match.blue, match.red)
+    region_and_teams = (self.brackets[match.bracket_id].league_id, match.blue,
+                        match.red)
     if ((qualifier == 'All' or qualifier in region_and_teams) and match.winner):
       return True
     return False
 
-  def _ScrapePickBanData(self,
-                         league, match, champ_stats, player_stats, num_games):
+  def _ScrapePickBanData(self, league, match, champ_stats, player_stats,
+                         num_games):
     """For each game in match, fetches and tallies pick/ban data from Riot."""
     for game in match.games:
       if not game.hash:
@@ -938,7 +1058,8 @@ class EsportsLib(object):
       num_games[league.league_id] += 1
       game_stats = self._proxy.FetchJson(
           'https://acs.leagueoflegends.com/v1/stats/game/%s/%s?gameHash=%s' %
-          (game.realm, game.game_id, game.hash), use_storage=True)
+          (game.realm, game.game_id, game.hash),
+          use_storage=True)
 
       participant_to_player = {
           p['participantId']: util_lib.Access(p, 'player.summonerName')

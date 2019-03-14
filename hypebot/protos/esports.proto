@@ -48,7 +48,7 @@ message Player {
 }
 
 message Team {
-  // Unique (within regions) abbreviated name. (ZLG)
+  // Unique (within regions) computer readable identifier.
   string team_id = 1;
 
   // Human readable name of team. (Zero Logic Gaming)
@@ -58,6 +58,9 @@ message Team {
   string league_id = 3;
 
   repeated Player players = 4;
+
+  // Human readable abbreviation of team name. (ZLG)
+  string abbreviation = 5;
 }
 
 // Things needed to fetch game from rito.
