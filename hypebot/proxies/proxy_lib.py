@@ -37,7 +37,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
   _STORAGE_SUBKEY = 'fetch_results'
 
   def __init__(self, store=None):
-    self._request_cache = cache_lib.LRUCache(256, max_age=60 * 60)
+    self._request_cache = cache_lib.LRUCache(256, max_age_secs=60 * 60)
     self._store = store
 
   @abc.abstractmethod
@@ -104,7 +104,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
           logging.error('Error storing return_data: %s', e)
     return return_data
 
-  def FetchJson(self, url, params={}, force_lookup=False, use_storage=False):
+  def FetchJson(self, url, params=None, force_lookup=False, use_storage=False):
     """Returns a python-native version of a JSON response from url."""
     try:
       return json.loads(
@@ -127,7 +127,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
 
   def HTTPFetch(self,
                 url,
-                params={},
+                params=None,
                 validate_fn=None,
                 force_lookup=False,
                 use_storage=False):
@@ -145,6 +145,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     Returns:
       The data or None if the fetch failed.
     """
+    params = params or {}
     action = partial(self._GetUrl, url, params)
     return self.RawFetch(
         util_lib.SafeUrl(url),

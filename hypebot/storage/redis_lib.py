@@ -295,7 +295,8 @@ class ReadCacheRedisStore(RedisStore):
 
   def __init__(self, params, cache_max_age=30, cache_max_items=128):
     super(ReadCacheRedisStore, self).__init__(params)
-    self._cache = cache_lib.LRUCache(cache_max_items, max_age=cache_max_age)
+    self._cache = cache_lib.LRUCache(
+        cache_max_items, max_age_secs=cache_max_age)
     logging.info('RCRedisStore params =>\n%s', self._params.AsDict())
 
   def SetValue(self, key, subkey, value, tx=None):
