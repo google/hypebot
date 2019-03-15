@@ -40,6 +40,10 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     self._request_cache = cache_lib.LRUCache(256, max_age_secs=60 * 60)
     self._store = store
 
+  def __repr__(self):
+    return '<%s.%s with %s>' % (
+        self.__class__.__module__, self.__class__.__name__, self._request_cache)
+
   @abc.abstractmethod
   def _GetUrl(self, url, params):
     """Fetches data from a specified URL.

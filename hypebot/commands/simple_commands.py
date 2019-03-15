@@ -46,6 +46,20 @@ class AskFutureCommand(command_lib.BaseCommand):
     return random.choice(messages.BALL_ANSWERS)
 
 
+@command_lib.CommandRegexParser(r'debug (.+)')
+class DebugCommand(command_lib.BaseCommand):
+
+  @command_lib.PrivateOnly
+  def _Handle(self, channel, user, subcommand):
+    subcommand = subcommand.lower().strip()
+    # Check for a property on self._core with subcommand as the name
+    available_properties = self._core.__dict__
+    if subcommand in available_properties:
+      return str(available_properties[subcommand])
+    else:
+      return 'Unknown subcommand: %s' % subcommand
+
+
 @command_lib.CommandRegexParser(r'disappoint (.+?)')
 class DisappointCommand(command_lib.BaseCommand):
 

@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 import collections
 
 import arrow
-from typing import Any, Generator, Tuple
+from typing import Any, AnyStr, Generator, Tuple
 
 
 class _TimedCacheElement(object):
@@ -42,6 +42,13 @@ class LRUCache(object):
     self._max_age_secs = max_age_secs
     self._max_items = max_items
     self._dict = collections.OrderedDict()
+
+  def __str__(self) -> AnyStr:
+    return '%s [%s/%s items, %ss TTL]' % (
+        self.__class__.__name__,
+        len(self._dict),
+        self._max_items,
+        self._max_age_secs)
 
   def Get(self, key: Any) -> Any:
     self._RemoveStaleElements()

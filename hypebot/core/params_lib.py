@@ -47,6 +47,9 @@ class HypeParams(object):
     self._locked = False
     self.Override(defaults)
 
+  def __str__(self):
+    return str(self.AsDict())
+
   def Override(self, params):
     self._RaiseIfLocked()
     params_dict = self._ParseDict(params)

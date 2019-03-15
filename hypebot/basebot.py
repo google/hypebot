@@ -86,6 +86,7 @@ class BaseBot(object):
           'AskFutureCommand': {},
           'BuyHypeStackCommand': {},
           'CookieJarCommand': {},
+          'DebugCommand': {},
           'DisappointCommand': {},
           'EchoCommand': {},
           'EnergyCommand': {},
