@@ -165,7 +165,8 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
     if self._core.esports.brackets[match.bracket_id].is_playoffs:
       topic = 'lcs_match_playoffs'
 
-    blue, red = (match.blue, match.red)
+    blue = self._core.esports.MatchTeamName(match.blue)
+    red = self._core.esports.MatchTeamName(match.red)
     if blue and red:
       match_name = '%s v %s' % (blue, red)
     else:

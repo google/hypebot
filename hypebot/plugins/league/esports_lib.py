@@ -269,7 +269,7 @@ class RitoProvider(TournamentProvider):
             for record in league_data['highlanderRecords']:
               if (record['tournament'] == tournament['id'] and
                   record['bracket'] == bracket['id']):
-                b.standings.append(_ExtractStandings(record))
+                b.standings.extend([_ExtractStandings(record)])
 
           for match in bracket['matches'].values():
             match_teams = self._ExtractMatchTeams(match)
@@ -387,13 +387,14 @@ class RitoProvider(TournamentProvider):
 class BattlefyProvider(TournamentProvider):
   """Uses unofficial Battlefy APIs to provide tournament data."""
 
-  _BASE_URL = 'https://dtmwra1jsgyb0.cloudfront.net'
+  _BASE_URL = 'https://api.battlefy.com'
 
-  def __init__(self, proxy, league_id, alias='CEA', **kwargs):
+  def __init__(self, proxy, league_id, alias, realm='NA1', **kwargs):
     super(BattlefyProvider, self).__init__(**kwargs)
     self._proxy = proxy
     self._league_id = league_id
     self._alias = alias
+    self._realm = realm
 
     self._teams = {}
     self._brackets = {}
@@ -406,7 +407,7 @@ class BattlefyProvider(TournamentProvider):
 
   @property
   def name(self):
-    return 'CEA'
+    return self._alias
 
   @property
   def aliases(self):
@@ -448,6 +449,30 @@ class BattlefyProvider(TournamentProvider):
               team_id=team['_id'],
               position=rank)
 
+  def _UpdateStandings(self, bracket):
+    stage_id = bracket.bracket_id.split('-')[-1]
+    standings = self._proxy.FetchJson(
+        '/'.join(
+            [self._BASE_URL, 'stages', stage_id, 'latest-round-standings']),
+        force_lookup=True)
+    del bracket.standings[:]
+    for rank, standing in enumerate(standings):
+      bracket.standings.add(
+          team=self._teams[standing['teamID']],
+          rank=rank + 1,
+          wins=standing['wins'],
+          losses=standing['losses'],
+          ties=standing['ties'],
+          points=standing['points'])
+
+  def _MatchWinner(self, match):
+    winner = 'TIE' if match['isComplete'] else None
+    if util_lib.Access(match, 'top.winner'):
+      winner = match['top']['teamID']
+    elif util_lib.Access(match, 'bottom.winner'):
+      winner = match['bottom']['teamID']
+    return winner
+
   def _LoadStage(self, stage_id):
     """Loads a single stage (bracket)."""
     with self._lock:
@@ -457,24 +482,50 @@ class BattlefyProvider(TournamentProvider):
           bracket_id=self._MakeBracketId(stage_id),
           name=stage['name'],
           league_id=self.league_id,
-          is_playoffs='playoff' in stage['name'])
+          is_playoffs='playoff' in stage['name'].lower())
       self._brackets[bracket.bracket_id] = bracket
 
       matches = self._proxy.FetchJson(
           '/'.join([self._BASE_URL, 'stages', stage_id, 'matches']),
           force_lookup=True)
       for match in matches:
-        bracket.schedule.add(
+        m = bracket.schedule.add(
             match_id=match['_id'],
             bracket_id=bracket.bracket_id,
-            red=match['top']['teamID'],
-            blue=match['bottom']['teamID'],
-            timestamp=arrow.get(stage['startTime']).timestamp)
+            red=util_lib.Access(match, 'top.teamID', 'BYE'),
+            blue=util_lib.Access(match, 'bottom.teamID', 'BYE'),
+            timestamp=arrow.get(stage['startTime']).timestamp,
+            winner=self._MatchWinner(match))
+        for game_id in match.get('appliedRiotGameIDs', []):
+          m.games.add(
+              game_id=game_id,
+              realm=self._realm,
+              hash=match['lolHookUrl'])
+    self._UpdateStandings(bracket)
+
+  def _UpdateSchedule(self, bracket):
+    """Updates a single brackets schedule."""
+    updated_matches = []
+    stage_id = bracket.bracket_id.split('-')[-1]
+    matches = self._proxy.FetchJson(
+        '/'.join([self._BASE_URL, 'stages', stage_id, 'matches']),
+        force_lookup=True)
+    for match in matches:
+      m = self._matches.get(match['_id'])
+      if not m or m.winner:
+        continue
+      m.winner = self._MatchWinner(match)
+      if m.winner:
+        updated_matches.append(m)
+    return updated_matches
 
   def LoadData(self):
     with self._lock:
       self._teams = {}
       self._brackets = {}
+
+      # Load teams first since we refer to these when loading stage standings.
+      self._LoadTeams()
 
       response = self._proxy.FetchJson(
           '/'.join([self._BASE_URL, 'tournaments', self.league_id]),
@@ -482,10 +533,13 @@ class BattlefyProvider(TournamentProvider):
       for stage_id in response['stageIDs']:
         self._LoadStage(stage_id)
 
-      self._LoadTeams()
-
   def UpdateMatches(self):
-    return []
+    updated_matches = []
+    with self._lock:
+      for bracket in self._brackets:
+        updated_matches.extend(self._UpdateSchedule(bracket))
+        self._UpdateStandings(bracket)
+    return updated_matches
 
 
 class GrumbleProvider(TournamentProvider):
@@ -674,7 +728,8 @@ class EsportsLib(object):
     self._timezone = rito_tz
 
     self._providers = [
-        BattlefyProvider(self._proxy, '5c4cc9914e0e0803348dae2c', 'CEA'),
+        BattlefyProvider(self._proxy, '5c4cc9914e0e0803348dae2c', 'CEA',
+                         stats_enabled=True),
         GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
         GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
         RitoProvider(self._proxy, 'IN', 'worlds',
@@ -837,7 +892,7 @@ class EsportsLib(object):
     with self._lock:
       if subcommand in self.teams:
         qualifier = self.teams[subcommand].team_id
-        display_qualifier = self.teams[subcommand].abbreviation
+        display_qualifier = self.teams[subcommand].name
       if subcommand in self.leagues:
         qualifier = self.leagues[subcommand].league_id
         display_qualifier = self.leagues[subcommand].name
@@ -867,10 +922,10 @@ class EsportsLib(object):
         num_games_str = ''
         if match.games:
           num_games_str = 'Bo%s - ' % len(match.games)
-        blue_team = util_lib.Colorize(
-            '{:3}'.format(self.teams[match.blue].abbreviation), 'blue')
-        red_team = util_lib.Colorize(
-            '{:3}'.format(self.teams[match.red].abbreviation), 'red')
+        blue_team = self.MatchTeamName(match.blue)
+        blue_team = util_lib.Colorize('{:3}'.format(blue_team), 'blue')
+        red_team = self.MatchTeamName(match.red)
+        red_team = util_lib.Colorize('{:3}'.format(red_team), 'red')
         schedule.append('{} v {}: {}{}'.format(blue_team, red_team,
                                                num_games_str, date_time))
         if len(schedule) >= num_games:
@@ -882,16 +937,37 @@ class EsportsLib(object):
       display_qualifier = 'No'
     return schedule[:num_games], display_qualifier
 
+  def MatchTeamName(self, team_id):
+    """Extract the team name (abbreviation) from their "id".
+
+    For matches, sometimes we don't store an actual team_id in the red/blue slot
+    since their could be a bye. The same goes for the winner if it is a tie. In
+    these cases, we want the display name to simply be whatever string we stored
+    in the team_id field.
+
+    Args:
+      team_id: Unique identifier of the team. E.g., from match.blue, match.red,
+        or match.winner.
+
+    Returns:
+      A short, human readable name for the team.
+    """
+    return (self.teams[team_id].abbreviation
+            if team_id in self.teams else team_id)
+
   def GetResults(self, subcommand, num_games=5):
     """Get the results of past games for the specified region or team."""
     qualifier = 'All'
+    display_qualifier = 'All'
     is_team = False
     with self._lock:
       if subcommand in self.teams:
-        qualifier = self.teams[subcommand].abbreviation
+        qualifier = self.teams[subcommand].team_id
+        display_qualifier = self.teams[subcommand].name
         is_team = True
       if subcommand in self.leagues:
         qualifier = self.leagues[subcommand].league_id
+        display_qualifier = self.leagues[subcommand].name
         is_team = False
 
     results = []
@@ -900,8 +976,10 @@ class EsportsLib(object):
     tmp_schedule.reverse()
     for match in tmp_schedule:
       if self._ResultIsInteresting(match, qualifier):
-        blue_team = util_lib.Colorize('{:3}'.format(match.blue), 'blue')
-        red_team = util_lib.Colorize('{:3}'.format(match.red), 'red')
+        blue_team = self.MatchTeamName(match.blue)
+        blue_team = util_lib.Colorize('{:3}'.format(blue_team), 'blue')
+        red_team = self.MatchTeamName(match.red)
+        red_team = util_lib.Colorize('{:3}'.format(red_team), 'red')
         is_tie = match.winner == 'TIE'
         if is_team:
           winner_msg = 'Tie' if is_tie else (
@@ -909,14 +987,14 @@ class EsportsLib(object):
         else:
           winner_msg = '{} {}'.format(
               match.winner if is_tie else util_lib.Colorize(
-                  '{:3}'.format(match.winner),
+                  '{:3}'.format(self.teams[match.winner].abbreviation),
                   'red' if match.red == match.winner else 'blue'),
               ':^)' if is_tie else 'wins!')
         results.append('{} v {}: {}'.format(blue_team, red_team, winner_msg))
         if len(results) >= num_games:
           break
 
-    return results[:num_games], qualifier
+    return results[:num_games], display_qualifier
 
   def GetStandings(self, req_region, req_bracket):
     """Gets the standings for a specified region."""
@@ -926,7 +1004,8 @@ class EsportsLib(object):
 
     standings = []
     for bracket in league.brackets:
-      if not (req_bracket in bracket.name or req_bracket in bracket.bracket_id):
+      if not (req_bracket.upper() in bracket.name.upper() or
+              req_bracket in bracket.bracket_id):
         continue
 
       teams = sorted(bracket.standings, key=lambda x: x.rank)
