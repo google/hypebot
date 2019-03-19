@@ -35,6 +35,10 @@ from hypebot.data.league import messages
 from hypebot.data.league import nicknames
 from hypebot.protos import esports_pb2
 
+# pylint: disable=line-too-long
+from google.protobuf import json_format
+# pylint: enable=line-too-long
+
 LIVESTREAM_LINK_FORMAT = 'https://gaming.youtube.com/embed/%s'
 
 
@@ -398,6 +402,7 @@ class BattlefyProvider(TournamentProvider):
 
     self._teams = {}
     self._brackets = {}
+    self._matches = {}
 
     self._lock = RLock()
 
@@ -496,12 +501,42 @@ class BattlefyProvider(TournamentProvider):
             blue=util_lib.Access(match, 'bottom.teamID', 'BYE'),
             timestamp=arrow.get(stage['startTime']).timestamp,
             winner=self._MatchWinner(match))
-        for game_id in match.get('appliedRiotGameIDs', []):
-          m.games.add(
+        self._matches[m.match_id] = m
+        stats = None
+        if self.stats_enabled and m.winner:
+          stats = self._proxy.FetchJson(
+              '/'.join([self._BASE_URL, 'matches', m.match_id]),
+              params={'extend[stats]': 'true'},
+              force_lookup=True)
+        for stat_idx, game_id in enumerate(match.get('appliedRiotGameIDs', [])):
+          game = m.games.add(
               game_id=game_id,
               realm=self._realm,
               hash=match['lolHookUrl'])
+          if stats:
+            self._ParseGameStats(game, stats[0]['stats'][stat_idx]['stats'])
+
     self._UpdateStandings(bracket)
+
+  def _ParseGameStats(self, game, stats):
+    """Maps from Battlefy stats to rito Match proto."""
+    game.stats.game_id = stats['gameId']
+    game.stats.game_duration = stats['gameLength']
+    game.stats.game_mode = stats['gameMode']
+    game.stats.game_type = stats['gameType']
+    game.stats.game_version = stats['gameVersion']
+    game.stats.map_id = stats['mapId']
+    game.stats.platform_id = stats['platformId']
+    for team in stats['teamStats']:
+      team_stats = game.stats.teams.add()
+      json_format.ParseDict(team, team_stats)
+    for team in stats['teams']:
+      for player in team['players']:
+        participant = game.stats.participants.add()
+        json_format.ParseDict(player, participant, ignore_unknown_fields=True)
+        identity = game.stats.participant_identities.add()
+        identity.participant_id = player['participantId']
+        identity.player.summoner_name = player['summonerName']
 
   def _UpdateSchedule(self, bracket):
     """Updates a single brackets schedule."""
@@ -523,6 +558,7 @@ class BattlefyProvider(TournamentProvider):
     with self._lock:
       self._teams = {}
       self._brackets = {}
+      self._matches = {}
 
       # Load teams first since we refer to these when loading stage standings.
       self._LoadTeams()
@@ -536,7 +572,7 @@ class BattlefyProvider(TournamentProvider):
   def UpdateMatches(self):
     updated_matches = []
     with self._lock:
-      for bracket in self._brackets:
+      for bracket in self._brackets.values():
         updated_matches.extend(self._UpdateSchedule(bracket))
         self._UpdateStandings(bracket)
     return updated_matches
@@ -1131,31 +1167,40 @@ class EsportsLib(object):
                          num_games):
     """For each game in match, fetches and tallies pick/ban data from Riot."""
     for game in match.games:
-      if not game.hash:
-        # In best-of series, not all games are played.
-        continue
+      # Sometimes the provider was nice and already gave us the game stats.
+      if not game.HasField('stats'):
+        if not game.hash:
+          logging.info(
+              'Game hash missing. Probably a Bo# series that ended early.')
+          continue
+        game_stats = self._proxy.FetchJson(
+            'https://acs.leagueoflegends.com/v1/stats/game/%s/%s?gameHash=%s' %
+            (game.realm, game.game_id, game.hash),
+            use_storage=True)
+        if not game_stats:
+          logging.warning(
+              'Failed to fetch game stats for game: %s', game.game_id)
+          continue
+        json_format.ParseDict(
+            game_stats, game.stats, ignore_unknown_fields=True)
       num_games[league.league_id] += 1
-      game_stats = self._proxy.FetchJson(
-          'https://acs.leagueoflegends.com/v1/stats/game/%s/%s?gameHash=%s' %
-          (game.realm, game.game_id, game.hash),
-          use_storage=True)
 
       participant_to_player = {
-          p['participantId']: util_lib.Access(p, 'player.summonerName')
-          for p in game_stats.get('participantIdentities', [])
+          p.participant_id: p.player.summoner_name
+          for p in game.stats.participant_identities
       }
 
       # Collect ban data.
       winning_team = None
-      for team in game_stats.get('teams', []):
-        if team.get('win') == 'Win':
-          winning_team = team.get('teamId')
-        for ban in team.get('bans', []):
-          champ_stats[ban['championId']][league.league_id]['bans'] += 1
+      for team in game.stats.teams:
+        if team.win == 'Win':
+          winning_team = team.team_id
+        for ban in team.bans:
+          champ_stats[ban.champion_id][league.league_id]['bans'] += 1
 
       # Collect pick and W/L data
-      for player in game_stats.get('participants', []):
-        champ_id = player['championId']
+      for player in game.stats.participants:
+        champ_id = player.champion_id
         champ_name = self._game.GetChampNameFromId(champ_id)
 
         # We need to use separate player_name and player_key here because Rito
@@ -1163,10 +1208,10 @@ class EsportsLib(object):
         # names so they aren't useful as keys, but we still want to display the
         # "canonical" player name back to the user eventually, so we save it as
         # a value in player_stats instead.
-        player_name = participant_to_player[player['participantId']]
+        player_name = participant_to_player[player.participant_id]
         player_key = util_lib.CanonicalizeName(player_name or 'hypebot')
         player_stats[player_key]['name'] = player_name or 'HypeBot'
-        if player.get('teamId') == winning_team:
+        if player.team_id == winning_team:
           champ_stats[champ_id][league.league_id]['wins'] += 1
           player_stats[player_key][champ_name]['wins'] += 1
           player_stats[player_key]['num_games']['wins'] += 1
