@@ -383,8 +383,9 @@ class LotteryGame(GameBase):
             ('We\'ve always been such close friends. Can I borrow some money '
              'for rent?')
         ])
-        notifications.append('%s won %s and a(n) %s in the lottery!' % (
-            user, util_lib.FormatHypecoins(coins), item.human_name))
+        item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
+        notifications.append('%s won %s and %s in the lottery!' % (
+            user, util_lib.FormatHypecoins(coins), item_str))
         return ([(user, coins), (user, item)], {}, notifications)
 
     return ([], {}, [])

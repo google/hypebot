@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +78,7 @@ PurseDef = namedtuple('PurseDef', 'base inc_amount inc_chance')
 
 
 class CoinPurse(BaseItem):
-  """You feeling lucky kid."""
+  """You feeling lucky kid?"""
 
   human_name = 'Coin purse'
   # Approximate median value of purse.
@@ -89,6 +90,7 @@ class CoinPurse(BaseItem):
       'large': PurseDef(100, 100, 0.5)
   }
   ROLLS_PER_PURSE = 3
+  HAT_TOKEN_CHANCE = 0.02
 
   def Use(self):
     text = ['%s opens the coin purse...' % self._user]
@@ -98,14 +100,36 @@ class CoinPurse(BaseItem):
       coin_amt = purse.base
       while random.random() < purse.inc_chance:
         coin_amt += purse.inc_amount
-      text += ['%s found a roll of %d HypeCoins!' % (
-          self._user, coin_amt)]
+      text += ['%s found a roll of %d HypeCoins!' % (self._user, coin_amt)]
       total_coin_amt += coin_amt
     payment_succeeded = self._core.bank.ProcessPayment(
-        coin_lib.MINT_ACCOUNT,
-        self._user, total_coin_amt,
-        'Coin purse reward', self._core.Reply)
+        coin_lib.MINT_ACCOUNT, self._user, total_coin_amt, 'Coin purse reward',
+        self._core.Reply)
+    if random.random() < self.HAT_TOKEN_CHANCE:
+      self._core.inventory.AddItem(
+          self._user, Create('HatToken', self._core, self._user, self._params))
+      text.append(
+          'While looking in the bottom of the bag, %s found a Hat Token!' %
+          self._user)
     return (text, payment_succeeded)
+
+
+class HatToken(BaseItem):
+  """This is a TODO, it's as good as a real bug."""
+
+  _GHOST_CHANCE = 0.25
+  human_name = 'Hat token'
+  # Approximate median value of hat token.
+  value = 50000
+
+  def Use(self):
+    text = ['%s tries to turn their token into a hat.' % self._user]
+    see_a_ghost = random.random() < self._GHOST_CHANCE
+    if see_a_ghost:
+      text += ('The ghost of tech debt past passes by, whispering',
+               '👻 Refactor inventory_lib if you want to use your tokenssss 👻')
+    text.append('Nothing %shappens' % ('else ' if see_a_ghost else ''))
+    return (text, False)
 
 
 _factory = factory_lib.Factory(BaseItem)

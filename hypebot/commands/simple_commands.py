@@ -127,8 +127,9 @@ class JackpotCommand(command_lib.BaseCommand):
   def _Handle(self, channel, unused_user):
     pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
     jackpot, item = self._game.ComputeCurrentJackpot(pool)
-    responses = ['Current jackpot is %s and a(n) %s' % (
-        util_lib.FormatHypecoins(jackpot), item.human_name)]
+    item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
+    responses = ['Current jackpot is %s and %s' % (
+        util_lib.FormatHypecoins(jackpot), item_str)]
     for bet_user, user_bets in pool.items():
       for bet in user_bets:
         responses.append('- %s, %s' % (bet_user, self._game.FormatBet(bet)))
@@ -148,8 +149,9 @@ class JackpotCommand(command_lib.BaseCommand):
           util_lib.TimeDeltaToHumanDuration(remaining))
     pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
     coins, item = self._game.ComputeCurrentJackpot(pool)
-    warning_str += 'Current jackpot is %s and a(n) %s' % (
-        util_lib.FormatHypecoins(coins), item.human_name)
+    item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
+    warning_str += 'Current jackpot is %s and %s' % (
+        util_lib.FormatHypecoins(coins), item_str)
     self._core.PublishMessage('lottery', warning_str)
 
 
