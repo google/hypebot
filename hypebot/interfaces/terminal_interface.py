@@ -20,6 +20,9 @@ and use stdout/stdin as your "chat application".
 
 By default it treats the messages as coming from `terminal-user`, you can
 simulate different users by inputing [$USER]$MESSAGE. E.g., [user1]! v
+
+If you need to see the full proto Message response, you can set
+`return_text_only` to False in the params for the interface.
 """
 
 from __future__ import absolute_import
@@ -29,6 +32,7 @@ from __future__ import unicode_literals
 
 import re
 
+from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
 from hypebot.protos.channel_pb2 import Channel
 
@@ -36,18 +40,26 @@ from hypebot.protos.channel_pb2 import Channel
 class TerminalInterface(interface_lib.BaseChatInterface):
   """See file comments."""
 
-  DEFAULT_USER = 'terminal-user'
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      interface_lib.BaseChatInterface.DEFAULT_PARAMS, {
+          'default_user': 'terminal-user',
+          'default_channel': '#hypebot',
+          'return_text_only': True,
+      })
 
   def Loop(self):
     while True:
-      nick = self.DEFAULT_USER
+      nick = self._params.default_user
       message = raw_input('> ').decode('utf-8')
-      match = re.match(r'^\[(\S+)\](.+)', message)
+      match = re.match(r'^\[(\S+)\]\s*(.+)', message)
       if match:
         nick, message = match.groups()
+
       self._on_message_fn(
-          Channel(id='#hypebot', visibility=Channel.PUBLIC, name='#hypebot'),
-          nick, message)
+          Channel(
+              id=self._params.default_channel,
+              visibility=Channel.PUBLIC,
+              name=self._params.default_channel), nick, message)
 
   def Who(self, user):
     self._user_tracker.AddHuman(user)
@@ -56,7 +68,10 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     self._user_tracker.AddHuman(self.DEFAULT_USER)
 
   def SendMessage(self, channel, message):
-    print('%s\n%s' % (channel, message))
+    if self._params.return_text_only:
+      print('%s' % '\n'.join(msg.text for msg in message.messages))
+    else:
+      print('%s\n%s' % (channel, message))
 
   def Notice(self, channel, message):
     print('NOTICE\n%s\n%s' % (channel, message))
