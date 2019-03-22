@@ -21,6 +21,14 @@ and use stdout/stdin as your "chat application".
 By default it treats the messages as coming from `terminal-user`, you can
 simulate different users by inputing [$USER]$MESSAGE. E.g., [user1]! v
 
+You can also simulate talking a different channel by inputting
+[#$CHANNEL]$MESSAGE. E.g., [#testing] ! v. Combining this and the previous nick
+override, you can simulate private messages:
+
+[#nick|nick] debug store
+
+Note order of channel and user override does not matter.
+
 If you need to see the full proto Message response, you can set
 `return_text_only` to False in the params for the interface.
 """
@@ -49,17 +57,39 @@ class TerminalInterface(interface_lib.BaseChatInterface):
 
   def Loop(self):
     while True:
+      channel = Channel(
+          id=self._params.default_channel,
+          visibility=Channel.PUBLIC,
+          name=self._params.default_channel)
       nick = self._params.default_user
       message = raw_input('> ').decode('utf-8')
-      match = re.match(r'^\[(\S+)\]\s*(.+)', message)
-      if match:
-        nick, message = match.groups()
+      overrides = self._ExtractOverrides(message)
+      if overrides:
+        channel, nick, message = overrides
+      self._on_message_fn(channel, nick, message)
 
-      self._on_message_fn(
-          Channel(
-              id=self._params.default_channel,
-              visibility=Channel.PUBLIC,
-              name=self._params.default_channel), nick, message)
+  def _ExtractOverrides(self, raw_message):
+    """Returns nothing, or the overrides parsed for a channel, nick, and msg."""
+    message_regex = re.compile(r'^\[(#?\w+)(?:\|(#?\w+))?\]\s*(.+)')
+    match = message_regex.match(raw_message)
+    if not match:
+      return
+    nick = self._params.default_user
+    channel_name = self._params.default_channel
+    visibility = Channel.PUBLIC
+    for i in range(1, 3):
+      nick_or_channel = match.group(i)
+      if not nick_or_channel:
+        break
+      if nick_or_channel.startswith('#'):
+        channel_name = nick_or_channel
+      else:
+        nick = nick_or_channel
+    if nick.lower() == channel_name.strip('#').lower():
+      visibility = Channel.PRIVATE
+    message = match.group(3)
+    return (Channel(id=channel_name, visibility=visibility, name=channel_name),
+            nick, message)
 
   def Who(self, user):
     self._user_tracker.AddHuman(user)
