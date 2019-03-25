@@ -185,9 +185,13 @@ class RitoProvider(TournamentProvider):
         'streamgroups': 'v2/streamgroups%s',
         'teams': 'v1/teams?slug=%s&tournament=%s'
     }
+    endpoint_fields_to_erase = {
+        'teams': ['players.bios', 'teams.bios', 'highlanderTournaments']
+    }
     full_url = base_esports_url + endpoint_urls[api_endpoint] % (api_id or '')
     return self._proxy.FetchJson(
-        full_url, force_lookup=force_lookup, use_storage=use_storage)
+        full_url, force_lookup=force_lookup, use_storage=use_storage,
+        fields_to_erase=endpoint_fields_to_erase.get(api_endpoint))
 
   def LoadData(self):
     with self._lock:
@@ -549,8 +553,9 @@ class BattlefyProvider(TournamentProvider):
       m = self._matches.get(match['_id'])
       if not m or m.winner:
         continue
-      m.winner = self._MatchWinner(match)
-      if m.winner:
+      winner = self._MatchWinner(match)
+      if winner:
+        m.winner = winner
         updated_matches.append(m)
     return updated_matches
 

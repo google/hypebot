@@ -352,7 +352,7 @@ class LCSStandingsCommand(command_lib.BaseCommand):
       return 'pls no spoilerino'
     query = query.split()
     league = query[0] if query else self._params.default_region
-    bracket = ' '.join(query[1:]) if len(query) > 1 else 'season'
+    bracket = ' '.join(query[1:]) if len(query) > 1 else 'regular'
 
     return self._core.esports.GetStandings(league, bracket)
 
