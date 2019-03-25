@@ -43,6 +43,28 @@ import re
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
 from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos.message_pb2 import MessageList
+
+_COLOR_PATTERN = re.compile(
+    r'\x03(?P<fg>\d\d)(?:|,(?P<bg>\d\d))(?P<txt>.*?)\x0f')
+_IRC_TO_TERM_COLORS = {
+    '00': '37;1',
+    '01': '30',
+    '02': '34',
+    '03': '32',
+    '04': '31;1',
+    '05': '31',
+    '06': '35',
+    '07': '33',
+    '08': '33;1',
+    '09': '32;1',
+    '10': '36',
+    '11': '36;1',
+    '12': '34;1',
+    '13': '35;1',
+    '14': '30;1',
+    '15': '37',
+}
 
 
 class TerminalInterface(interface_lib.BaseChatInterface):
@@ -95,16 +117,36 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     self._user_tracker.AddHuman(user)
 
   def WhoAll(self):
-    self._user_tracker.AddHuman(self.DEFAULT_USER)
+    self._user_tracker.AddHuman(self._params.default_user)
 
-  def SendMessage(self, channel, message):
+  def SendMessage(self, channel, message_list):
     if self._params.return_text_only:
-      print('%s' % '\n'.join(msg.text for msg in message.messages))
+      message_list = self._TranslateColors(message_list)
+      print('%s' % '\n'.join(msg.text for msg in message_list.messages))
     else:
-      print('%s\n%s' % (channel, message))
+      print('%s\n%s' % (channel, message_list))
 
   def Notice(self, channel, message):
     print('NOTICE\n%s\n%s' % (channel, message))
 
   def Topic(self, channel, new_topic):
     print('TOPIC\n%s\n%s' % (channel, new_topic))
+
+  def _TranslateColors(self, message_list):
+    colored_messages = MessageList()
+    for m in message_list.messages:
+      msg = m.text
+      pos = 0
+      colored_message = ''
+      while True:
+        match = _COLOR_PATTERN.search(msg, pos=pos)
+        if not match:
+          break
+        colored_message += msg[pos:match.start()]
+        colored_message += '\033[%sm%s\033[0m' % (
+            _IRC_TO_TERM_COLORS[match.group('fg')], match.group('txt'))
+        pos = match.end()
+      if colored_message:
+        colored_message += msg[pos:]
+      colored_messages.messages.add(text=colored_message or m.text)
+    return colored_messages
