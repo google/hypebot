@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import copy
 import math
 import random
 import re
@@ -191,11 +192,16 @@ def TimeDeltaToHumanDuration(time_delta):
                     round(time_delta.microseconds / SECOND_IN_MICROS))
 
 
-def SafeUrl(url):
+def SafeUrl(url, params=None):
   """Returns url with any sensitive information (API key) stripped."""
-  if 'api_key' not in url:
-    return url
-  return ''.join((url.split('api_key')[0], '<redacted>'))
+  if 'api_key' in url:
+    url = ''.join((url.split('api_key')[0], '<redacted>'))
+  if params:
+    params = copy.copy(params)
+    if 'api_key' in params:
+      params['api_key'] = '<redacted>'
+    url += ','.join(['%s=%s' % (k, v) for k, v in params.items()])
+  return url
 
 
 def GetWeightedChoice(options, prob_table, prob_table_lock=None):

@@ -21,6 +21,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import abc
+import copy
 from functools import partial
 import json
 
@@ -115,12 +116,14 @@ class Proxy(with_metaclass(abc.ABCMeta)):
       params = params or {}
       action = partial(self._JsonAction, url, params, fields_to_erase)
       # By adding to params, we ensure that it gets added to the cache key.
+      # Make a copy to avoid sending in the actual request.
+      params = copy.copy(params)
       params['_fields_to_erase'] = fields_to_erase
       return json.loads(
           self.HTTPFetch(url, params, action, self._ValidateJson,
                          force_lookup, use_storage) or '{}')
     except Exception as e:  # pylint: disable=broad-except
-      self._LogError(url, exception=e)
+      self._LogError(url, params, exception=e)
       return {}
 
   def _JsonAction(self,
@@ -206,15 +209,15 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     if action is None:
       action = partial(self._GetUrl, url, params)
     return self.RawFetch(
-        util_lib.SafeUrl(url),
+        util_lib.SafeUrl(url, params),
         action,
         validate_fn,
         force_lookup=force_lookup,
         use_storage=use_storage)
 
-  def _LogError(self, url, error_code=None, exception=None):
+  def _LogError(self, url, params=None, error_code=None, exception=None):
     """Logs an error in a standardized format."""
-    safe_url = util_lib.SafeUrl(url)
+    safe_url = util_lib.SafeUrl(url, params)
     logging.error('Fetch for %s failed', safe_url)
 
     if error_code:
