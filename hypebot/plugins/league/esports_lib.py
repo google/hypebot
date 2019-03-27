@@ -309,7 +309,7 @@ class RitoProvider(TournamentProvider):
 
               game_id_mappings = self._FetchEsportsData(
                   'matchDetails', (tournament['id'], m.match_id),
-                  use_storage=True).get('gameIdMappings')
+                  use_storage=True).get('gameIdMappings', [])
               for game in m.games:
                 game_id = game.hash
                 game.ClearField('hash')
@@ -857,8 +857,12 @@ class EsportsLib(object):
     # variables and operate outside of the lock to allow other esports commands
     # to resolve.
     # TODO: Reload each provider in it's own threadpool.
-    for provider in self._providers:
-      provider.LoadData()
+    try:
+      for provider in self._providers:
+        provider.LoadData()
+    except Exception as e:
+      logging.error('Failed to load esports')
+      logging.exception(e)
 
     teams = {}
     matches = {}

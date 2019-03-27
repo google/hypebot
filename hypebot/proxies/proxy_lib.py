@@ -82,7 +82,12 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     Returns:
       The data or None if the action failed.
     """
+    logging.info('RawFetch for %s', key)
     if not force_lookup:
+      return_data = self._request_cache.Get(key)
+      if return_data:
+        return return_data
+      logging.info('Cache miss for %s', key)
       if use_storage and self._store:
         try:
           return_data = self._store.GetValue(key, self._STORAGE_SUBKEY)
@@ -91,10 +96,6 @@ class Proxy(with_metaclass(abc.ABCMeta)):
         except Exception as e:
           logging.error('Error fetching %s from storage: %s', key, e)
         logging.info('Storage missing %s', key)
-      return_data = self._request_cache.Get(key)
-      if return_data:
-        return return_data
-      logging.info('Cache miss for %s', key)
 
     return_data = action()
     if not validate_fn:
