@@ -27,6 +27,7 @@ from threading import Lock
 import unicodedata
 
 import arrow
+from dateutil.relativedelta import relativedelta
 import six
 from typing import Text, Union
 
@@ -51,10 +52,14 @@ def Access(obj, path, default=None):
   return obj
 
 
-def ArrowTime(hour=0, minute=0, second=0, tz='UTC'):
+def ArrowTime(hour=0, minute=0, second=0, tz='UTC', weekday=None):
   """Returns an Arrow object with the time portion set to a specific time."""
-  return arrow.now(tz).replace(hour=hour, minute=minute, second=second,
+  time = arrow.now(tz).replace(hour=hour, minute=minute, second=second,
                                microsecond=0)
+  if weekday is not None:
+    return arrow.Arrow.fromdatetime(
+        time.datetime + relativedelta(weekday=weekday))
+  return time
 
 
 def BuildUser(user: Text, canonicalize: bool = True) -> User:

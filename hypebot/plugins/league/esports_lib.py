@@ -497,13 +497,21 @@ class BattlefyProvider(TournamentProvider):
       matches = self._proxy.FetchJson(
           '/'.join([self._BASE_URL, 'stages', stage_id, 'matches']),
           force_lookup=True)
+      # Battlefy doesn't provide actual match start times. We assume that
+      # matches are only provided for the current week. And then replace with
+      # completed time if it exists.
+      default_match_time = util_lib.ArrowTime(
+          weekday=5, hour=12, tz='America/Los_Angeles')
       for match in matches:
+        match_time = default_match_time
+        if 'completedAt' in match:
+          match_time = arrow.get(match['completedAt'])
         m = bracket.schedule.add(
             match_id=match['_id'],
             bracket_id=bracket.bracket_id,
             red=util_lib.Access(match, 'top.teamID', 'BYE'),
             blue=util_lib.Access(match, 'bottom.teamID', 'BYE'),
-            timestamp=arrow.get(stage['startTime']).timestamp,
+            timestamp=match_time.timestamp,
             winner=self._MatchWinner(match))
         self._matches[m.match_id] = m
         stats = None
