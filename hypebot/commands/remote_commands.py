@@ -64,12 +64,11 @@ class StocksCommand(command_lib.BaseCommand):
       self._core.betting_games.append(self._game)
 
       self._core.scheduler.DailyCallback(
-          util_lib.ArrowTime(16, 0, 30, 'America/New_York'),
-          self._BetCallback)
+          util_lib.ArrowTime(16, 0, 30, 'America/New_York'), self._BetCallback)
 
   def _BetCallback(self):
-    notifications = self._core.bets.SettleBets(
-        self._game, self._core.nick, self._Reply)
+    notifications = self._core.bets.SettleBets(self._game, self._core.nick,
+                                               self._Reply)
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
@@ -96,21 +95,26 @@ class StocksCommand(command_lib.BaseCommand):
                 symbols[0])
 
     responses = []
-    if len(quotes) > 5:
-      responses.append(
-          'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
-          self._core.nick)
     histories = self._core.stocks.History(symbols)
     if 'HYPE' in symbols:
       histories['HYPE'] = [1, 2, 4, 8]
-    for symbol, quote in list(quotes.items())[:5]:
+    for symbol in symbols:
+      if symbol not in quotes:
+        continue
+      if len(responses) >= 5:
+        responses.insert(
+            0,
+            'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
+            self._core.nick)
+        break
+      quote = quotes[symbol]
       history = histories.get(symbol)
       change_str = self._FormatChangeStr(quote.change, quote.change_percent)
       response = 'One share of %s is currently worth %0.2f %s' % (
           symbol, quote.price, change_str)
       if quote.extended_change:
-        ext_change_str = self._FormatChangeStr(
-            quote.extended_change, quote.extended_change_percent)
+        ext_change_str = self._FormatChangeStr(quote.extended_change,
+                                               quote.extended_change_percent)
         response += ' [ext: %0.2f %s]' % (quote.extended_price, ext_change_str)
       if history:
         response += ' %s' % util_lib.Sparkline(history)
@@ -137,8 +141,7 @@ class WeatherCommand(command_lib.BaseCommand):
       })
 
   def __init__(self, *args):
-    super(WeatherCommand,
-          self).__init__(*args)  # pytype: disable=wrong-arg-count
+    super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
     self._weather = weather_lib.WeatherLib(self._core.proxy,
                                            self._params.apixu_key)
 
@@ -155,32 +158,29 @@ class WeatherCommand(command_lib.BaseCommand):
     if location.lower() == 'mtv':
       location = 'mountain view'
 
-    weather = self._weather.GetForecast(location,
-                                        days=len(self._params.forecast_days))
+    weather = self._weather.GetForecast(
+        location, days=len(self._params.forecast_days))
     if not weather:
       return 'Unknown location.'
 
     responses = []
     responses.append('Currently %s and %s in %s' %
                      (self._FormatTemp(weather.current.temp_f, unit),
-                      weather.current.condition,
-                      weather.location))
+                      weather.current.condition, weather.location))
 
     weather.MergeFrom(self._weather.GetHistory(location, unused_days=1))
     if weather.hindsight:
       yesterday = weather.hindsight[0]
-      responses.append('Yesterday: %s (%s - %s)' % (
-          yesterday.condition,
-          self._FormatTemp(yesterday.min_temp_f, unit),
-          self._FormatTemp(yesterday.max_temp_f, unit)))
+      responses.append(
+          'Yesterday: %s (%s - %s)' %
+          (yesterday.condition, self._FormatTemp(yesterday.min_temp_f, unit),
+           self._FormatTemp(yesterday.max_temp_f, unit)))
 
     for index, day in enumerate(weather.forecast):
-      condition_str = '%s: %s' % (
-          self._params.forecast_days[index],
-          day.condition)
-      temp_str = '(%s - %s)' % (
-          self._FormatTemp(day.min_temp_f, unit),
-          self._FormatTemp(day.max_temp_f, unit))
+      condition_str = '%s: %s' % (self._params.forecast_days[index],
+                                  day.condition)
+      temp_str = '(%s - %s)' % (self._FormatTemp(day.min_temp_f, unit),
+                                self._FormatTemp(day.max_temp_f, unit))
       if index == 0:
         condition_str = util_lib.Bold(condition_str)
       responses.append('%s %s' % (condition_str, temp_str))
