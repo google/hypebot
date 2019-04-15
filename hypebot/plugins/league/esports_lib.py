@@ -779,8 +779,9 @@ class EsportsLib(object):
     self._providers = [
         BattlefyProvider(self._proxy, '5c4cc9914e0e0803348dae2c', 'CEA',
                          stats_enabled=True),
-        GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
-        GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
+        # Disable until next Grumble, and this is bugging out right now.
+        # GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
+        # GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
         RitoProvider(self._proxy, 'IN', 'worlds',
                      aliases=['International', 'Worlds'],
                      stats_enabled=False),
