@@ -525,8 +525,9 @@ class BattlefyProvider(TournamentProvider):
               game_id=game_id,
               realm=self._realm,
               hash=match['lolHookUrl'])
-          if stats:
-            self._ParseGameStats(game, stats[0]['stats'][stat_idx]['stats'])
+          game_stats = util_lib.Access(stats, '0.stats.%d.stats' % stat_idx)
+          if game_stats:
+            self._ParseGameStats(game, game_stats)
 
     self._UpdateStandings(bracket)
 
