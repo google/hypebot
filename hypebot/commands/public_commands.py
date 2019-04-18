@@ -36,6 +36,7 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
 from hypebot.plugins import coin_lib
+from hypebot.plugins import inventory_lib
 
 
 _SongLine = collections.namedtuple('SongLine', 'state lyric pattern')
@@ -135,6 +136,22 @@ class CookieJarCommand(command_lib.BasePublicCommand):
         if ((self._AccusorsTurn() and user == self._accusor) or
             (self._AccusedTurn() and user == self._accused)):
           self._NextLine(channel)
+
+
+@command_lib.PublicParser
+class EggHunt(command_lib.BasePublicCommand):
+  """Gotta find them all."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'find_chance': 0.05,
+      })
+
+  def _Handle(self, channel, user, message):
+    if random.random() < self._params.find_chance:
+      item = inventory_lib.Create('HypeEgg', self._core, user, {})
+      self._core.inventory.AddItem(user, item)
+      return '%s found a(n) %s' % (user, item.human_name)
 
 
 @command_lib.PublicParser

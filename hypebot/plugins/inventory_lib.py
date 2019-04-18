@@ -132,6 +132,16 @@ class HatToken(BaseItem):
     return (text, False)
 
 
+class HypeEgg(BaseItem):
+  """Find them if you can."""
+
+  human_name = 'HypeEgg'
+  value = 1000
+
+  def Use(self):
+    return ('What a pretty HypeEgg, it would be a shame to break it.', False)
+
+
 _factory = factory_lib.Factory(BaseItem)
 Create = _factory.Create  # pylint: disable=invalid-name
 
