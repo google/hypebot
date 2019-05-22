@@ -475,7 +475,7 @@ class BattlefyProvider(TournamentProvider):
           points=standing['points'])
 
   def _MatchWinner(self, match):
-    winner = 'TIE' if match['isComplete'] else None
+    winner = 'TIE' if match.get('isComplete') else None
     if util_lib.Access(match, 'top.winner'):
       winner = match['top']['teamID']
     elif util_lib.Access(match, 'bottom.winner'):
