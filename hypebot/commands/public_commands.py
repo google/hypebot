@@ -75,7 +75,7 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
 
   @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
-    match = self._regex.match(message)
+    match = self._regex.search(message)
     if match and random.random() < self._params.probability:
       return '%s (%s)' % (random.choose(self._AUTO_REPLIES), match.groups()[0])
 
