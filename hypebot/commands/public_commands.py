@@ -77,7 +77,7 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
   def _Handle(self, channel, user, message):
     match = self._regex.search(message)
     if match and random.random() < self._params.probability:
-      return '%s (%s)' % (random.choose(self._AUTO_REPLIES), match.groups()[0])
+      return '%s (%s)' % (random.choice(self._AUTO_REPLIES), match.groups()[0])
 
 
 _SongLine = collections.namedtuple('SongLine', 'state lyric pattern')
