@@ -84,6 +84,7 @@ class BaseBot(object):
           'AliasListCommand': {},
           'AliasRemoveCommand': {},
           'AskFutureCommand': {},
+          'AutoReplySnarkCommand': {},
           'BuyHypeStackCommand': {},
           'CookieJarCommand': {},
           'DebugCommand': {},

@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +38,46 @@ from hypebot.core import util_lib
 from hypebot.data import messages
 from hypebot.plugins import coin_lib
 from hypebot.plugins import inventory_lib
+
+
+@command_lib.PublicParser
+class AutoReplySnarkCommand(command_lib.BasePublicCommand):
+  """Auto-reply to auto-replies."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'probability': 0.25,
+      })
+
+  _AUTO_REPLIES = [
+      'Much appreciated',
+      'Works fine',
+      'Good point',
+      'Agreed',
+      'Ouch',
+      'Neat!',
+      'Congrats!',
+      'Do it',
+      'Me too',
+      'Noted!',
+      'lol',
+      'Wow, thanks...',
+      '💩',
+      '💪',
+      '😬',
+      '🔥',
+      'Cool story, bro',
+  ]
+
+  def __init__(self, *args):
+    super(AutoReplySnarkCommand, self).__init__(*args)
+    self._regex = re.compile(r' \((auto|auto-reply|ar)\)$')
+
+  @command_lib.MainChannelOnly
+  def _Handle(self, channel, user, message):
+    match = self._regex.match(message)
+    if match and random.random() < self._params.probability:
+      return '%s (%s)' % (random.choose(self._AUTO_REPLIES), match.groups()[0])
 
 
 _SongLine = collections.namedtuple('SongLine', 'state lyric pattern')
@@ -439,4 +480,3 @@ class SayCommand(command_lib.BasePublicCommand):
           self._phrases[channel.id][speaker][message] = say
         # Short circuit so we only get one response.
         return responses
-
