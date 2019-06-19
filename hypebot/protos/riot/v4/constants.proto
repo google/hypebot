@@ -29,6 +29,8 @@ message Season {
     SEASON2017 = 9;
     PRESEASON2018 = 10;
     SEASON2018 = 11;
+    PRESEASON2019 = 12;
+    SEASON2019 = 13;
   }
 }
 
@@ -143,6 +145,7 @@ message Tier {
     GOLD = 30;
     SILVER = 40;
     BRONZE = 50;
+    IRON = 60;
     UNRANKED = 100;
   }
 }
