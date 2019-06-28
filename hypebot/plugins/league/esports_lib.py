@@ -522,9 +522,7 @@ class BattlefyProvider(TournamentProvider):
               force_lookup=True)
         for stat_idx, game_id in enumerate(match.get('appliedRiotGameIDs', [])):
           game = m.games.add(
-              game_id=game_id,
-              realm=self._realm,
-              hash=match['lolHookUrl'])
+              game_id=game_id, realm=self._realm, hash=match['lolHookUrl'])
           game_stats = util_lib.Access(stats, '0.stats.%d.stats' % stat_idx)
           if game_stats:
             self._ParseGameStats(game, game_stats)
@@ -595,13 +593,14 @@ class BattlefyProvider(TournamentProvider):
 class GrumbleProvider(TournamentProvider):
   """Provide tournament information for a Grumble division."""
 
-  _BASE_URL = ('http://goog-lol-tournaments.appspot.com/rest/%s/grumble-2019/')
+  _BASE_URL = ('http://goog-lol-tournaments.appspot.com/rest/')
 
-  def __init__(self, proxy, division='D1', realm='NA1', **kwargs):
+  def __init__(self, proxy, division='D1', realm='NA1', year=2019, **kwargs):
     super(GrumbleProvider, self).__init__(**kwargs)
     self._proxy = proxy
     self._division = division
     self._realm = realm
+    self._year = year
     self._teams = {}
     self._brackets = {}
     self._matches = {}
@@ -630,6 +629,13 @@ class GrumbleProvider(TournamentProvider):
     with self._lock:
       return self._teams.values()
 
+  def _FetchJson(self, end_point, path_parts, use_year=True, **kwargs):
+    parts = [self._BASE_URL, end_point]
+    if use_year:
+      parts.append('grumble-%s' % self._year)
+    parts.extend(path_parts)
+    return self._proxy.FetchJson('/'.join(parts), **kwargs)
+
   def _ParseSchedule(self, schedule, bracket):
     """Parse schedule into bracket."""
     match_count = 0
@@ -647,10 +653,18 @@ class GrumbleProvider(TournamentProvider):
               timestamp=match['timestampSec'])
           self._matches[m.match_id] = m
           for game in match['games']:
-            m.games.add(
+            game_proto = m.games.add(
                 game_id=str(util_lib.Access(game, 'ref.gameId')),
                 realm=self._realm,
                 hash=util_lib.Access(game, 'ref.tournamentCode'))
+            if self.stats_enabled and util_lib.Access(game, 'winner'):
+              response = self._FetchJson(
+                  'game', [game_proto.game_id, game_proto.hash],
+                  use_year=False,
+                  use_storage=True)
+              if response:
+                json_format.ParseDict(
+                    response, game_proto.stats, ignore_unknown_fields=True)
 
           for team in [match['team1'], match['team2']]:
             team_id = util_lib.Access(team, 'ref.id')
@@ -699,18 +713,16 @@ class GrumbleProvider(TournamentProvider):
           bracket_id=self._MakeBracketId('practice'),
           name='Practice',
           league_id=self.league_id)
-      response = self._proxy.FetchJson(
-          '/'.join([self._BASE_URL % 'bracket', self._division, 'practice']),
-          force_lookup=True)
+      response = self._FetchJson(
+          'bracket', [self._division, 'practice'], force_lookup=True)
       self._ParseSchedule(response['schedule'], self._brackets['practice'])
 
       self._brackets['season'] = esports_pb2.Bracket(
           bracket_id=self._MakeBracketId('season'),
           name='Regular Season',
           league_id=self.league_id)
-      response = self._proxy.FetchJson(
-          '/'.join([self._BASE_URL % 'bracket', self._division, 'season']),
-          force_lookup=True)
+      response = self._FetchJson(
+          'bracket', [self._division, 'season'], force_lookup=True)
       self._ParseSchedule(response['schedule'], self._brackets['season'])
 
       self._brackets['playoffs'] = esports_pb2.Bracket(
@@ -718,14 +730,12 @@ class GrumbleProvider(TournamentProvider):
           name='Playoffs',
           is_playoffs=True,
           league_id=self.league_id)
-      response = self._proxy.FetchJson(
-          '/'.join([self._BASE_URL % 'bracket', self._division, 'playoffs']),
-          force_lookup=True)
+      response = self._FetchJson(
+          'bracket', [self._division, 'playoffs'], force_lookup=True)
       self._ParseSchedule(response['schedule'], self._brackets['playoffs'])
 
       for team_id, team in self._teams.items():
-        response = self._proxy.FetchJson('/'.join(
-            [self._BASE_URL % 'team', self._division, team_id]))
+        response = self._FetchJson('team', [self._division, team_id])
         if not response:
           continue
         for player in response['players']:
@@ -762,15 +772,19 @@ class GrumbleProvider(TournamentProvider):
   def UpdateMatches(self):
     updated_matches = []
     with self._lock:
-      response = self._proxy.FetchJson(
-          '/'.join([self._BASE_URL % 'bracket', self._division, 'season']),
-          force_lookup=True)
+      response = self._FetchJson(
+          'bracket', [self._division, 'practice'], force_lookup=True)
+      updated_matches.extend(
+          self._UpdateSchedule(response['schedule'],
+                               self._brackets['practice']))
+
+      response = self._FetchJson(
+          'bracket', [self._division, 'season'], force_lookup=True)
       updated_matches.extend(
           self._UpdateSchedule(response['schedule'], self._brackets['season']))
 
-      response = self._proxy.FetchJson(
-          '/'.join([self._BASE_URL % 'bracket', self._division, 'playoffs']),
-          force_lookup=True)
+      response = self._FetchJson(
+          'bracket', [self._division, 'playoffs'], force_lookup=True)
       updated_matches.extend(
           self._UpdateSchedule(response['schedule'],
                                self._brackets['playoffs']))
@@ -1203,8 +1217,8 @@ class EsportsLib(object):
             (game.realm, game.game_id, game.hash),
             use_storage=True)
         if not game_stats:
-          logging.warning(
-              'Failed to fetch game stats for game: %s', game.game_id)
+          logging.warning('Failed to fetch game stats for game: %s',
+                          game.game_id)
           continue
         json_format.ParseDict(
             game_stats, game.stats, ignore_unknown_fields=True)
