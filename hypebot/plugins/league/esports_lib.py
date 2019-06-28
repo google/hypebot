@@ -595,7 +595,7 @@ class BattlefyProvider(TournamentProvider):
 class GrumbleProvider(TournamentProvider):
   """Provide tournament information for a Grumble division."""
 
-  _BASE_URL = ('http://goog-lol-tournaments.appspot.com/rest/%s/grumble-2018/')
+  _BASE_URL = ('http://goog-lol-tournaments.appspot.com/rest/%s/grumble-2019/')
 
   def __init__(self, proxy, division='D1', realm='NA1', **kwargs):
     super(GrumbleProvider, self).__init__(**kwargs)
@@ -695,6 +695,15 @@ class GrumbleProvider(TournamentProvider):
       self._brackets = {}
       self._matches = {}
 
+      self._brackets['practice'] = esports_pb2.Bracket(
+          bracket_id=self._MakeBracketId('practice'),
+          name='Practice',
+          league_id=self.league_id)
+      response = self._proxy.FetchJson(
+          '/'.join([self._BASE_URL % 'bracket', self._division, 'practice']),
+          force_lookup=True)
+      self._ParseSchedule(response['schedule'], self._brackets['practice'])
+
       self._brackets['season'] = esports_pb2.Bracket(
           bracket_id=self._MakeBracketId('season'),
           name='Regular Season',
@@ -778,11 +787,8 @@ class EsportsLib(object):
     self._timezone = rito_tz
 
     self._providers = [
-        BattlefyProvider(self._proxy, '5c4cc9914e0e0803348dae2c', 'CEA',
-                         stats_enabled=True),
-        # Disable until next Grumble, and this is bugging out right now.
-        # GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
-        # GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
+        GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
+        GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
         RitoProvider(self._proxy, 'IN', 'worlds',
                      aliases=['International', 'Worlds'],
                      stats_enabled=False),
