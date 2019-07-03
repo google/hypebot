@@ -35,7 +35,9 @@ class IEXStock(stock_lib.StockLib):
   DEFAULT_PARAMS = params_lib.MergeParams(
       stock_lib.StockLib.DEFAULT_PARAMS,
       {
-          'base_url': 'https://api.iextrading.com/1.0/stock/market/batch',
+          'base_url': 'https://cloud.iexapis.com/v1/stock/market/batch',
+          # Sign up for token at iexcloud.io
+          'token': None,
       })
 
   def __init__(self, params, proxy):
@@ -49,6 +51,7 @@ class IEXStock(stock_lib.StockLib):
         'symbols': ','.join(symbols),
         'types': 'quote',
         'displayPercent': 'true',  # Keep string, not boolean.
+        'token': self._params.token,
     }
     response = self._proxy.FetchJson(self._params.base_url,
                                      params=request_params,
@@ -78,6 +81,7 @@ class IEXStock(stock_lib.StockLib):
         'symbols': ','.join(symbols),
         'types': 'chart',
         'range': span,
+        'token': self._params.token,
     }
     response = self._proxy.FetchJson(self._params.base_url,
                                      params=request_params,
