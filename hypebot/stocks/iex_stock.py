@@ -61,16 +61,18 @@ class IEXStock(stock_lib.StockLib):
     for symbol, data in response.items():
       quote = data['quote']
 
-      stock_info[symbol] = stock_pb2.Quote(
+      stock = stock_pb2.Quote(
           symbol=symbol,
           open=quote.get('open', 0),
           close=quote.get('close', 0),
           price=quote.get('latestPrice', 0),
           change=quote.get('change', 0),
-          change_percent=quote.get('changePercent', 0),
-          extended_price=quote.get('extendedPrice', 0),
-          extended_change=quote.get('extendedChange', 0),
-          extended_change_percent=quote.get('extendedChangePercent', 0))
+          change_percent=quote.get('changePercent', 0))
+      if quote.get('openTime', 0) < quote.get('closeTime'):
+        stock.extended_price = quote.get('extendedPrice', 0)
+        stock.extended_change = quote.get('extendedChange', 0)
+        stock.extended_change_percent = quote.get('extendedChangePercent', 0)
+      stock_info[symbol] = stock
     return stock_info
 
   def History(self,
