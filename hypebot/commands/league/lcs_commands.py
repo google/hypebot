@@ -56,54 +56,65 @@ class BodyCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'lcs-ch(a|u)mps (.+?)')
 class LCSPlayerStatsCommand(command_lib.BaseCommand):
 
+  def _FormatChamp(self, champ):
+    """Formats champ tuple to display name (wins-losses)."""
+    wins = champ[1].get('wins', 0)
+    losses = champ[1]['picks'] - wins
+    return '%s (%s-%s)' % (champ[0], wins, losses)
+
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, a_or_u, player):
     serious_output = a_or_u == 'a'
+    # First, attempt to parse the query against the summoner tracker. If it
+    # matches a username, then use it. The summoner tracker internally queries
+    # Rito if it doesn't find a username, so we ignore those since LCS is on a
+    # separate server and we don't want name conflicts.
+    summoner = (self._core.summoner_tracker.ParseSummoner(
+        user, None, None, player) or [{}])[0]
+    if summoner.get('username'):
+      player = summoner['summoner']
     player_name, player_data = self._core.esports.GetPlayerChampStats(player)
+    if summoner.get('username'):
+      player_name = '%s = %s' % (summoner['username'], player_name)
     if not player_name:
       return 'Unknown player. I can only give data about LCS players.'
     elif not player_data or not player_data['champs']:
       return '%s hasn\'t done much this split.' % player_name
 
-    champ_data = player_data['champs']
-    total_wins = player_data['num_games']['wins']
-    total_losses = player_data['num_games']['picks'] - total_wins
-    player_str = '%s (%s-%s)' % (player_name, total_wins, total_losses)
+    best_champs = sorted(
+        player_data['champs'].items(),
+        key=lambda x: (x[1].get('wins', 0), -x[1]['picks']),
+        reverse=True)
 
-    # Break ties in most_played by wins
-    champs = sorted(champ_data.items(), key=lambda x: x[1].get('wins', 0))
-    most_played_champ = sorted(champs, key=lambda x: x[1]['picks'])[-1][0]
-    most_played_champ_wins = champ_data[most_played_champ]['wins']
-    most_played_champ_losses = champ_data[most_played_champ][
-        'picks'] - most_played_champ_wins
-    most_played_champ_str = '%s (%s-%s)' % (
-        most_played_champ, most_played_champ_wins, most_played_champ_losses)
-
-    # Break ties in best_champ by picks
-    champs = sorted(champ_data.items(), key=lambda x: x[1]['picks'])
-    best_champ = sorted(champs, key=lambda x: x[1]['wins'])[-1][0]
-    best_champ_wins = champ_data[best_champ]['wins']
-    best_champ_losses = champ_data[best_champ]['picks'] - best_champ_wins
-    best_champ_str = '%s (%s-%s)' % (best_champ, best_champ_wins,
-                                     best_champ_losses)
     if serious_output:
-      return '{}: Most Wins: {}, Most Played: {}.'.format(
-          player_str, best_champ_str, most_played_champ_str)
+      output = [
+          '%s:' % self._FormatChamp((player_name, player_data['num_games']))
+      ]
+      output.extend(
+          ['* %s' % self._FormatChamp(champ) for champ in best_champs[:5]])
+      return output
     elif player_name == 'G2 Perkz':
-      # Break ties in worst_champ by picks
-      champs = sorted(champ_data.items(), key=lambda x: x[1]['picks'])
+      # Worst isn't the opposite order of best since more losses is worse than
+      # fewer wins.
       worst_champ = sorted(
-          champs, key=lambda x: x[1]['picks'] - x[1].get('wins', 0))[-1][0]
-      worst_champ_wins = champ_data[worst_champ].get('wins', 0)
-      worst_champ_losses = champ_data[worst_champ]['picks'] - worst_champ_wins
-      worst_champ_str = '%s (%s-%s)' % (worst_champ, worst_champ_wins,
-                                        worst_champ_losses)
-      return ('My {} is bad, my {} is worse; you guessed right, I\'m G2 Perkz'.
-              format(worst_champ_str, 'Azir' if user == 'koelze' else 'Ryze'))
+          player_data['champs'].items(),
+          key=lambda x: (x[1]['picks'] - x[1].get('wins', 0), -x[1]['picks']),
+          reverse=True)[0]
+      return ('My {} is bad, my {} is worse; you guessed right, I\'m G2 Perkz'
+              .format(
+                  self._FormatChamp(worst_champ),
+                  'Azir' if user == 'koelze' else 'Ryze'))
     else:
+      most_played_champ = sorted(
+          player_data['champs'].items(),
+          key=lambda x: (x[1]['picks'], x[1].get('wins', 0)),
+          reverse=True)[0]
       return (
           'My {} is fine, my {} is swell; you guessed right, I\'m {} stuck in '
-          'LCS hell').format(best_champ_str, most_played_champ_str, player_str)
+          'LCS hell').format(
+              self._FormatChamp(best_champs[0]),
+              self._FormatChamp(most_played_champ),
+              self._FormatChamp((player_name, player_data['num_games'])))
 
 
 @command_lib.CommandRegexParser(r'lcs-link')
