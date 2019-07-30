@@ -20,6 +20,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import copy
+import datetime
 import math
 import random
 import re
@@ -54,11 +55,11 @@ def Access(obj, path, default=None):
 
 def ArrowTime(hour=0, minute=0, second=0, tz='UTC', weekday=None):
   """Returns an Arrow object with the time portion set to a specific time."""
-  time = arrow.now(tz).replace(hour=hour, minute=minute, second=second,
-                               microsecond=0)
+  time = arrow.now(tz).replace(
+      hour=hour, minute=minute, second=second, microsecond=0)
   if weekday is not None:
-    return arrow.Arrow.fromdatetime(
-        time.datetime + relativedelta(weekday=weekday))
+    return arrow.Arrow.fromdatetime(time.datetime +
+                                    relativedelta(weekday=weekday))
   return time
 
 
@@ -112,7 +113,7 @@ def UnformatHypecoins(value):
 
   scale = 0
   if units in DECIMAL_POWERS:
-    scale = 1e3 ** DECIMAL_POWERS.index(units)
+    scale = 1e3**DECIMAL_POWERS.index(units)
   if not scale:
     scale = 1
   return number * scale
@@ -126,13 +127,14 @@ def FormatHypecoins(amount, abbreviate=False):
     abbreviate: {boolean} whether to display full amount or convert large
       amounts to small strings. Abbreviate shows 3 sig figs using the k, M, G
       suffix system. Without abbreviate, just adds commas and ₡.
+
   Returns:
     {string} formatted hypecoin amount.
   """
   amount_str = 'NaN'
   if abbreviate:
     for power, prefix in enumerate(DECIMAL_POWERS):
-      value = amount * 1e3 ** -power
+      value = amount * 1e3**-power
       if abs(round(value)) < 1e3:
         break
     if prefix:
@@ -154,47 +156,45 @@ def SafeCast(value, desired_type, default=None):
     return default
 
 
-def TimeDeltaToHumanDuration(time_delta):
+def TimeDeltaToHumanDuration(time_delta, precision=1):
   """Converts a python timedelta object to a human-readable duration.
-
-  The duration returned is rounded to the largest unit of precision (e.g. a
-  time_delta that represents between 30 days and 1 day will be expressed in
-  days only). Valid units are months, days, hours, minutes, and seconds.
 
   Args:
     time_delta: Python timedelta object
-  Returns:
-    Human-readable string representing the duration of time_delta to a single
-    'unit' of precision.
-  """
-  def _RoundToUnit(base_val, units):
-    """Returns the rounded remainder (0 or 1) of base_val expressed in units."""
-    return round((base_val % units) / units)
+    precision: Number of different units to display. The duration is converted
+      into year, month, days, hours, minute, seconds.
 
-  # A bunch of constants for funsies, MONTH_IN_DAYS is approximate.
+  Returns:
+    Human-readable string representing the duration of time_delta.
+  """
+  # A bunch of constants for funsies.
   # pylint: disable=invalid-name
-  MONTH_IN_DAYS = 30.0
-  DAY_IN_SECONDS = 24 * 60 * 60.0
+  YEAR_IN_DAYS = 365.25  # Approximate.
+  MONTH_IN_DAYS = YEAR_IN_DAYS / 12.0  # Average.
   HOUR_IN_SECONDS = 60 * 60.0
   MINUTE_IN_SECONDS = 60.0
-  SECOND_IN_MICROS = 1000000.0
   # pylint: enable=invalid-name
 
+  parts = []
+  if time_delta.days >= YEAR_IN_DAYS:
+    parts.append('%dy' % (time_delta.days / YEAR_IN_DAYS))
+    time_delta = datetime.timedelta(days=time_delta.days % YEAR_IN_DAYS)
   if time_delta.days >= 30:
-    return '%dmo' % (time_delta.days / MONTH_IN_DAYS +
-                     _RoundToUnit(time_delta.days, MONTH_IN_DAYS))
-  elif time_delta.days >= 1:
-    return '%dd' % (time_delta.days +
-                    _RoundToUnit(time_delta.seconds, DAY_IN_SECONDS))
-  elif time_delta.seconds >= HOUR_IN_SECONDS:
-    return '%dh' % (time_delta.seconds / HOUR_IN_SECONDS +
-                    _RoundToUnit(time_delta.seconds, HOUR_IN_SECONDS))
-  elif time_delta.seconds >= MINUTE_IN_SECONDS:
-    return '%dm' % (time_delta.seconds / MINUTE_IN_SECONDS +
-                    _RoundToUnit(time_delta.seconds, MINUTE_IN_SECONDS))
-  else:
-    return '%ds' % (time_delta.seconds +
-                    round(time_delta.microseconds / SECOND_IN_MICROS))
+    parts.append('%dmo' % (time_delta.days / MONTH_IN_DAYS))
+    time_delta = datetime.timedelta(days=time_delta.days % MONTH_IN_DAYS)
+  if time_delta.days >= 1:
+    parts.append('%dd' % time_delta.days)
+    time_delta = datetime.timedelta(seconds=time_delta.seconds)
+  if time_delta.seconds >= HOUR_IN_SECONDS:
+    parts.append('%dh' % (time_delta.seconds / HOUR_IN_SECONDS))
+    time_delta = datetime.timedelta(seconds=time_delta.seconds %
+                                    HOUR_IN_SECONDS)
+  if time_delta.seconds >= MINUTE_IN_SECONDS:
+    parts.append('%dm' % (time_delta.seconds / MINUTE_IN_SECONDS))
+    time_delta = datetime.timedelta(seconds=time_delta.seconds %
+                                    MINUTE_IN_SECONDS)
+  parts.append('%dm' % time_delta.seconds)
+  return ' '.join(parts[0:precision])
 
 
 def SafeUrl(url, params=None):
@@ -222,6 +222,7 @@ def GetWeightedChoice(options, prob_table, prob_table_lock=None):
       element at index `i` has the probability for `options[i]`.
     prob_table_lock: (optional) The probability table may be accessed by several
       threads, in which case a lock may be provided.
+
   Returns:
     The selected option.
   """
@@ -273,9 +274,11 @@ def Underline(string):
   return '\x1F%s\x0F' % string
 
 
-_MIRC_COLORS = ['white', 'black', 'blue', 'green', 'red', 'brown', 'purple',
-                'orange', 'yellow', 'light green', 'cyan', 'light cyan',
-                'light blue', 'pink', 'grey', 'light grey']
+_MIRC_COLORS = [
+    'white', 'black', 'blue', 'green', 'red', 'brown', 'purple', 'orange',
+    'yellow', 'light green', 'cyan', 'light cyan', 'light blue', 'pink', 'grey',
+    'light grey'
+]
 
 
 def Colorize(string, color):
@@ -361,4 +364,3 @@ class UserTracker(object):
   def AllUsers(self):
     """Returns a list of all known users."""
     return list(self._bots.union(self._humans))
-
