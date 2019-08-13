@@ -137,7 +137,7 @@ class TriviaChannel(object):
     return self._current_question is not None
 
   def AddQuestions(self, num):
-    if self._num_questions_remaining == 0 and num >= 10:
+    if self._num_questions_remaining == 0 and num >= 3:
       self._leaderboard.BeginGame()
     self._num_questions_remaining += num
     self._MaybeStartNewQuestion()
@@ -259,7 +259,7 @@ class QuestionMaker(object):
   def _PassiveToChampQuestion(self):
     champ = self._RandomChamp()
     name = champ.name
-    passive = champ.passive.name
+    passive = util_lib.Dankify(champ.passive.name)
     question_text = '[Passives] Which champion\'s passive is "{}"?'.format(
         passive)
     return Question(question_text, name, canonical_fn=self._game.GetChampId)
@@ -272,13 +272,13 @@ class QuestionMaker(object):
     skill = self._game.GetChampSkill(champ, skill_letter)
 
     question_text = '[Skills] Which champion\'s {} is "{}"?'.format(
-        skill_letter, skill.name)
+        skill_letter, util_lib.Dankify(skill.name))
     return Question(question_text, name, canonical_fn=self._game.GetChampId)
 
   def _TitleToChampQuestion(self):
     champ = self._RandomChamp()
     name = champ.name
-    title = champ.title
+    title = util_lib.Dankify(champ.title)
 
     question_text = '[Titles] Fill in the champ: ____, {}'.format(title)
     return Question(question_text, name, canonical_fn=self._game.GetChampId)

@@ -22,7 +22,7 @@ class TriviaAddCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, num_questions):
     if not self._core.trivia.IsTrivaChannel(channel):
       return
-    num_questions = int(num_questions or 1)
+    num_questions = min(int(num_questions or 1), 10)
     self._core.trivia.AddQuestions(channel, num_questions)
 
 
