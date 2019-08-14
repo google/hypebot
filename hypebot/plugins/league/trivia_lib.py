@@ -13,10 +13,14 @@
 # limitations under the License.
 """Contains classes for trivia bot."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import operator
 import random
 import threading
-import time
 
 from absl import flags
 from absl import logging
@@ -35,27 +39,15 @@ class TriviaMaster(object):
   This should only be instantiated once.
   """
 
-  def __init__(self, game_lib, new_question_callback,
-               question_done_callback, leaderboard_callback):
+  def __init__(self, game_lib, msg_fn):
     """Create a new TriviaMaster.
 
     Args:
       game_lib: a functional instance of game_lib.GameLib.
-      new_question_callback: function to be called when new question is made.
-          takes in 2 args:
-          channel (Channel), question (Question)
-      question_done_callback: function to be called when question is done,
-          either by timeout or correct answer. takes in 3 args:
-          channel (Channel), username (string), question (Question)
-          [username is None when no one had the correct answer.]
-      leaderboard_callback: function to be called after completing a round of
-          trivia. takes in 2 args:
-          channel (Channel), leaderboard (Leaderboard)
+      msg_fn: function to allow Trivia to send messages.
     """
     self._question_maker = QuestionMaker(game_lib)
-    self._new_question_callback = new_question_callback
-    self._question_done_callback = question_done_callback
-    self._leaderboard_callback = leaderboard_callback
+    self._msg_fn = msg_fn
     # keeps track of channel id -> TriviaChannel
     self._channel_map = {}
 
@@ -67,8 +59,7 @@ class TriviaMaster(object):
     if self.IsTrivaChannel(channel):
       return
     self._channel_map[channel.id] = TriviaChannel(
-        channel, self._question_maker, self._new_question_callback,
-        self._question_done_callback, self._leaderboard_callback)
+        channel, self._question_maker, self._msg_fn)
 
   def AddQuestions(self, channel, num_questions):
     if not self.IsTrivaChannel(channel):
@@ -92,30 +83,18 @@ class TriviaChannel(object):
   _DEFAULT_TIMEOUT_SEC = 30
   _MAX_QUESTIONS = 30
 
-  def __init__(self, channel, question_maker, new_question_callback,
-               question_done_callback, leaderboard_callback):
+  def __init__(self, channel, question_maker, msg_fn):
     """Create a new TriviaChannel.
 
     Args:
       channel: channel
       question_maker: instance of QuestionMaker()
-      new_question_callback: function to be called when new question is made.
-          takes in 2 args:
-          channel (Channel), question (Question)
-      question_done_callback: function to be called when question is done,
-          either by timeout or correct answer. takes in 3 args:
-          channel (Channel), username (string), question (Question)
-          [username is None when no one had the correct answer.]
-      leaderboard_callback: function to be called after completing a round of
-          trivia. takes in 2 args:
-          channel (Channel), leaderboard (Leaderboard)
+      msg_fn: function to allow sending of messages.
     """
 
     self._question_maker = question_maker
     self._channel = channel
-    self._new_question_callback = new_question_callback
-    self._question_done_callback = question_done_callback
-    self._leaderboard_callback = leaderboard_callback
+    self._msg_fn = msg_fn
 
     # number of pending questions to do. do a question if this > 0.
     # TODO: there is a potential race condition on this number if not
@@ -148,8 +127,7 @@ class TriviaChannel(object):
     with self._question_lock:
       if self._num_questions_remaining <= 0:
         self._questions.clear()
-        self._leaderboard.AttemptToFinishGame(self._leaderboard_callback,
-                                              self._channel)
+        self._leaderboard.AttemptToFinishGame(self._msg_fn, self._channel)
         return
       if self._num_questions_remaining >= self._MAX_QUESTIONS:
         self._num_questions_remaining = self._MAX_QUESTIONS
@@ -167,7 +145,7 @@ class TriviaChannel(object):
       self._current_question = question
       self._questions.add(hash(question.GetQuestion()))
     if must_callback:
-      self._new_question_callback(self._channel, question)
+      self._msg_fn(self._channel, question.GetQuestionText())
 
   # TODO: this could possibly be called for a new question if a question was
   # answered right near a timeout expiring
@@ -182,9 +160,11 @@ class TriviaChannel(object):
         self._timeout_timer = None
 
     if must_callback:
-      self._question_done_callback(self._channel, None, question)
-      time.sleep(FLAGS.trivia_delay_seconds)
-      self._MaybeStartNewQuestion()
+      self._msg_fn(self._channel,
+                   'Time\'s up! Answer was: %s' % question.GetAnswer())
+      timer = threading.Timer(
+          FLAGS.trivia_delay_seconds, self._MaybeStartNewQuestion)
+      timer.start()
 
   def CheckAnswer(self, username, answer):
     must_callback = False
@@ -199,14 +179,18 @@ class TriviaChannel(object):
         must_callback = True
         question = self._current_question
         self._current_question = None
-        self._timeout_timer.cancel()
-        self._timeout_timer = None
+        if self._timeout_timer:
+          self._timeout_timer.cancel()
+          self._timeout_timer = None
         self._leaderboard.Correct(username, question.GetPointValue())
 
     if must_callback:
-      self._question_done_callback(self._channel, username, question)
-      time.sleep(FLAGS.trivia_delay_seconds)
-      self._MaybeStartNewQuestion()
+      self._msg_fn(
+          self._channel,
+          '%s got it! Answer was: %s' % (username, question.GetAnswer()))
+      timer = threading.Timer(
+          FLAGS.trivia_delay_seconds, self._MaybeStartNewQuestion)
+      timer.start()
 
 
 class QuestionMaker(object):
@@ -349,9 +333,9 @@ class Leaderboard(object):
         self._user_score_map[username] = 0
       self._user_score_map[username] += point_value
 
-  def AttemptToFinishGame(self, callback, channel):
+  def AttemptToFinishGame(self, msg_fn, channel):
     if self._active:
-      callback(channel, self)
+      msg_fn(channel, self.Results())
     self._active = False
 
   def Results(self):
@@ -361,4 +345,3 @@ class Leaderboard(object):
     for user in sorted_users:
       user_info.append('{} ({})'.format(user[0], user[1]))
     return 'Trivia Leaderboard: [{}]'.format(', '.join(user_info))
-

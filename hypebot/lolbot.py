@@ -132,27 +132,7 @@ class HypeBot(basebot.BaseBot):
                                      **self._params.lcs_channel.AsDict())
     # Trivia can probably be self contained once multiple parsers exist.
     self._core.trivia = trivia_lib.TriviaMaster(self._core.game,
-                                                self._OnNewTriviaQuestion,
-                                                self._OnTriviaQuestionDone,
-                                                self._OnTriviaLeaderboard)
-
-  ########################
-  ### Trivia callbacks ###
-  ########################
-
-  def _OnNewTriviaQuestion(self, channel, question):
-    self._core.Reply(channel, question.GetQuestionText())
-
-  def _OnTriviaQuestionDone(self, channel, user, question):
-    if user:
-      self._core.Reply(channel, '%s got it! Answer was: %s' %
-                       (user, question.GetAnswer()))
-    else:
-      self._core.Reply(channel,
-                       'Time\'s up! Answer was: %s' % question.GetAnswer())
-
-  def _OnTriviaLeaderboard(self, channel, leaderboard):
-    self._core.Reply(channel, leaderboard.Results())
+                                                self._core.Reply)
 
   ##############################
   ### Private helper methods ###
