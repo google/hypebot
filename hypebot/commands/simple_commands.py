@@ -46,6 +46,17 @@ class AskFutureCommand(command_lib.BaseCommand):
     return random.choice(messages.BALL_ANSWERS)
 
 
+@command_lib.CommandRegexParser(r'coin-(flip|toss)')
+class CoinFlipCommand(command_lib.BaseCommand):
+  """Throw currency around."""
+
+  def _Handle(self, channel, user, verb):
+    action = 'flips' if verb == 'flip' else 'tosses'
+    coin_side = 'heads' if random.random() >= 0.5 else 'tails'
+    return '%s %s a coin, it lands on %s!' % (self._core.nick, action,
+                                              coin_side)
+
+
 @command_lib.CommandRegexParser(r'debug (.+)')
 class DebugCommand(command_lib.BaseCommand):
 

@@ -86,6 +86,7 @@ class BaseBot(object):
           'AskFutureCommand': {},
           'AutoReplySnarkCommand': {},
           'BuyHypeStackCommand': {},
+          'CoinFlipCommand': {},
           'CookieJarCommand': {},
           'DebugCommand': {},
           'DisappointCommand': {},
