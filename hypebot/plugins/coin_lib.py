@@ -435,10 +435,13 @@ class Bank(object):
   def GetUserBalances(self, plebs_only=False, account=None):
     """Returns dict of users mapping to their balance for all users."""
     user_balances = self._store.GetSubkey(self._BALANCE_SUBKEY)
-    return {user: util_lib.SafeCast(balance, int, 0)
-            for user, balance in user_balances
-            if (not plebs_only or user not in HYPECENTS) and
-            (not account or IsSubAccount(user, account))}
+    return {
+        user: util_lib.SafeCast(balance, int, 0)
+        for user, balance in user_balances
+        if (not plebs_only or user not in HYPECENTS) and
+        (not account or IsSubAccount(user, account)) and
+        not user.startswith('http')
+    }
 
   def GetTransactions(self, user):
     return self._store.GetHistoricalValues(user, self._TRANSACTION_SUBKEY, 5)
