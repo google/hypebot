@@ -35,7 +35,6 @@ from hypebot.plugins.league import items_lib
 from hypebot.plugins.league import rito_lib
 from hypebot.plugins.league import summoner_lib
 from hypebot.plugins.league import trivia_lib
-from hypebot.protos.channel_pb2 import Channel
 
 FLAGS = flags.FLAGS
 
@@ -106,8 +105,7 @@ class HypeBot(basebot.BaseBot):
 
   def __init__(self, params):
     super(HypeBot, self).__init__(params)
-    for chan in self._params.trivia_channels:
-      channel = Channel(visibility=Channel.PUBLIC, **chan)
+    for channel in self._params.trivia_channels:
       self._core.trivia.MakeNewChannel(channel)
 
     # Place LCS gambling first, so it beats Stock to taking the game.
@@ -128,8 +126,7 @@ class HypeBot(basebot.BaseBot):
         self._core.proxy, self._core.executor, self._core.game,
         self._core.timezone)
     self._core.items = items_lib.ItemsLib(self._core.rito)
-    self._core.lcs_channel = Channel(visibility=Channel.PUBLIC,
-                                     **self._params.lcs_channel.AsDict())
+    self._core.lcs_channel = self._params.lcs_channel
     # Trivia can probably be self contained once multiple parsers exist.
     self._core.trivia = trivia_lib.TriviaMaster(self._core.game,
                                                 self._core.Reply)

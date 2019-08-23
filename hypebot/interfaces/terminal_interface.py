@@ -79,10 +79,7 @@ class TerminalInterface(interface_lib.BaseChatInterface):
 
   def Loop(self):
     while True:
-      channel = Channel(
-          id=self._params.default_channel,
-          visibility=Channel.PUBLIC,
-          name=self._params.default_channel)
+      channel = self._params.default_channel
       nick = self._params.default_user
       message = raw_input('> ').decode('utf-8')
       overrides = self._ExtractOverrides(message)

@@ -302,8 +302,7 @@ class Core(object):
                                                self.Reply)
     self.betting_games = []
     self.last_command = None
-    self.default_channel = Channel(visibility=Channel.PUBLIC,
-                                   **self.params.default_channel.AsDict())
+    self.default_channel = self.params.default_channel
 
   def Reply(self,
             channel: types.Target,

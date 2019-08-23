@@ -202,9 +202,9 @@ class GreetingsCommand(command_lib.BasePublicCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'ratelimit': {'enabled': True, 'return_only': True},
-          # Whether or not to greet users who don't explictly greet hypebot.
-          # Still grants paycheck.
-          'greet_users_on_activity': True
+          # Channels where we greet users who don't explictly greet hypebot.
+          # Still grants paychecks in all other channels.
+          'greet_channels': []
       })
 
   def _Handle(self, channel, user, message):
@@ -217,7 +217,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     #  * The user is not named like a subaccount
     if all((not self._core.params.execution_mode.dev,
             self._core.cached_store,
-            command_lib.IsMainChannel(channel, self._core.params.main_channels),
+            util_lib.MatchesAny(self._core.params.main_channels, channel),
             not self._core.user_tracker.IsBot(user),
             not coin_lib.IsSubAccount(user))):
       got_paid = self._DeliverPaycheck(user)
@@ -238,7 +238,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
 
     # If we didn't give user a paycheck, they can't get a greeting for just
     # talking. They must explictly greet hypebot.
-    if self._params.greet_users_on_activity and got_paid:
+    if got_paid and util_lib.MatchesAny(self._params.greet_channels, channel):
       return self._BuildGreeting(user)
 
   def _DeliverPaycheck(self, user):

@@ -180,7 +180,7 @@ class MainCommand(command_lib.BaseCommand):
 
   def _Handle(self, channel, user):
     if (channel.visibility == Channel.PRIVATE or
-        command_lib.IsMainChannel(channel, self._core.params.main_channels)):
+        util_lib.MatchesAny(self._core.params.main_channels, channel)):
       if channel.id.strip('#') == self._core.nick:
         return 'Of course I\'m a main, this whole place is named after me'
       else:

@@ -49,7 +49,6 @@ class HypeJackCommand(command_lib.BasePublicCommand):
     self._games = {}  # type: Dict[Text, hypejack_lib.Game]
 
     for channel in self._params.channels:
-      channel = Channel(visibility=Channel.PUBLIC, **channel)
       self._core.interface.Join(channel)
       self._games[channel.id] = hypejack_lib.Game(
           channel, self._core, partial(self._Reply, default_channel=channel))

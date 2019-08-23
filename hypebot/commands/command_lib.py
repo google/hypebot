@@ -52,7 +52,17 @@ class BaseCommand(object):
           'interval': 5,
           # Will only ratelimit if _Handle returns a value.
           'return_only': False,
-      }
+      },
+      # Which channels (rooms) should handle the message.
+      #
+      # This operates in addition to the parsers and is useful for surfacing
+      # different commands for different communities. E.g., !who could be
+      # handled by different commands for a LoL or Overwatch channel.
+      #
+      # Default allows all channels to utilize command.  Otherwise, supply a
+      # list of channels where the specified id must be a prefix of the incoming
+      # message's channel.id.
+      'channels': [''],
   })
 
   # Used to ignore a level of scoping.
@@ -86,6 +96,10 @@ class BaseCommand(object):
     Returns:
       Response message from command.
     """
+    if (channel.visibility == Channel.PUBLIC and
+        not util_lib.MatchesAny(self._params.channels, channel)):
+      return
+
     for parser in self._parsers:
       take, args, kwargs = parser(channel, user, message)
       if take:
@@ -369,21 +383,14 @@ def LimitPublicLines(max_lines: int = 6):
   return Decorator
 
 
-def IsMainChannel(channel, main_ids):
-  for main_id in main_ids:
-    if re.match(main_id, channel.id):
-      return True
-  return False
-
-
 def MainChannelOnly(fn):
   """Decorator to restrict handling to main channel or private channels."""
 
   @wraps(fn)
   def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
     if (channel.visibility == Channel.PRIVATE or
-        IsMainChannel(channel,
-                      getattr(fn_self, '_core').params.main_channels)):
+        util_lib.MatchesAny(getattr(fn_self, '_core').params.main_channels,
+                            channel)):
       return fn(fn_self, channel, user, *args, **kwargs)
 
   return Wrapped

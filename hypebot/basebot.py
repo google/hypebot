@@ -52,7 +52,8 @@ class BaseBot(object):
           'type': 'DiscordInterface'
       },
       # Restrict some responses to only these channels.
-      'main_channels': ['.*'],
+      # Empty string matches all channels.
+      'main_channels': [''],
       # The default channel for announcements and discussion.
       'default_channel': {
           'id': '418098011445395462',

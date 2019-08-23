@@ -34,6 +34,7 @@ from typing import Text, Union
 
 from hypebot.core import params_lib
 from hypebot.protos.user_pb2 import User
+from hypebot.protos.channel_pb2 import Channel
 
 
 def Access(obj, path, default=None):
@@ -364,3 +365,10 @@ class UserTracker(object):
   def AllUsers(self):
     """Returns a list of all known users."""
     return list(self._bots.union(self._humans))
+
+def MatchesAny(channels, channel):
+  """Whether any channels' id is a prefix of channel.id."""
+  for chan in channels:
+    if channel.id.startswith(chan.id):
+      return True
+  return False
