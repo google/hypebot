@@ -38,6 +38,7 @@ CHAMP_NICKNAME_MAP = {
     'rango': 'rengar',
     'sarah': 'missfortune',
     'satan': 'teemo',
+    'teeto': 'teemo',
     'shauna': 'vayne',
     'susan': 'nasus',
     'tahmmyboy': 'tahmkench',
