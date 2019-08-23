@@ -743,6 +743,14 @@ class GrumbleProvider(TournamentProvider):
               summoner_name=player['summonerName'],
               team_id=team_id,
               position=random.choice(['Fill', 'Feed']))
+        try:
+          # Update brackets standings with updated team data since protos copy.
+          for bracket in self._brackets.values():
+            for team_standings in bracket.standings:
+              if team_standings.team.team_id == team_id:
+                team_standings.team.CopyFrom(team)
+        except Exception as e:
+          logging.warning('Woops: %s', e)
 
   def _UpdateSchedule(self, schedule, bracket):
     """Update existing matches if they are now wonnered."""
@@ -823,6 +831,7 @@ class EsportsLib(object):
     self._matches = {}
     self._brackets = {}
     self._leagues = {}
+    self._summoner_data = {}
 
     # Maintains mappings from champ_key -> per-region stats about picks, etc.
     self._champ_stats = defaultdict(lambda: defaultdict(Counter))
@@ -898,6 +907,7 @@ class EsportsLib(object):
     matches = {}
     brackets = {}
     leagues = {}
+    summoner_data = {}
     champ_stats = defaultdict(lambda: defaultdict(Counter))
     player_stats = defaultdict(lambda: defaultdict(Counter))
     num_games = Counter()
@@ -906,6 +916,10 @@ class EsportsLib(object):
       leagues[league.league_id] = league
       for bracket in league.brackets:
         brackets[bracket.bracket_id] = bracket
+        for team_standings in bracket.standings:
+          for player in team_standings.team.players:
+            summoner_data[util_lib.CanonicalizeName(player.summoner_name)] = (
+                team_standings)
         for match in bracket.schedule:
           match = Match(match)
           matches[match.match_id] = match
@@ -930,6 +944,7 @@ class EsportsLib(object):
         for alias in league.aliases:
           league_aliases[alias] = league.league_id
       self._leagues = name_complete_lib.NameComplete(league_aliases, leagues)
+      self._summoner_data = summoner_data
 
       self._champ_stats = champ_stats
       self._player_stats = name_complete_lib.NameComplete(
@@ -948,6 +963,12 @@ class EsportsLib(object):
     for provider in self._providers:
       updated_matches.extend(provider.UpdateMatches())
     return updated_matches
+
+  def Who(self, summoner):
+    """Gets the TeamStandings for the summoner to display in !who."""
+    summoner = util_lib.CanonicalizeName(summoner['summoner'])
+    with self._lock:
+      return self._summoner_data.get(summoner)
 
   def GetLivestreamLinks(self):
     """Get links to the livestream(s), if any are currently active.

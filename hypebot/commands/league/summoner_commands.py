@@ -114,8 +114,8 @@ class WhoCommand(_BaseSummonerCommand):
     responses = []  # type: List[card_lib.ContextCardMessage]
     for summoner in summoners:
       rito_data = self._core.summoner.Who(summoner)
-      grumble_data = None
-      responses.append(self._SummonerDataToText(rito_data, grumble_data))
+      team_data = self._core.esports.Who(summoner)
+      responses.append(self._SummonerDataToText(rito_data, team_data))
     return responses
 
   def _CreateHypebotMessage(self) -> Text:
@@ -151,8 +151,8 @@ class WhoCommand(_BaseSummonerCommand):
     if extra_info:
       info += ' [' + ', '.join(extra_info) + ']'
     if team_data:
-      rank = team_data['team_rank']
-      info += ' [(%s) %s, %d%s]' % (team_data['league_abbrev'],
-                                    team_data['team_name'], rank,
+      rank = team_data.rank
+      info += ' [(%s) %s, %d%s]' % (team_data.team.league_id,
+                                    team_data.team.name, rank,
                                     inflect_lib.Ordinalize(rank))
     return info
