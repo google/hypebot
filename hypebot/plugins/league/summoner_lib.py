@@ -51,6 +51,7 @@ GAME_MODES = {
         constants_pb2.QueueType.RANKED_TEAM_5x5: 'Ranked 5s',
         constants_pb2.QueueType.TEAM_BUILDER_DRAFT_UNRANKED_5x5: 'Normals',
         constants_pb2.QueueType.URF_5x5: 'URF',
+        constants_pb2.QueueType.CLASH: 'CLASH',
     },
     'KINGPORO': 'Poro King',
     'ODIN': 'Dominion',
@@ -133,7 +134,7 @@ class SummonerLib(object):
       game_type = GAME_MODES.get(last_game.game_mode)
       if last_game.game_mode == 'CLASSIC':
         game_type = game_type.get(last_game.queue_id)
-      game_data['type'] = game_type
+      game_data['type'] = game_type or 'Unknown'
 
       # Game time
       # It seems rito api returns games in US/Pacific time, but this could
