@@ -89,7 +89,7 @@ class DisappointCommand(command_lib.BaseCommand):
     if normalized_son == 'me':
       son = user
     if normalized_son == self._core.nick:
-      return '\x01ACTION feels its shame deeply\x01'
+      return '%s feels its shame deeply' % self._core.params.name
     return '%s, I am disappoint.' % son
 
 

@@ -421,7 +421,8 @@ class MissingPingCommand(command_lib.BasePublicCommand):
         self._last_user[channel.id] = ping_target
       elif self._last_user[channel.id]:
         missing_str = '%s is' % self._last_user[channel.id]
-      return '\x01ACTION signals that %s missing\x01' % missing_str
+      return '%s signals that %s missing' % (self._core.params.name,
+                                             missing_str)
     elif self._core.user_tracker.IsHuman(user):
       self._last_user[channel.id] = user
 
