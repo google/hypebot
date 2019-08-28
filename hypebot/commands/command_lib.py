@@ -63,6 +63,11 @@ class BaseCommand(object):
       # list of channels where the specified id must be a prefix of the incoming
       # message's channel.id.
       'channels': [''],
+      # Alternatively, which channels should not handle the message. This takes
+      # precedence over 'channels'.
+      #
+      # Default allows all channels to handle the message.
+      'avoid_channels': [],
   })
 
   # Used to ignore a level of scoping.
@@ -97,7 +102,8 @@ class BaseCommand(object):
       Response message from command.
     """
     if (channel.visibility == Channel.PUBLIC and
-        not util_lib.MatchesAny(self._params.channels, channel)):
+        (not util_lib.MatchesAny(self._params.channels, channel) or
+         util_lib.MatchesAny(self._params.avoid_channels, channel))):
       return
 
     for parser in self._parsers:
