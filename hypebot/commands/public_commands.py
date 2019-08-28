@@ -127,11 +127,11 @@ class CookieJarCommand(command_lib.BasePublicCommand):
 
   def _BotIsAccusor(self):
     with self._lock:
-      return self._accusor == self._core.nick
+      return self._accusor == self._core.name
 
   def _BotIsAccused(self):
     with self._lock:
-      return self._accused == self._core.nick
+      return self._accused == self._core.name
 
   def _NextLine(self, channel):
     with self._lock:
@@ -170,7 +170,7 @@ class CookieJarCommand(command_lib.BasePublicCommand):
               return
             self._cookie = match.groups()[1]
             self._accusor = user
-            self._accused = self._core.nick
+            self._accused = self._core.name
           elif user == self._accusor and match.groups()[1] == self._cookie:
             self._accused = match.groups()[0].lower()
 
@@ -223,16 +223,18 @@ class GreetingsCommand(command_lib.BasePublicCommand):
       got_paid = self._DeliverPaycheck(user)
 
     # TODO: This and below don't really belong here.
-    if re.search(r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
-                 (self._core.nick, channel.name), message):
+    if re.search(
+        r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
+        (self._core.name, channel.name), message):
       return 'And flights of angels sing thee to thy rest, {}'.format(user)
 
-    if re.search(r'(?i)oh,? %s(\..*)?\s*$' % self._core.nick, message):
+    if re.search(r'(?i)oh,? %s(\..*)?\s*$' % self._core.name, message):
       return messages.OH_STRING
 
     # Keeping the optional # in the regex supports IRC channels.
-    match = re.search(r'(?i)(morning|afternoon|evening),? (%s|#?%s)' % (
-        self._core.nick, channel.name), message)
+    match = re.search(
+        r'(?i)(morning|afternoon|evening),? (%s|#?%s)' %
+        (self._core.name, channel.name), message)
     if match:
       return self._BuildGreeting(user, match.group(1))
 
@@ -296,10 +298,8 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     except Exception as e:
       logging.info('GreetingCommand exception: %s', e)
       self._core.bets.FineUser(user, 100, 'Bad greeting', self._Reply)
-      return (
-          '%s has an invalid greeting and feels bad for trying to '
-          'break %s' % (user, self._core.nick)
-      )
+      return ('%s has an invalid greeting and feels bad for trying to '
+              'break %s' % (user, self._core.name))
 
 
 @command_lib.PublicParser
@@ -337,7 +337,7 @@ class HypeCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, message):
     if message == 'hype':
       # Fake the hype so it can still trigger easter eggs.
-      message = '#%sHype' % self._core.params.name
+      message = '#%sHype' % self._core.name
 
     hypes = []
     responses = []
@@ -358,7 +358,7 @@ class HypeCommand(command_lib.BaseCommand):
         }
         self._dogers[user] = t
         if random.randint(0, 100) == 42:
-          responses.append(messages.PROSE_HYPE)
+          responses.append(messages.PROSE_HYPE % self._core.name)
         if len(self._dogers) >= self._params.doge_num_hypers:
           if (t - self._last_doge.get(channel.id, 0) >=
               self._params.doge_rate_seconds):
@@ -415,7 +415,7 @@ class MissingPingCommand(command_lib.BasePublicCommand):
       ping_target = ping_match.groups()[0].strip()
       missing_str = 'enemies are'
       if ping_target:
-        if util_lib.CanonicalizeName(ping_target) == self._core.nick:
+        if util_lib.CanonicalizeName(ping_target) == self._core.name.lower():
           ping_target = user
         missing_str = '%s is' % ping_target
         self._last_user[channel.id] = ping_target

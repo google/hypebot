@@ -44,8 +44,8 @@ class HypeStackBalanceCommand(command_lib.BaseCommand):
       self._core.last_command = partial(self._Handle, stack_user=stack_user)
       normalized_stack_user = user
       stack_user = user
-    elif normalized_stack_user == self._core.nick:
-      return '%s IS the stack' % self._core.nick
+    elif normalized_stack_user == self._core.name.lower():
+      return '%s IS the stack' % self._core.name
     stack_user = stack_user.strip()
     stacks = self._core.hypestacks.GetHypeStacks(normalized_stack_user)
     stack_msg = '%s isn\'t very hype' % stack_user
@@ -83,4 +83,3 @@ class BuyHypeStackCommand(command_lib.BaseCommand):
     }
     self._core.request_tracker.RequestConfirmation(
         user, summary, purchase_details, self._core.hypestacks.PurchaseStacks)
-

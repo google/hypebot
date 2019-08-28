@@ -443,12 +443,12 @@ def RequireReady(obj_name):
       if obj and obj.IsReady():
         return fn(fn_self, *args, **kwargs)
 
-      nick = getattr(fn_self, '_core').nick
+      bot_name = getattr(fn_self, '_core').name
       if not obj:
-        return '%s is not enabled for %s' % (obj_name, nick)
+        return '%s is not enabled for %s' % (obj_name, bot_name)
       else:
         return '%s.%s is still loading data, please try again later.' % (
-            nick, obj_name)
+            bot_name, obj_name)
 
     return Wrapped
 

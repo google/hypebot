@@ -342,7 +342,7 @@ class UserTracker(object):
       self._humans.add(name)
 
   def AddBot(self, bot_name):
-    """Adds bot_nick as a known bot."""
+    """Adds bot_name as a known bot."""
     with self._bots_lock:
       self._bots.add(bot_name)
 

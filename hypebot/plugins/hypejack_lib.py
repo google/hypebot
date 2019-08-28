@@ -278,7 +278,7 @@ class Game(vegas_game_lib.GameBase):
       bet = bet_pb2.Bet(
           user=user,
           amount=amount,
-          resolver=self._core.nick,
+          resolver=self._core.name.lower(),
           direction=bet_pb2.Bet.FOR,
           target='hand-0')
 
@@ -368,7 +368,8 @@ Commands:
       if self._active_round:
         logging.error('HypeJack game already active.')
         return
-      bets = self._core.bets.LookupBets(self.name, resolver=self._core.nick)
+      bets = self._core.bets.LookupBets(
+          self.name, resolver=self._core.name.lower())
       if not bets:
         logging.error('Attempted to start HypeJack with no players.')
         return
@@ -411,7 +412,7 @@ Commands:
         self._dealer_hand.cards.append(self._shoe.pop())
         self._msg_fn(None, 'Dealer: %s' % self._dealer_hand)
 
-      self._core.bets.SettleBets(self, self._core.nick, self._msg_fn)
+      self._core.bets.SettleBets(self, self._core.name.lower(), self._msg_fn)
 
       # Reset game state.
       self._peeps = {}

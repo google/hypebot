@@ -269,7 +269,7 @@ class Core(object):
         never intended for human consumption.
     """
     self.params = params
-    self.nick = self.params.name.lower()
+    self.name = self.params.name
     self.interface = interface
     self.output_util = OutputUtil(self.Reply)
     self.message_util = MessageUtil()
@@ -293,11 +293,11 @@ class Core(object):
     self.proxy = proxy_factory.Create(self.params.proxy.type, self.store)
     self.zombie_manager = zombie_lib.ZombieManager()
     self.request_tracker = RequestTracker(self.Reply)
-    self.bank = coin_lib.Bank(self.store, self.nick)
+    self.bank = coin_lib.Bank(self.store, self.name.lower())
     self.bets = coin_lib.Bookie(self.store, self.bank, self.inventory)
     self.stocks = stock_factory.CreateFromParams(self.params.stocks, self.proxy)
     self.deployment_manager = deploy_lib.DeploymentManager(
-        self.nick, self.bets, self.output_util, self.executor)
+        self.name.lower(), self.bets, self.output_util, self.executor)
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
     self.betting_games = []

@@ -80,7 +80,7 @@ class HCBetCommand(command_lib.BaseCommand):
               bet_target):
     if account or coin_lib.IsSubAccount(user):
       return 'Must bet from your main account.'
-    if user == self._core.nick:
+    if user == self._core.name.lower():
       return '%s doesn\'t meddle in human affairs' % user
     user = _GetUserAccount(user, account)
     msg_fn = partial(self._Reply, default_channel=channel)
@@ -96,7 +96,7 @@ class HCBetCommand(command_lib.BaseCommand):
     bet = Bet(
         user=user,
         amount=amount,
-        resolver=self._core.nick,
+        resolver=self._core.name.lower(),
         direction=Bet.Direction.Value(direction.upper()),
         target=bet_target.lower())
     for game in self._core.betting_games:
@@ -282,7 +282,7 @@ class HCGiftCommand(command_lib.BaseCommand):
 
     normalized_recipient = recipient.lower()
 
-    if normalized_recipient == self._core.nick:
+    if normalized_recipient == self._core.name.lower():
       self._Reply(channel, messages.OH_STRING)
 
     if normalized_recipient in self._UNGIFTABLE:
@@ -342,7 +342,8 @@ class HCRobCommand(command_lib.BaseCommand):
   def __init__(self, *args):
     super(HCRobCommand, self).__init__(*args)
     self._robbin_hood = coin_lib.Thievery(self._core.store, self._core.bank,
-                                          self._core.nick, self._core.timezone)
+                                          self._core.name.lower(),
+                                          self._core.timezone)
 
   @command_lib.MainChannelOnly
   @command_lib.HumansOnly('%s is not a crook.')

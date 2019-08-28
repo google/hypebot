@@ -146,8 +146,9 @@ class HypeBot(basebot.BaseBot):
   @command_lib.RequireReady('_core.esports')
   def _LCSGameCallback(self):
     self._core.esports.UpdateEsportsMatches()
-    notifications = self._core.bets.SettleBets(
-        self._lcs_game, self._core.nick, self._core.Reply)
+    notifications = self._core.bets.SettleBets(self._lcs_game,
+                                               self._core.name.lower(),
+                                               self._core.Reply)
     if notifications:
       self._core.PublishMessage('lcs_bets', notifications)
 
@@ -161,4 +162,3 @@ def main(argv):
 
 if __name__ == '__main__':
   app.run(main)
-

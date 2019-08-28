@@ -116,7 +116,7 @@ class PushCommand(_BaseDeployCommand):
                     user: str,
                     cl: int,
                     bot_name: str) -> hypecore.MessageType:
-    if bot_name == self._core.nick:
+    if bot_name == self._core.name.lower():
       info_str = 'I\'m going to reload myself. The future is now.'
     else:
       info_str = 'Initiating reload for %s.' % bot_name
@@ -160,4 +160,3 @@ class TestCommand(_BaseDeployCommand):
       return 'Running tests, I\'ll let you know when they\'re finished'
     else:
       self._DeployActionInProgress(channel, bot_name)
-

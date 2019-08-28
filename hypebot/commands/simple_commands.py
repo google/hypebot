@@ -53,7 +53,7 @@ class CoinFlipCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, verb):
     action = 'flips' if verb == 'flip' else 'tosses'
     coin_side = 'heads' if random.random() >= 0.5 else 'tails'
-    return '%s %s a coin, it lands on %s!' % (self._core.nick, action,
+    return '%s %s a coin, it lands on %s!' % (self._core.name, action,
                                               coin_side)
 
 
@@ -88,7 +88,7 @@ class DisappointCommand(command_lib.BaseCommand):
     normalized_son = util_lib.CanonicalizeName(son)
     if normalized_son == 'me':
       son = user
-    if normalized_son == self._core.nick:
+    if normalized_son == self._core.name.lower():
       return '%s feels its shame deeply' % self._core.params.name
     return '%s, I am disappoint.' % son
 
@@ -145,7 +145,8 @@ class JackpotCommand(command_lib.BaseCommand):
 
   @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user):
-    pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
+    pool = self._core.bets.LookupBets(
+        self._game.name, resolver=self._core.name.lower())
     jackpot, item = self._game.ComputeCurrentJackpot(pool)
     item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
     responses = ['Current jackpot is %s and %s' % (
@@ -156,8 +157,9 @@ class JackpotCommand(command_lib.BaseCommand):
     return responses
 
   def _LotteryCallback(self):
-    notifications = self._core.bets.SettleBets(
-        self._game, self._core.nick, self._Reply)
+    notifications = self._core.bets.SettleBets(self._game,
+                                               self._core.name.lower(),
+                                               self._Reply)
     if notifications:
       self._core.PublishMessage('lottery', notifications)
 
@@ -167,7 +169,8 @@ class JackpotCommand(command_lib.BaseCommand):
     if remaining is not None:
       warning_str += 'The lottery winner will be drawn in %s! ' % (
           util_lib.TimeDeltaToHumanDuration(remaining))
-    pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
+    pool = self._core.bets.LookupBets(
+        self._game.name, resolver=self._core.name.lower())
     coins, item = self._game.ComputeCurrentJackpot(pool)
     item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
     warning_str += 'Current jackpot is %s and %s' % (
@@ -181,11 +184,10 @@ class MainCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user):
     if (channel.visibility == Channel.PRIVATE or
         util_lib.MatchesAny(self._core.params.main_channels, channel)):
-      if channel.id.strip('#') == self._core.nick:
+      if channel.id.strip('#') == self._core.name.lower():
         return 'Of course I\'m a main, this whole place is named after me'
       else:
-        return '%s is a main bot for %s' % (
-            self._core.params.name, channel.name)
+        return '%s is a main bot for %s' % (self._core.name, channel.name)
 
 
 @command_lib.CommandRegexParser(r'(?:dank)?(?:meme)?(?:\s+v)?')
@@ -207,15 +209,15 @@ class OrRiotCommand(command_lib.BaseCommand):
 
   @command_lib.MainChannelOnly
   def _Handle(self, channel, user, or_riot):
-    or_riot = util_lib.StripColor(or_riot).upper()
+    or_riot = util_lib.StripColor(or_riot)
     normalized_riot = util_lib.CanonicalizeName(or_riot)
     if normalized_riot == 'me':
       self._core.last_command = partial(self._Handle, or_riot=or_riot)
       or_riot = user.upper()
-    if normalized_riot == self._core.nick:
-      return 'ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.nick.upper()
+    if normalized_riot == self._core.name.lower():
+      return ('ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.name).upper()
     else:
-      return 'ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot
+      return ('ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot).upper()
 
 
 @command_lib.CommandRegexParser(r'rage')
@@ -253,8 +255,8 @@ class RaiseCommand(command_lib.BaseCommand):
     if normalized_dongs == 'me':
       self._core.last_command = partial(self._Handle, dongs=dongs)
       normalized_dongs = user
-    if normalized_dongs == self._core.nick:
-      return 'Do not raise me, I am but a simple %s' % self._core.params.name
+    if normalized_dongs == self._core.name.lower():
+      return 'Do not raise me, I am but a simple %s' % self._core.name
     elif self._core.zombie_manager.GetCorpseForChannel(
         channel) == normalized_dongs:
       return self._core.zombie_manager.AnimateCorpse(channel)
@@ -305,27 +307,27 @@ class RipCommand(command_lib.BaseCommand):
       if normalized_rip_target == 'me':
         self._core.last_command = partial(self._Handle, rip_target=rip_target)
         normalized_rip_target = user
-      if normalized_rip_target == self._core.nick:
+      if normalized_rip_target == self._core.name.lower():
         self._Spook(user)
         normalized_rip_target = user
 
       if normalized_rip_target in self.RIP_HUMANS:
-        rip_vals = (normalized_rip_target, self._core.nick,
+        rip_vals = (normalized_rip_target, self._core.name,
                     self.RIP_HUMANS[normalized_rip_target])
       elif self._core.user_tracker.IsHuman(normalized_rip_target):
         if user == normalized_rip_target:
           rip_mod = 'noober'
         else:
           rip_mod = 'minion'
-        rip_vals = (normalized_rip_target, self._core.nick, rip_mod)
+        rip_vals = (normalized_rip_target, self._core.name, rip_mod)
       elif normalized_rip_target in self._normalized_commands:
-        rip_vals = (rip_target, self._core.nick, 'command')
+        rip_vals = (rip_target, self._core.name, 'command')
       else:
         rip_string = 'RIP in pepperonis %s, you will be missed.'
         rip_vals = rip_target
     else:
       rip_target, rip_mod = random.choice(list(self.RIP_HUMANS.items()))
-      rip_vals = (rip_target, self._core.nick, rip_mod)
+      rip_vals = (rip_target, self._core.name, rip_mod)
 
     self._core.zombie_manager.NewCorpse(
         channel, normalized_rip_target or rip_target)
@@ -474,7 +476,8 @@ class StoryCommand(command_lib.BasePublicCommand):
       else:
         del self._active_stories[channel.id]
       return self._stories[story.name][story.line + 1]
-    elif not story and message == '%s, tell me a story' % self._core.nick:
+    elif (not story and
+          message == '%s, tell me a story' % self._core.name.lower()):
       story_name = util_lib.GetWeightedChoice(list(self._stories.keys()),
                                               self._probs)
       self._active_stories[channel.id] = _StoryProgress(story_name, t, 1)
@@ -486,6 +489,4 @@ class VersionCommand(command_lib.BaseCommand):
 
   def _Handle(self, channel, unused_user):
     return '%s(c) Version %s. #%sVersionHype' % (
-        self._core.params.name,
-        self._core.params.version,
-        self._core.params.name)
+        self._core.name, self._core.params.version, self._core.name)

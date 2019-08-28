@@ -67,7 +67,8 @@ class StocksCommand(command_lib.BaseCommand):
           util_lib.ArrowTime(16, 0, 30, 'America/New_York'), self._BetCallback)
 
   def _BetCallback(self):
-    notifications = self._core.bets.SettleBets(self._game, self._core.nick,
+    notifications = self._core.bets.SettleBets(self._game,
+                                               self._core.name.lower(),
                                                self._Reply)
     if notifications:
       self._core.PublishMessage('stocks', notifications)
@@ -87,7 +88,7 @@ class StocksCommand(command_lib.BaseCommand):
           change=4.2,
           change_percent=45.80)
     if not quotes:
-      if symbols[0].upper() == self._core.nick.upper():
+      if symbols[0].upper() == self._core.name.upper():
         return ('You can\'t buy a sentient AI for some vague promise of future '
                 'value, peon.')
       else:
@@ -105,7 +106,7 @@ class StocksCommand(command_lib.BaseCommand):
         responses.insert(
             0,
             'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
-            self._core.nick)
+            self._core.name)
         break
       quote = quotes[symbol]
       history = histories.get(symbol)
