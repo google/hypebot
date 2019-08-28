@@ -18,7 +18,9 @@ package hypebot;
 message Channel {
   // The unique name of the target. For IRC, the channel or username. For
   // Hangouts Chat, the Space name. This is intended to be the replacement for
-  // everything that currently uses target as a string.
+  // everything that currently uses target as a string. Note that some chat
+  // systems may have case-sensitive identifiers, so this field should not have
+  // case changing operations applied to it.
   string id = 1;
 
   enum Visibility {
