@@ -38,7 +38,6 @@ _RESERVED_ALIAS_KEYWORDS = ['list', 'remove', 'copy', 'clone']
 class AliasAddCommand(command_lib.BaseCommand):
   """Adds or updates a user's alias."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,
@@ -62,7 +61,6 @@ class AliasAddCommand(command_lib.BaseCommand):
 class AliasCloneCommand(command_lib.BaseCommand):
   """Steal an alias from someone else."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,
@@ -83,7 +81,6 @@ class AliasCloneCommand(command_lib.BaseCommand):
 class AliasRemoveCommand(command_lib.BaseCommand):
   """Removes an alias from a user's set."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,
@@ -100,7 +97,6 @@ class AliasRemoveCommand(command_lib.BaseCommand):
 class AliasListCommand(command_lib.BaseCommand):
   """Lists all aliases saved for a user."""
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self,
               channel: Channel,
@@ -118,7 +114,6 @@ class AliasListCommand(command_lib.BaseCommand):
 class EchoCommand(command_lib.BaseCommand):
   """Display a string to standard output."""
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self,
               channel: Channel,
@@ -132,7 +127,6 @@ class EchoCommand(command_lib.BaseCommand):
 class GrepCommand(command_lib.BaseCommand):
   """Print lines matching a pattern."""
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self,
               channel: Channel,
@@ -161,7 +155,6 @@ class GrepCommand(command_lib.BaseCommand):
 class SubCommand(command_lib.BaseCommand):
   """Substitute lines according to a pattern."""
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self,
               channel: Channel,
@@ -196,7 +189,6 @@ class WordCountCommand(command_lib.BaseCommand):
     self._parser.add_argument('-w', '--words', action='store_true')
     self._parser.add_argument('-c', '--chars', action='store_true')
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               unused_user: str,
@@ -221,4 +213,3 @@ class WordCountCommand(command_lib.BaseCommand):
     if options.chars:
       responses.append(str(len(message)))
     return ' '.join(responses)
-

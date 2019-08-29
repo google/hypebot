@@ -48,7 +48,6 @@ class _BaseDeployCommand(command_lib.BaseCommand):
     # LogAndOutput, it is intended for HBDS.
     self._core.output_util.LogAndOutput(logging.WARN, channel, msg.strip())
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self,
               channel: Channel,
@@ -131,7 +130,6 @@ class PushCommand(_BaseDeployCommand):
 class SetSchemaCommand(_BaseDeployCommand):
   """Updates the storage schema if applicable."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,

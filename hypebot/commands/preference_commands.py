@@ -36,7 +36,6 @@ def _IsProtected(pref):
 class PreferencesCommand(command_lib.BaseCommand):
   """See preferences for a user."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               unused_channel: types.Channel,
               user: Text,
@@ -57,7 +56,6 @@ class PreferencesCommand(command_lib.BaseCommand):
 class SetPreferenceCommand(command_lib.BaseCommand):
   """Set preference."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               unused_channel: types.Channel,
               user: Text,
@@ -69,4 +67,3 @@ class SetPreferenceCommand(command_lib.BaseCommand):
     if not value:
       return 'Removed %s preference' % pref
     return 'Set %s to %s' % (pref, value)
-

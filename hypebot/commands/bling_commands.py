@@ -27,7 +27,6 @@ from hypebot.plugins import coin_lib
 class GreetingPurchaseCommand(command_lib.BaseCommand):
   """Let you buy some welcome bling."""
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self, channel, user, subcommand):
     greetings = self._UserGreetings(user)

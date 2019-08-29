@@ -51,7 +51,6 @@ def _GetUserAccount(user, account):
 @command_lib.RegexParser(r'()(\S+)\?\?(?:[\s,.!?]|$)')
 class HCBalanceCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, account, balance_user):
     balance_user = balance_user or user
     if balance_user == 'me':
@@ -74,7 +73,6 @@ class HCBetCommand(command_lib.BaseCommand):
   #   Could also have a sytem where different targets will use their own
   #   hypecoins to bid on which one gets to handle the bet.
   #   User could also specify by name, e.g., 'lol', 'stock'.
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self, channel, user, account, amount_str, more_str, direction,
               bet_target):
@@ -120,7 +118,6 @@ class HCBetsCommand(command_lib.BaseCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {'num_bets': 5})
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, account, me, users_or_games):
     game_names = {g.name.lower(): g for g in self._core.betting_games}
     desired_games = set()
@@ -183,7 +180,6 @@ class HCBetsCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'%s circ(?:ulation)?' % _HC_PREFIX)
 class HCCirculationCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, account):
     num_users, coins_in_circulation = self._core.bank.GetBankStats(
         plebs_only=True, account=account)
@@ -196,7 +192,6 @@ class HCCirculationCommand(command_lib.BaseCommand):
 class HCForbesCommand(command_lib.BaseCommand):
   """Display net worth of a single user or the wealthiest peeps."""
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self, channel, user, account, forbes_user):
     if forbes_user:
@@ -258,7 +253,6 @@ class HCGiftCommand(command_lib.BaseCommand):
   # never gift these recipients.
   _UNGIFTABLE = frozenset(['c'])
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly('%s does not believe in charity.')
   def _Handle(self, channel, user, account, recipient, amount_str='1'):
     if (account or coin_lib.IsSubAccount(user) or
@@ -307,7 +301,6 @@ class HCResetCommand(command_lib.BaseCommand):
           'bailout_amount': 5500
       })
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self, channel, user, account):
     if account or coin_lib.IsSubAccount(user):
@@ -345,7 +338,6 @@ class HCRobCommand(command_lib.BaseCommand):
                                           self._core.name.lower(),
                                           self._core.timezone)
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly('%s is not a crook.')
   def _Handle(self, channel, user, account, victim, amount_str='1'):
     if account or coin_lib.IsSubAccount(user) or coin_lib.IsSubAccount(victim):
@@ -369,7 +361,6 @@ class HCRobCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'%s t[x|ransaction(?:s)?] ?(.+)?' % _HC_PREFIX)
 class HCTransactionsCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, account, tx_user):
     tx_user = tx_user or user
     if tx_user == 'me':

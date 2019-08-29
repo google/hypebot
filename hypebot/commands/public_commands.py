@@ -73,7 +73,6 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
     super(AutoReplySnarkCommand, self).__init__(*args)
     self._regex = re.compile(r' \((auto|auto-reply|ar)\)$')
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     match = self._regex.search(message)
     if match and random.random() < self._params.probability:
@@ -153,7 +152,6 @@ class CookieJarCommand(command_lib.BasePublicCommand):
           self._Reply(channel, line.lyric)
         self._NextLine(channel)
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     with self._lock:
       if (self._cookie and
@@ -186,6 +184,7 @@ class EggHunt(command_lib.BasePublicCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'find_chance': 0.05,
+          'main_channel_only': False,
       })
 
   def _Handle(self, channel, user, message):
@@ -200,8 +199,13 @@ class GreetingsCommand(command_lib.BasePublicCommand):
   """Greet users who acknowledge hypebot's presence."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
-          'ratelimit': {'enabled': True, 'return_only': True},
+      command_lib.BasePublicCommand.DEFAULT_PARAMS,
+      {
+          'ratelimit': {
+              'enabled': True,
+              'return_only': True
+          },
+          'main_channel_only': False,
           # Channels where we greet users who don't explictly greet hypebot.
           # Still grants paychecks in all other channels.
           'greet_channels': []
@@ -322,7 +326,8 @@ class HypeCommand(command_lib.BaseCommand):
           'ratelimit': {
               'scope': 'CHANNEL',
               'return_only': True,
-          }
+          },
+          'main_channel_only': False,
       })
 
   def __init__(self, *args):
@@ -396,19 +401,19 @@ class MissingPingCommand(command_lib.BasePublicCommand):
   """Flame teammates."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BasePublicCommand.DEFAULT_PARAMS,
-      {'ratelimit': {
-          'enabled': True,
-          'interval': 2,
-          'return_only': True
-      }})
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'ratelimit': {
+              'enabled': True,
+              'interval': 2,
+              'return_only': True
+          },
+      })
 
   def __init__(self, *args):
     super(MissingPingCommand, self).__init__(*args)
     self._last_user = collections.defaultdict(str)
     self._regex = re.compile(r'^\?+(.*)')
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     ping_match = self._regex.match(message)
     if ping_match:
@@ -454,7 +459,6 @@ class SayCommand(command_lib.BasePublicCommand):
     self._phrases = collections.defaultdict(
         lambda: collections.defaultdict(dict))
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     match = self._regex.search(message)
     if match:

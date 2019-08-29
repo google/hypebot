@@ -32,7 +32,6 @@ from hypebot.protos import stock_pb2
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel: types.Channel, user: str):
     data = self._core.proxy.FetchJson(
         'https://kittysales.herokuapp.com/data', {'offset': 0, 'count': 1},
@@ -52,8 +51,7 @@ class KittiesSalesCommand(command_lib.BaseCommand):
 class StocksCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS,
-      {
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'enable_betting': True,
       })
 
@@ -73,7 +71,6 @@ class StocksCommand(command_lib.BaseCommand):
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
               user: str,
@@ -135,8 +132,7 @@ class StocksCommand(command_lib.BaseCommand):
 class WeatherCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS,
-      {
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'forecast_days': ['Today', 'Tomorrow', 'The next day'],
           'apixu_key': None,
       })
@@ -146,7 +142,6 @@ class WeatherCommand(command_lib.BaseCommand):
     self._weather = weather_lib.WeatherLib(self._core.proxy,
                                            self._params.apixu_key)
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
               user: str,

@@ -14,10 +14,16 @@
 """League trivia commands."""
 
 from hypebot.commands import command_lib
+from hypebot.core import params_lib
 
 
 @command_lib.CommandRegexParser(r'trivia ?([0-9]*)')
 class TriviaAddCommand(command_lib.BaseCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _Handle(self, channel, user, num_questions):
     if not self._core.trivia.IsTrivaChannel(channel):
@@ -28,6 +34,11 @@ class TriviaAddCommand(command_lib.BaseCommand):
 
 @command_lib.PublicParser
 class TriviaAnswerCommand(command_lib.BasePublicCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _Handle(self, channel, user, message):
     if not self._core.trivia.IsTrivaChannel(channel):

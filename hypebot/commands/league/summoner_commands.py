@@ -26,6 +26,7 @@ import arrow
 
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
+from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
 from hypebot.plugins.league import summoner_lib
@@ -36,6 +37,11 @@ SUMMONER_REGEX = r'(all)?(?:-(\w+))? (.+)'
 
 class _BaseSummonerCommand(command_lib.BaseCommand):
   """Base class for commands that want to access summoners."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   _hypebot_message = 'I deserve challenjour!'
 

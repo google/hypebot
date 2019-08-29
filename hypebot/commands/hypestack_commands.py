@@ -33,7 +33,6 @@ _STACK_PREFIX = r'(?:hype)?stacks?'
 class HypeStackBalanceCommand(command_lib.BaseCommand):
   """Show the number of HypeStacks a given user possesses."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,
@@ -59,7 +58,6 @@ class HypeStackBalanceCommand(command_lib.BaseCommand):
 class BuyHypeStackCommand(command_lib.BaseCommand):
   """Rewards consumerism with sellout HypeStacks."""
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self,
               channel: Channel,

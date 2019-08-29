@@ -68,6 +68,9 @@ class BaseCommand(object):
       #
       # Default allows all channels to handle the message.
       'avoid_channels': [],
+      # If the command should be invoked in all channels that match channels
+      # above, or only the ones listed in core.params.main_channels.
+      'main_channel_only': True,
   })
 
   # Used to ignore a level of scoping.
@@ -90,7 +93,8 @@ class BaseCommand(object):
              message: Text) -> hypecore.MessageType:
     """Attempt to handle the message.
 
-    Compare message against all parsers. If one of them accepts the message,
+    First we check if this command is available for this channel. Then, we
+    compare message against all parsers. If one of them accepts the message,
     send the parsed command to the internal _Handle function.
 
     Args:
@@ -101,11 +105,8 @@ class BaseCommand(object):
     Returns:
       Response message from command.
     """
-    if (channel.visibility == Channel.PUBLIC and
-        (not util_lib.MatchesAny(self._params.channels, channel) or
-         util_lib.MatchesAny(self._params.avoid_channels, channel))):
+    if not self._InScope(channel):
       return
-
     for parser in self._parsers:
       take, args, kwargs = parser(channel, user, message)
       if take:
@@ -115,6 +116,21 @@ class BaseCommand(object):
 
         # Ensure we don't handle the same message twice.
         return self._Ratelimit(channel, user, *args, **kwargs)
+
+  def _InScope(self, channel: Channel):
+    # DMs are always allowed.
+    if channel.visibility == Channel.PRIVATE:
+      return True
+    # Channel scope
+    if (not util_lib.MatchesAny(self._params.channels, channel) or
+        util_lib.MatchesAny(self._params.avoid_channels, channel)):
+      return False
+    # MainChannelOnly
+    if (self._params.main_channel_only and
+        not util_lib.MatchesAny(self._core.params.main_channels, channel)):
+      return False
+
+    return True
 
   def _Ratelimit(self, channel: Channel, user: Text, *args, **kwargs):
     """Ratelimits calls/responses from Handling the message.
@@ -387,19 +403,6 @@ def LimitPublicLines(max_lines: int = 6):
     return Wrapped
 
   return Decorator
-
-
-def MainChannelOnly(fn):
-  """Decorator to restrict handling to main channel or private channels."""
-
-  @wraps(fn)
-  def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
-    if (channel.visibility == Channel.PRIVATE or
-        util_lib.MatchesAny(getattr(fn_self, '_core').params.main_channels,
-                            channel)):
-      return fn(fn_self, channel, user, *args, **kwargs)
-
-  return Wrapped
 
 
 def HumansOnly(message='I\'m sorry %s, I\'m afraid I can\'t do that'):

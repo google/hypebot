@@ -39,7 +39,6 @@ from hypebot.protos.channel_pb2 import Channel
 @command_lib.CommandRegexParser(r'8ball (.+)')
 class AskFutureCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, question):
     if not question:
       return 'You must ask a question.'
@@ -83,7 +82,6 @@ class DebugCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'disappoint (.+?)')
 class DisappointCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, son):
     normalized_son = util_lib.CanonicalizeName(son)
     if normalized_son == 'me':
@@ -96,7 +94,6 @@ class DisappointCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'unlock (.+?)')
 class PrideAndAccomplishmentCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, unlockable):
     return ('The intent is to provide players with a sense of pride and '
             'accomplishment for unlocking different %s.') % unlockable
@@ -105,7 +102,6 @@ class PrideAndAccomplishmentCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'energy (.+?)')
 class EnergyCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, energy_target):
     return '༼ つ ◕_◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕_◕ ༽つ' % energy_target
 
@@ -143,7 +139,6 @@ class JackpotCommand(command_lib.BaseCommand):
           warning_time, self._LotteryWarningCallback, warning_offset,
           _jitter=0)
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user):
     pool = self._core.bets.LookupBets(
         self._game.name, resolver=self._core.name.lower())
@@ -181,6 +176,11 @@ class JackpotCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'mains?')
 class MainCommand(command_lib.BaseCommand):
 
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
   def _Handle(self, channel, user):
     if (channel.visibility == Channel.PRIVATE or
         util_lib.MatchesAny(self._core.params.main_channels, channel)):
@@ -194,20 +194,18 @@ class MainCommand(command_lib.BaseCommand):
 class MemeCommand(command_lib.TextCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.TextCommand.DEFAULT_PARAMS,
-      {
-          'choices': ['Cake, and grief counseling, will be available at the '
-                      'conclusion of the test.'],
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': [
+              'Cake, and grief counseling, will be available at the '
+              'conclusion of the test.'
+          ],
+          'main_channel_only': False,
       })
-
-  def _Handle(self, *args, **kwargs):
-    return super(MemeCommand, self)._Handle(*args, **kwargs)
 
 
 @command_lib.CommandRegexParser(r'riot (.+)')
 class OrRiotCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, or_riot):
     or_riot = util_lib.StripColor(or_riot)
     normalized_riot = util_lib.CanonicalizeName(or_riot)
@@ -224,12 +222,9 @@ class OrRiotCommand(command_lib.BaseCommand):
 class RageCommand(command_lib.TextCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.TextCommand.DEFAULT_PARAMS,
-      {'choices': messages.RAGE_STRINGS})
-
-  @command_lib.MainChannelOnly
-  def _Handle(self, *args, **kwargs):
-    return super(RageCommand, self)._Handle(*args, **kwargs)
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': messages.RAGE_STRINGS,
+      })
 
 
 @command_lib.CommandRegexParser(r'ratelimit')
@@ -248,7 +243,6 @@ class RatelimitCommand(command_lib.TextCommand):
 class RaiseCommand(command_lib.BaseCommand):
   """Get hyped."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, dongs):
     dongs = util_lib.StripColor(dongs)
     normalized_dongs = util_lib.CanonicalizeName(dongs)
@@ -298,7 +292,6 @@ class RipCommand(command_lib.BaseCommand):
     self._normalized_commands = [util_lib.CanonicalizeName(name) for name in
                                  self._core.params.commands.AsDict().keys()]
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, rip_target):
     normalized_rip_target = None
     rip_string = 'Here lies %s, a once-valued %s %s.'
@@ -345,7 +338,6 @@ class SameCommand(command_lib.BaseCommand):
           'enabled': False,
       }})
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user):
     if self._core.last_command:
       return self._core.last_command(channel=channel, user=user)  # pylint: disable=not-callable
@@ -386,7 +378,6 @@ class ScrabbleCommand(command_lib.BaseCommand):
       'Z': 10
   }
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, msg):
     logging.info('Scrabbling: "%s"', msg)
     scrabble_msg = ''.join(msg.upper().split())
@@ -398,17 +389,17 @@ class ScrabbleCommand(command_lib.BaseCommand):
 
 @command_lib.RegexParser(r'¯\\_\(ツ\)_/¯')
 @command_lib.CommandRegexParser(r'shrug(?:gie)?')
-class ShruggieCommand(command_lib.BaseCommand):
+class ShruggieCommand(command_lib.TextCommand):
 
-  @command_lib.MainChannelOnly
-  def _Handle(self, channel, unused_user):
-    return r'¯\ˍ(ツ)ˍ/¯'
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': [r'¯\ˍ(ツ)ˍ/¯'],
+      })
 
 
 @command_lib.CommandRegexParser(r'sticks?')
 class SticksCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user):
     stick_description = messages.SPECIAL_STICK_USERS.get(user, 'stick')
     action_msg = '%s bangs two %ss together.' % (user, stick_description)
@@ -486,6 +477,11 @@ class StoryCommand(command_lib.BasePublicCommand):
 
 @command_lib.CommandRegexParser(r'version')
 class VersionCommand(command_lib.BaseCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _Handle(self, channel, unused_user):
     return '%s(c) Version %s. #%sVersionHype' % (
