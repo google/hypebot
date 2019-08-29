@@ -36,7 +36,7 @@ class TriviaAddCommand(command_lib.BaseCommand):
 class TriviaAnswerCommand(command_lib.BasePublicCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'main_channel_only': False,
       })
 
