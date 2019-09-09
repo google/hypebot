@@ -809,8 +809,8 @@ class EsportsLib(object):
     self._timezone = rito_tz
 
     self._providers = [
-        GrumbleProvider(self._proxy, 'D1', stats_enabled=True),
-        GrumbleProvider(self._proxy, 'D2', stats_enabled=True),
+        BattlefyProvider(self._proxy, '5d58669ea837004f58b095ad', 'CEA',
+                         stats_enabled=True),
         RitoProvider(self._proxy, 'IN', 'worlds',
                      aliases=['International', 'Worlds'],
                      stats_enabled=False),
