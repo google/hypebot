@@ -133,6 +133,10 @@ message QueueType {
     CLASH = 700;
     // Nexus Blitz!
     NEXUS_BLITZ = 1200;
+    // Teamfight Tactics
+    TFT = 1090;
+    // Ranked Teamfight Tactics
+    RANKED_TFT = 1100;
   }
 }
 
