@@ -158,7 +158,8 @@ class WhoCommand(_BaseSummonerCommand):
       info += ' [' + ', '.join(extra_info) + ']'
     if team_data:
       rank = team_data.rank
-      info += ' [(%s) %s, %d%s]' % (team_data.team.league_id,
+      league = self._core.esports.leagues[team_data.team.league_id]
+      info += ' [(%s) %s, %d%s]' % (league.name,
                                     team_data.team.name, rank,
                                     inflect_lib.Ordinalize(rank))
     return info
