@@ -13,9 +13,9 @@
 // limitations under the License.
 syntax = "proto3";
 
-package hypebot.riot.v3;
+package hypebot.riot.v4;
 
-import "hypebot/protos/riot/v3/constants.proto";
+import "hypebot/protos/riot/v4/constants.proto";
 
 service LeagueService {
   rpc ListLeaguePositions(ListLeaguePositionsRequest)
@@ -24,7 +24,7 @@ service LeagueService {
 }
 
 message ListLeaguePositionsRequest {
-  int64 summoner_id = 1;
+  string encrypted_summoner_id = 1;
 }
 
 message ListLeaguePositionsResponse {
@@ -51,13 +51,16 @@ message LeaguePosition {
   int32 wins = 5;
   bool veteran = 6;
   int32 losses = 7;
-  string player_or_team_id = 8;
-  string league_name = 9;
-  string player_or_team_name = 10;
+  // Encrypted.
+  string summoner_id = 8;
+  string league_id = 9;
+  string summoner_name = 10;
   bool inactive = 11;
   bool fresh_blood = 12;
   Tier.Enum tier = 13;
   int32 league_points = 14;
+  string league_name = 15;
+  string position = 16;
 }
 
 message MiniSeries {

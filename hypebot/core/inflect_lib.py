@@ -24,9 +24,28 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import inflection
+from typing import AnyStr
 
 
-def Ordinalize(number: int) -> str:
+def AddIndefiniteArticle(noun: AnyStr) -> AnyStr:
+  """Formats a noun with an appropriate indefinite article.
+
+  Does not handle advanced cases, e.g. "hour" or other soft consonents.
+
+  Args:
+    noun: A string representing a noun.
+
+  Returns:
+    A string containing noun prefixed with an indefinite article, e.g.,
+    "a thing" or "an object".
+  """
+  if noun[0] in ('a', 'e', 'i', 'o', 'u'):
+    return 'an ' + noun
+  else:
+    return 'a ' + noun
+
+
+def Ordinalize(number: int) -> AnyStr:
   """Converts an int into the ordinal string representation.
 
   Args:
@@ -46,7 +65,7 @@ def Ordinalize(number: int) -> str:
     return 'th'
 
 
-def Plural(quantity: int, noun: str, plural: str = None) -> str:
+def Plural(quantity: int, noun: AnyStr, plural: AnyStr = None) -> AnyStr:
   """Formats a quanity of a noun correctly.
 
   Args:

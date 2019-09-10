@@ -48,7 +48,6 @@ class _BaseDeployCommand(command_lib.BaseCommand):
     # LogAndOutput, it is intended for HBDS.
     self._core.output_util.LogAndOutput(logging.WARN, channel, msg.strip())
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self,
               channel: Channel,
@@ -116,7 +115,7 @@ class PushCommand(_BaseDeployCommand):
                     user: str,
                     cl: int,
                     bot_name: str) -> hypecore.MessageType:
-    if bot_name == self._core.nick:
+    if bot_name == self._core.name.lower():
       info_str = 'I\'m going to reload myself. The future is now.'
     else:
       info_str = 'Initiating reload for %s.' % bot_name
@@ -131,7 +130,6 @@ class PushCommand(_BaseDeployCommand):
 class SetSchemaCommand(_BaseDeployCommand):
   """Updates the storage schema if applicable."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: Channel,
               user: str,
@@ -160,4 +158,3 @@ class TestCommand(_BaseDeployCommand):
       return 'Running tests, I\'ll let you know when they\'re finished'
     else:
       self._DeployActionInProgress(channel, bot_name)
-

@@ -28,6 +28,7 @@ from hypebot.interfaces import interface_lib
 # Importing commands registers them with factory.
 import hypebot.interfaces.capture_interface
 import hypebot.interfaces.discord_interface
+import hypebot.interfaces.terminal_interface
 # pylint: enable=usused-import
 
 

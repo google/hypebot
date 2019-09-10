@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""rito_lib is a wrapper around Riot API v3.
+"""rito_lib is a wrapper around Riot API v4.
 
 Due to the deprecation of the static data API, we use data dragon and mimic the
 old response from the static-data-api.
@@ -23,7 +23,7 @@ usage:
 
   # wrappers for api calls.
   s.GetSummoner(region, summoner_name)
-  s.GetSummonerById(region, summoner_id)
+  s.GetSummonerBySummonerId(region, summoner_id)
   s.ListLeaguePositions(region, summoner_id)
   s.ListChampionMasteries(region, summoner_id)
   s.GetChampionMastery(region, summoner_id, champ_id)
@@ -44,15 +44,15 @@ import os
 import six
 
 from hypebot.protos.riot import platform_pb2
-from hypebot.protos.riot.v3 import champion_mastery_pb2
-from hypebot.protos.riot.v3 import champion_mastery_pb2_grpc
-from hypebot.protos.riot.v3 import league_pb2
-from hypebot.protos.riot.v3 import league_pb2_grpc
-from hypebot.protos.riot.v3 import match_pb2
-from hypebot.protos.riot.v3 import match_pb2_grpc
+from hypebot.protos.riot.v4 import champion_mastery_pb2
+from hypebot.protos.riot.v4 import champion_mastery_pb2_grpc
+from hypebot.protos.riot.v4 import league_pb2
+from hypebot.protos.riot.v4 import league_pb2_grpc
+from hypebot.protos.riot.v4 import match_pb2
+from hypebot.protos.riot.v4 import match_pb2_grpc
 from hypebot.protos.riot.v3 import static_data_pb2
-from hypebot.protos.riot.v3 import summoner_pb2
-from hypebot.protos.riot.v3 import summoner_pb2_grpc
+from hypebot.protos.riot.v4 import summoner_pb2
+from hypebot.protos.riot.v4 import summoner_pb2_grpc
 
 PLATFORM_IDS = {
     'br': platform_pb2.BR1,
@@ -174,37 +174,52 @@ class RitoLib(object):
                     e)
 
   def GetSummoner(self, region, summoner_name):
-    return self._CallApi(self._summoner_service.GetSummoner,
-                         summoner_pb2.GetSummonerRequest(name=summoner_name),
-                         region)
+    return self._CallApi(
+        self._summoner_service.GetSummoner,
+        summoner_pb2.GetSummonerRequest(summoner_name=summoner_name), region)
 
-  def GetSummonerById(self, region, summoner_id):
-    return self._CallApi(self._summoner_service.GetSummoner,
-                         summoner_pb2.GetSummonerRequest(id=summoner_id),
-                         region)
+  def GetSummonerBySummonerId(self, region, encrypted_summoner_id):
+    return self._CallApi(
+        self._summoner_service.GetSummoner,
+        summoner_pb2.GetSummonerRequest(
+            encrypted_summoner_id=encrypted_summoner_id), region)
 
-  def ListLeaguePositions(self, region, summoner_id):
+  def GetSummonerByAccountId(self, region, encrypted_account_id):
+    return self._CallApi(
+        self._summoner_service.GetSummoner,
+        summoner_pb2.GetSummonerRequest(
+            encrypted_account_id=encrypted_account_id), region)
+
+  def GetSummonerByPuuid(self, region, encrypted_puuid):
+    return self._CallApi(
+        self._summoner_service.GetSummoner,
+        summoner_pb2.GetSummonerRequest(encrypted_puuid=encrypted_puuid),
+        region)
+
+  def ListLeaguePositions(self, region, encrypted_summoner_id):
     return self._CallApi(
         self._league_service.ListLeaguePositions,
-        league_pb2.ListLeaguePositionsRequest(summoner_id=summoner_id), region)
+        league_pb2.ListLeaguePositionsRequest(
+            encrypted_summoner_id=encrypted_summoner_id), region)
 
-  def ListChampionMasteries(self, region, summoner_id):
+  def ListChampionMasteries(self, region, encrypted_summoner_id):
     return self._CallApi(
         self._champion_mastery_service.ListChampionMasteries,
         champion_mastery_pb2.ListChampionMasteriesRequest(
-            summoner_id=summoner_id), region)
+            encrypted_summoner_id=encrypted_summoner_id), region)
 
-  def GetChampionMastery(self, region, summoner_id, champ_id):
+  def GetChampionMastery(self, region, encrypted_summoner_id, champ_id):
     return self._CallApi(
         self._champion_mastery_service.GetChampionMastery,
         champion_mastery_pb2.GetChampionMasteryRequest(
-            summoner_id=summoner_id, champion_id=champ_id), region)
+            encrypted_summoner_id=encrypted_summoner_id, champion_id=champ_id),
+        region)
 
-  def ListRecentMatches(self, region, account_id):
+  def ListRecentMatches(self, region, encrypted_account_id):
     return self._CallApi(
         self._match_service.ListMatches,
-        match_pb2.ListMatchesRequest(account_id=account_id, end_index=20),
-        region)
+        match_pb2.ListMatchesRequest(
+            encrypted_account_id=encrypted_account_id, end_index=20), region)
 
   def GetMatch(self, region, game_id):
     return self._CallApi(

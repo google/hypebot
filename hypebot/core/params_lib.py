@@ -19,6 +19,9 @@ HypeParams is a class for managing parameters with the following goals.
 2. Overridable. Both by subclasses and at initialization.
 3. Lockable. Once fully initialized, they should be constant.
 4. Accessible. Dot notation is more readable than dict access with strings.
+
+Parameter keys ending with `channel` or `channels` are special and converted
+into Channel protos.
 """
 
 from __future__ import absolute_import
@@ -29,7 +32,68 @@ from __future__ import unicode_literals
 import json
 import os
 
+from absl import logging
+from hypebot.protos import channel_pb2
 import six
+
+
+def _ParseChannel(channel):
+  """Parse a single messy definition of a channel into a Channel proto.
+
+  Parsing:
+    * If a Channel, return as is.
+    * If a string, convert into a public channel with id equal to the string.
+    * If a dictionary or HypeParams object, convert into a public channel with
+      the matching fields set.
+
+  Args:
+    channel: The messy object to convert into a channel.
+
+  Returns:
+    Channel or None if it failed to parse.
+  """
+  if isinstance(channel, channel_pb2.Channel):
+    return channel
+  if isinstance(channel, HypeParams):
+    channel = channel.AsDict()
+  if isinstance(channel, dict):
+    try:
+      return channel_pb2.Channel(visibility=channel_pb2.Channel.PUBLIC,
+                                 **channel)
+    except KeyError:
+      logging.error('Failed to parse %s as a Channel', channel)
+      return None
+  if isinstance(channel, six.string_types):
+    return channel_pb2.Channel(visibility=channel_pb2.Channel.PUBLIC,
+                               id=channel, name=channel)
+  return None
+
+
+def _ParseChannels(channels):
+  """Parse channels from params.
+
+  In multiple places it is useful to specify a list of channels in HypeParams.
+  However, when parsing HypeParams, dictionaries within lists are treated as
+  dictionaries and not as HypeParams or as a definable proto type. This converts
+  a messy definition of channels within HypeParams into a consist list of actual
+  Channel protos.
+
+  Logic:
+    * If None, return None.
+    * If a non-list object, convert into a single element list.
+    * If a list, parse each element of the list into a channel.
+
+  Args:
+    channels: Messy definition of a list of channels.
+
+  Returns:
+    None or a List of Channel protos.
+  """
+  if channels is None:
+    return None
+  if isinstance(channels, list):
+    return filter(None, [_ParseChannel(channel) for channel in channels])
+  return filter(None, [_ParseChannel(channels)])
 
 
 class HypeParams(object):
@@ -47,6 +111,9 @@ class HypeParams(object):
     self._locked = False
     self.Override(defaults)
 
+  def __str__(self):
+    return str(self.AsDict())
+
   def Override(self, params):
     self._RaiseIfLocked()
     params_dict = self._ParseDict(params)
@@ -57,8 +124,20 @@ class HypeParams(object):
       self._AssignValueConvertDict(key, value)
 
   def _AssignValueConvertDict(self, key, value):
-    """Assigns value to key and converts dict values to HypeParams."""
-    if isinstance(value, dict):
+    """Assigns value to key and converts dict values to HypeParams.
+
+    Keys which end in `channel` or `channels` are special and get converted into
+    Channel protos.
+
+    Args:
+      key: Key to set in internal dictionary.
+      value: Value to assign to key in internal dictionary.
+    """
+    if key.endswith('channel'):
+      self.__dict__[key] = _ParseChannel(value)
+    elif key.endswith('channels'):
+      self.__dict__[key] = _ParseChannels(value)
+    elif isinstance(value, dict):
       if (not hasattr(self, key) or
           not isinstance(self.__dict__[key], HypeParams)):
         self.__dict__[key] = HypeParams()

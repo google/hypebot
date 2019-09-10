@@ -25,7 +25,9 @@ from __future__ import unicode_literals
 from typing import Dict, List, Text
 
 from hypebot.core import params_lib
+from hypebot.protos import stock_pb2
 from hypebot.stocks import stock_lib
+
 
 class IEXStock(stock_lib.StockLib):
   """Data provided for free by IEX."""
@@ -33,7 +35,9 @@ class IEXStock(stock_lib.StockLib):
   DEFAULT_PARAMS = params_lib.MergeParams(
       stock_lib.StockLib.DEFAULT_PARAMS,
       {
-          'base_url': 'https://api.iextrading.com/1.0/stock/market/batch',
+          'base_url': 'https://cloud.iexapis.com/v1/stock/market/batch',
+          # Sign up for token at iexcloud.io
+          'token': None,
       })
 
   def __init__(self, params, proxy):
@@ -41,22 +45,36 @@ class IEXStock(stock_lib.StockLib):
     self._proxy = proxy
 
   def Quotes(self,
-             symbols: List[Text]) -> Dict[Text, stock_lib.StockQuote]:
+             symbols: List[Text]) -> Dict[Text, stock_pb2.Quote]:
     """See StockLib.Quotes for details."""
     request_params = {
         'symbols': ','.join(symbols),
         'types': 'quote',
         'displayPercent': 'true',  # Keep string, not boolean.
+        'token': self._params.token,
     }
     response = self._proxy.FetchJson(self._params.base_url,
                                      params=request_params,
                                      force_lookup=True)
+
     stock_info = {}
     for symbol, data in response.items():
-      stock_info[symbol] = stock_lib.StockQuote(
-          price=data['quote'].get('latestPrice', 0),
-          change=data['quote'].get('change', 0),
-          percent=data['quote'].get('changePercent', 0))
+      quote = data['quote']
+
+      stock = stock_pb2.Quote(
+          symbol=symbol,
+          open=quote.get('open', 0),
+          close=quote.get('close', 0),
+          price=quote.get('latestPrice', 0),
+          change=quote.get('change', 0),
+          change_percent=quote.get('changePercent', 0))
+      realtime_price = quote.get('iexRealtimePrice')
+      if realtime_price and realtime_price != stock.price:
+        stock.extended_price = realtime_price
+        stock.extended_change = realtime_price - stock.price
+        stock.extended_change_percent = int(
+            float(stock.extended_change) / stock.price * 100 + 0.5)
+      stock_info[symbol] = stock
     return stock_info
 
   def History(self,
@@ -67,6 +85,7 @@ class IEXStock(stock_lib.StockLib):
         'symbols': ','.join(symbols),
         'types': 'chart',
         'range': span,
+        'token': self._params.token,
     }
     response = self._proxy.FetchJson(self._params.base_url,
                                      params=request_params,

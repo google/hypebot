@@ -34,7 +34,6 @@ def FormatStacks(item_params):
 @command_lib.CommandRegexParser(r'inventory ?(.+)?')
 class InventoryList(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, inventory_user):
     inventory_user = inventory_user or user
     if inventory_user == 'me':
@@ -56,7 +55,6 @@ class InventoryList(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'use (.+)')
 class InventoryUse(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   @command_lib.LimitPublicLines()
   def _Handle(self, channel, user, item_name):
     inventory = self._core.inventory.GetUserInventory(user)

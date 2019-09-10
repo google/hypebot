@@ -13,7 +13,7 @@
 // limitations under the License.
 syntax = "proto3";
 
-package hypebot.riot.v3;
+package hypebot.riot.v4;
 
 message Season {
   enum Enum {
@@ -29,6 +29,8 @@ message Season {
     SEASON2017 = 9;
     PRESEASON2018 = 10;
     SEASON2018 = 11;
+    PRESEASON2019 = 12;
+    SEASON2019 = 13;
   }
 }
 
@@ -127,8 +129,14 @@ message QueueType {
     ASSASSINATE_5x5 = 600;
     // Dark Star games
     DARKSTAR_3x3 = 610;
+    // Clash Weekend Tournament
+    CLASH = 700;
     // Nexus Blitz!
     NEXUS_BLITZ = 1200;
+    // Teamfight Tactics
+    TFT = 1090;
+    // Ranked Teamfight Tactics
+    RANKED_TFT = 1100;
   }
 }
 
@@ -143,6 +151,7 @@ message Tier {
     GOLD = 30;
     SILVER = 40;
     BRONZE = 50;
+    IRON = 60;
     UNRANKED = 100;
   }
 }

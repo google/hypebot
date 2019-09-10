@@ -43,6 +43,11 @@ flags.DEFINE_multi_string('spoiler_free_channels', ['#lol'], 'Channels where '
 @command_lib.CommandRegexParser(r'body ?(.*?)')
 class BodyCommand(command_lib.BaseCommand):
 
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
   def _Handle(self, channel, user, bodyer):
     if not bodyer:
       bodyer = 'Jensen'
@@ -56,58 +61,79 @@ class BodyCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'lcs-ch(a|u)mps (.+?)')
 class LCSPlayerStatsCommand(command_lib.BaseCommand):
 
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
+  def _FormatChamp(self, champ):
+    """Formats champ tuple to display name (wins-losses)."""
+    wins = champ[1].get('wins', 0)
+    losses = champ[1]['picks'] - wins
+    return '%s (%s-%s)' % (champ[0], wins, losses)
+
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, a_or_u, player):
     serious_output = a_or_u == 'a'
+    # First, attempt to parse the query against the summoner tracker. If it
+    # matches a username, then use it. The summoner tracker internally queries
+    # Rito if it doesn't find a username, so we ignore those since LCS is on a
+    # separate server and we don't want name conflicts.
+    summoner = (self._core.summoner_tracker.ParseSummoner(
+        user, None, None, player) or [{}])[0]
+    if summoner.get('username'):
+      player = summoner['summoner']
     player_name, player_data = self._core.esports.GetPlayerChampStats(player)
+    if summoner.get('username'):
+      player_name = '%s = %s' % (summoner['username'], player_name)
     if not player_name:
       return 'Unknown player. I can only give data about LCS players.'
     elif not player_data or not player_data['champs']:
       return '%s hasn\'t done much this split.' % player_name
 
-    champ_data = player_data['champs']
-    total_wins = player_data['num_games']['wins']
-    total_losses = player_data['num_games']['picks'] - total_wins
-    player_str = '%s (%s-%s)' % (player_name, total_wins, total_losses)
+    best_champs = sorted(
+        player_data['champs'].items(),
+        key=lambda x: (x[1].get('wins', 0), -x[1]['picks']),
+        reverse=True)
 
-    # Break ties in most_played by wins
-    champs = sorted(champ_data.items(), key=lambda x: x[1].get('wins', 0))
-    most_played_champ = sorted(champs, key=lambda x: x[1]['picks'])[-1][0]
-    most_played_champ_wins = champ_data[most_played_champ]['wins']
-    most_played_champ_losses = champ_data[most_played_champ][
-        'picks'] - most_played_champ_wins
-    most_played_champ_str = '%s (%s-%s)' % (
-        most_played_champ, most_played_champ_wins, most_played_champ_losses)
-
-    # Break ties in best_champ by picks
-    champs = sorted(champ_data.items(), key=lambda x: x[1]['picks'])
-    best_champ = sorted(champs, key=lambda x: x[1]['wins'])[-1][0]
-    best_champ_wins = champ_data[best_champ]['wins']
-    best_champ_losses = champ_data[best_champ]['picks'] - best_champ_wins
-    best_champ_str = '%s (%s-%s)' % (best_champ, best_champ_wins,
-                                     best_champ_losses)
     if serious_output:
-      return '{}: Most Wins: {}, Most Played: {}.'.format(
-          player_str, best_champ_str, most_played_champ_str)
+      output = [
+          '%s:' % self._FormatChamp((player_name, player_data['num_games']))
+      ]
+      output.extend(
+          ['* %s' % self._FormatChamp(champ) for champ in best_champs[:5]])
+      return output
     elif player_name == 'G2 Perkz':
-      # Break ties in worst_champ by picks
-      champs = sorted(champ_data.items(), key=lambda x: x[1]['picks'])
+      # Worst isn't the opposite order of best since more losses is worse than
+      # fewer wins.
       worst_champ = sorted(
-          champs, key=lambda x: x[1]['picks'] - x[1].get('wins', 0))[-1][0]
-      worst_champ_wins = champ_data[worst_champ].get('wins', 0)
-      worst_champ_losses = champ_data[worst_champ]['picks'] - worst_champ_wins
-      worst_champ_str = '%s (%s-%s)' % (worst_champ, worst_champ_wins,
-                                        worst_champ_losses)
-      return ('My {} is bad, my {} is worse; you guessed right, I\'m G2 Perkz'.
-              format(worst_champ_str, 'Azir' if user == 'koelze' else 'Ryze'))
+          player_data['champs'].items(),
+          key=lambda x: (x[1]['picks'] - x[1].get('wins', 0), -x[1]['picks']),
+          reverse=True)[0]
+      return ('My {} is bad, my {} is worse; you guessed right, I\'m G2 Perkz'
+              .format(
+                  self._FormatChamp(worst_champ),
+                  'Azir' if user == 'koelze' else 'Ryze'))
     else:
+      most_played_champ = sorted(
+          player_data['champs'].items(),
+          key=lambda x: (x[1]['picks'], x[1].get('wins', 0)),
+          reverse=True)[0]
       return (
           'My {} is fine, my {} is swell; you guessed right, I\'m {} stuck in '
-          'LCS hell').format(best_champ_str, most_played_champ_str, player_str)
+          'LCS hell').format(
+              self._FormatChamp(best_champs[0]),
+              self._FormatChamp(most_played_champ),
+              self._FormatChamp((player_name, player_data['num_games'])))
 
 
 @command_lib.CommandRegexParser(r'lcs-link')
 class LCSLivestreamLinkCommand(command_lib.BaseCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _Handle(self, channel, user):
     livestream_links = self._core.esports.GetLivestreamLinks()
@@ -130,6 +156,7 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
           # How soon before an LCS match to send a notification to subscribed
           # channels.
           'match_notification_sec': 15 * 60,
+          'main_channel_only': False,
       })
 
   def __init__(self, *args):
@@ -165,7 +192,8 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
     if self._core.esports.brackets[match.bracket_id].is_playoffs:
       topic = 'lcs_match_playoffs'
 
-    blue, red = (match.blue, match.red)
+    blue = self._core.esports.MatchTeamName(match.blue)
+    red = self._core.esports.MatchTeamName(match.red)
     if blue and red:
       match_name = '%s v %s' % (blue, red)
     else:
@@ -177,7 +205,7 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
       livestream_str = 'Watch at %s' % livestream_link
       self._core.interface.Topic(
           self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
-    self._core.SendNotification(
+    self._core.PublishMessage(
         topic, u'%s is starting soon. %s and get #Hyped!' %
         (match_name, livestream_str))
 
@@ -186,6 +214,11 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
     r'lcs-p(?:ick)?b(?:an)?-?(\w+)? (.+?) ?([v|^]?)')
 class LCSPickBanRatesCommand(command_lib.BaseCommand):
   """Better stats than LCS production."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _PopulatePickBanChampStr(self, champ_str, champ, stats, subcommand,
                                num_games):
@@ -313,6 +346,11 @@ class LCSScheduleCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'num_games': 5,
           'full_num_games': 10,
       })
@@ -342,7 +380,10 @@ class LCSScheduleCommand(command_lib.BaseCommand):
 class LCSStandingsCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {'default_region': 'NA'})
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'default_region': 'NA',
+          'main_channel_only': False
+      })
 
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, query):
@@ -351,7 +392,7 @@ class LCSStandingsCommand(command_lib.BaseCommand):
       return 'pls no spoilerino'
     query = query.split()
     league = query[0] if query else self._params.default_region
-    bracket = ' '.join(query[1:]) if len(query) > 1 else 'season'
+    bracket = ' '.join(query[1:]) if len(query) > 1 else 'regular'
 
     return self._core.esports.GetStandings(league, bracket)
 
@@ -363,6 +404,7 @@ class LCSResultsCommand(command_lib.BaseCommand):
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'num_games': 5,
           'full_num_games': 10,
+          'main_channel_only': False,
       })
 
   @command_lib.RequireReady('_core.esports')
@@ -382,6 +424,11 @@ class LCSResultsCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'roster(full)?(?:-(\w+))? (.+?)')
 class LCSRosterCommand(command_lib.BaseCommand):
   """Display players and their roles."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   # A map of actual player names to what their name should be displayed as.
   # You know, for memes.
@@ -408,6 +455,11 @@ class LCSRosterCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'rooster(full)? (.+?)')
 class LCSRoosterCommand(command_lib.BaseCommand):
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   def _Handle(self, channel, user, include_sub, team):
     team = team.upper()

@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +37,46 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
 from hypebot.plugins import coin_lib
+from hypebot.plugins import inventory_lib
+
+
+@command_lib.PublicParser
+class AutoReplySnarkCommand(command_lib.BasePublicCommand):
+  """Auto-reply to auto-replies."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'probability': 0.25,
+      })
+
+  _AUTO_REPLIES = [
+      'Much appreciated',
+      'Works fine',
+      'Good point',
+      'Agreed',
+      'Ouch',
+      'Neat!',
+      'Congrats!',
+      'Do it',
+      'Me too',
+      'Noted!',
+      'lol',
+      'Wow, thanks...',
+      '💩',
+      '💪',
+      '😬',
+      '🔥',
+      'Cool story, bro',
+  ]
+
+  def __init__(self, *args):
+    super(AutoReplySnarkCommand, self).__init__(*args)
+    self._regex = re.compile(r' \((auto|auto-reply|ar)\)$')
+
+  def _Handle(self, channel, user, message):
+    match = self._regex.search(message)
+    if match and random.random() < self._params.probability:
+      return '%s (%s)' % (random.choice(self._AUTO_REPLIES), match.groups()[0])
 
 
 _SongLine = collections.namedtuple('SongLine', 'state lyric pattern')
@@ -85,11 +126,11 @@ class CookieJarCommand(command_lib.BasePublicCommand):
 
   def _BotIsAccusor(self):
     with self._lock:
-      return self._accusor == self._core.nick
+      return self._accusor == self._core.name
 
   def _BotIsAccused(self):
     with self._lock:
-      return self._accused == self._core.nick
+      return self._accused == self._core.name
 
   def _NextLine(self, channel):
     with self._lock:
@@ -111,7 +152,6 @@ class CookieJarCommand(command_lib.BasePublicCommand):
           self._Reply(channel, line.lyric)
         self._NextLine(channel)
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     with self._lock:
       if (self._cookie and
@@ -128,7 +168,7 @@ class CookieJarCommand(command_lib.BasePublicCommand):
               return
             self._cookie = match.groups()[1]
             self._accusor = user
-            self._accused = self._core.nick
+            self._accused = self._core.name
           elif user == self._accusor and match.groups()[1] == self._cookie:
             self._accused = match.groups()[0].lower()
 
@@ -138,15 +178,37 @@ class CookieJarCommand(command_lib.BasePublicCommand):
 
 
 @command_lib.PublicParser
+class EggHunt(command_lib.BasePublicCommand):
+  """Gotta find them all."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'find_chance': 0.05,
+          'main_channel_only': False,
+      })
+
+  def _Handle(self, channel, user, message):
+    if random.random() < self._params.find_chance:
+      item = inventory_lib.Create('HypeEgg', self._core, user, {})
+      self._core.inventory.AddItem(user, item)
+      return '%s found a(n) %s' % (user, item.human_name)
+
+
+@command_lib.PublicParser
 class GreetingsCommand(command_lib.BasePublicCommand):
   """Greet users who acknowledge hypebot's presence."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
-          'ratelimit': {'enabled': True, 'return_only': True},
-          # Whether or not to greet users who don't explictly greet hypebot.
-          # Still grants paycheck.
-          'greet_users_on_activity': True
+      command_lib.BasePublicCommand.DEFAULT_PARAMS,
+      {
+          'ratelimit': {
+              'enabled': True,
+              'return_only': True
+          },
+          'main_channel_only': False,
+          # Channels where we greet users who don't explictly greet hypebot.
+          # Still grants paychecks in all other channels.
+          'greet_channels': []
       })
 
   def _Handle(self, channel, user, message):
@@ -159,28 +221,30 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     #  * The user is not named like a subaccount
     if all((not self._core.params.execution_mode.dev,
             self._core.cached_store,
-            command_lib.IsMainChannel(channel, self._core.params.main_channels),
+            util_lib.MatchesAny(self._core.params.main_channels, channel),
             not self._core.user_tracker.IsBot(user),
             not coin_lib.IsSubAccount(user))):
       got_paid = self._DeliverPaycheck(user)
 
     # TODO: This and below don't really belong here.
-    if re.search(r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
-                 (self._core.nick, channel.name), message):
+    if re.search(
+        r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
+        (self._core.name, channel.name), message):
       return 'And flights of angels sing thee to thy rest, {}'.format(user)
 
-    if re.search(r'(?i)oh,? %s(\..*)?\s*$' % self._core.nick, message):
+    if re.search(r'(?i)oh,? %s(\..*)?\s*$' % self._core.name, message):
       return messages.OH_STRING
 
     # Keeping the optional # in the regex supports IRC channels.
-    match = re.search(r'(?i)(morning|afternoon|evening),? (%s|#?%s)' % (
-        self._core.nick, channel.name), message)
+    match = re.search(
+        r'(?i)(morning|afternoon|evening),? (%s|#?%s)' %
+        (self._core.name, channel.name), message)
     if match:
       return self._BuildGreeting(user, match.group(1))
 
     # If we didn't give user a paycheck, they can't get a greeting for just
     # talking. They must explictly greet hypebot.
-    if self._params.greet_users_on_activity and got_paid:
+    if got_paid and util_lib.MatchesAny(self._params.greet_channels, channel):
       return self._BuildGreeting(user)
 
   def _DeliverPaycheck(self, user):
@@ -238,10 +302,8 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     except Exception as e:
       logging.info('GreetingCommand exception: %s', e)
       self._core.bets.FineUser(user, 100, 'Bad greeting', self._Reply)
-      return (
-          '%s has an invalid greeting and feels bad for trying to '
-          'break %s' % (user, self._core.nick)
-      )
+      return ('%s has an invalid greeting and feels bad for trying to '
+              'break %s' % (user, self._core.name))
 
 
 @command_lib.PublicParser
@@ -264,7 +326,8 @@ class HypeCommand(command_lib.BaseCommand):
           'ratelimit': {
               'scope': 'CHANNEL',
               'return_only': True,
-          }
+          },
+          'main_channel_only': False,
       })
 
   def __init__(self, *args):
@@ -279,7 +342,7 @@ class HypeCommand(command_lib.BaseCommand):
   def _Handle(self, channel, user, message):
     if message == 'hype':
       # Fake the hype so it can still trigger easter eggs.
-      message = '#%sHype' % self._core.params.name
+      message = '#%sHype' % self._core.name
 
     hypes = []
     responses = []
@@ -300,7 +363,7 @@ class HypeCommand(command_lib.BaseCommand):
         }
         self._dogers[user] = t
         if random.randint(0, 100) == 42:
-          responses.append(messages.PROSE_HYPE)
+          responses.append(messages.PROSE_HYPE % self._core.name)
         if len(self._dogers) >= self._params.doge_num_hypers:
           if (t - self._last_doge.get(channel.id, 0) >=
               self._params.doge_rate_seconds):
@@ -338,32 +401,33 @@ class MissingPingCommand(command_lib.BasePublicCommand):
   """Flame teammates."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BasePublicCommand.DEFAULT_PARAMS,
-      {'ratelimit': {
-          'enabled': True,
-          'interval': 2,
-          'return_only': True
-      }})
+      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+          'ratelimit': {
+              'enabled': True,
+              'interval': 2,
+              'return_only': True
+          },
+      })
 
   def __init__(self, *args):
     super(MissingPingCommand, self).__init__(*args)
     self._last_user = collections.defaultdict(str)
     self._regex = re.compile(r'^\?+(.*)')
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     ping_match = self._regex.match(message)
     if ping_match:
       ping_target = ping_match.groups()[0].strip()
       missing_str = 'enemies are'
       if ping_target:
-        if util_lib.CanonicalizeName(ping_target) == self._core.nick:
+        if util_lib.CanonicalizeName(ping_target) == self._core.name.lower():
           ping_target = user
         missing_str = '%s is' % ping_target
         self._last_user[channel.id] = ping_target
       elif self._last_user[channel.id]:
         missing_str = '%s is' % self._last_user[channel.id]
-      return '\x01ACTION signals that %s missing\x01' % missing_str
+      return '%s signals that %s missing' % (self._core.params.name,
+                                             missing_str)
     elif self._core.user_tracker.IsHuman(user):
       self._last_user[channel.id] = user
 
@@ -395,7 +459,6 @@ class SayCommand(command_lib.BasePublicCommand):
     self._phrases = collections.defaultdict(
         lambda: collections.defaultdict(dict))
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, message):
     match = self._regex.search(message)
     if match:
@@ -422,4 +485,3 @@ class SayCommand(command_lib.BasePublicCommand):
           self._phrases[channel.id][speaker][message] = say
         # Short circuit so we only get one response.
         return responses
-

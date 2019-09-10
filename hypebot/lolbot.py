@@ -35,7 +35,6 @@ from hypebot.plugins.league import items_lib
 from hypebot.plugins.league import rito_lib
 from hypebot.plugins.league import summoner_lib
 from hypebot.plugins.league import trivia_lib
-from hypebot.protos.channel_pb2 import Channel
 
 FLAGS = flags.FLAGS
 
@@ -106,8 +105,7 @@ class HypeBot(basebot.BaseBot):
 
   def __init__(self, params):
     super(HypeBot, self).__init__(params)
-    for chan in self._params.trivia_channels:
-      channel = Channel(visibility=Channel.PUBLIC, **chan)
+    for channel in self._params.trivia_channels:
       self._core.trivia.MakeNewChannel(channel)
 
     # Place LCS gambling first, so it beats Stock to taking the game.
@@ -128,31 +126,10 @@ class HypeBot(basebot.BaseBot):
         self._core.proxy, self._core.executor, self._core.game,
         self._core.timezone)
     self._core.items = items_lib.ItemsLib(self._core.rito)
-    self._core.lcs_channel = Channel(visibility=Channel.PUBLIC,
-                                     **self._params.lcs_channel.AsDict())
+    self._core.lcs_channel = self._params.lcs_channel
     # Trivia can probably be self contained once multiple parsers exist.
     self._core.trivia = trivia_lib.TriviaMaster(self._core.game,
-                                                self._OnNewTriviaQuestion,
-                                                self._OnTriviaQuestionDone,
-                                                self._OnTriviaLeaderboard)
-
-  ########################
-  ### Trivia callbacks ###
-  ########################
-
-  def _OnNewTriviaQuestion(self, channel, question):
-    self._core.Reply(channel, question.GetQuestionText())
-
-  def _OnTriviaQuestionDone(self, channel, user, question):
-    if user:
-      self._core.Reply(channel, '%s got it! Answer was: %s' %
-                       (user, question.GetAnswer()))
-    else:
-      self._core.Reply(channel,
-                       'Time\'s up! Answer was: %s' % question.GetAnswer())
-
-  def _OnTriviaLeaderboard(self, channel, leaderboard):
-    self._core.Reply(channel, leaderboard.Results())
+                                                self._core.Reply)
 
   ##############################
   ### Private helper methods ###
@@ -160,7 +137,7 @@ class HypeBot(basebot.BaseBot):
 
   def _GetRitoLib(self):
     api_key = (self._params.riot.api_key or
-               self._core.store.GetValue('api_key', 'key'))
+               self._core.store.GetValue('riot_api_key', 'api_key'))
     if not api_key:
       logging.fatal('Rito API key failed to load.')
     channel = grpc.insecure_channel(self._params.riot.api_address)
@@ -169,10 +146,11 @@ class HypeBot(basebot.BaseBot):
   @command_lib.RequireReady('_core.esports')
   def _LCSGameCallback(self):
     self._core.esports.UpdateEsportsMatches()
-    notifications = self._core.bets.SettleBets(
-        self._lcs_game, self._core.nick, self._Reply)
+    notifications = self._core.bets.SettleBets(self._lcs_game,
+                                               self._core.name.lower(),
+                                               self._core.Reply)
     if notifications:
-      self._core.SendNotification('lcs_bets', notifications)
+      self._core.PublishMessage('lcs_bets', notifications)
 
 
 def main(argv):
@@ -184,4 +162,3 @@ def main(argv):
 
 if __name__ == '__main__':
   app.run(main)
-

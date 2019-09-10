@@ -13,7 +13,7 @@
 // limitations under the License.
 syntax = "proto3";
 
-package hypebot.riot.v3;
+package hypebot.riot.v4;
 
 service SummonerService {
   rpc GetSummoner(GetSummonerRequest) returns (Summoner) {}
@@ -21,15 +21,20 @@ service SummonerService {
 
 message GetSummonerRequest {
   oneof key {
-    int64 id = 1;
-    int64 account_id = 2;
-    string name = 3;
+    string encrypted_summoner_id = 1;
+    string encrypted_account_id = 2;
+    string summoner_name = 3;
+    string encrypted_puuid = 4;
   }
 }
 
 message Summoner {
-  int64 id = 1;
-  int64 account_id = 2;
+  // Encrypted Summoner ID.
+  string id = 1;
+  // Encrypted.
+  string account_id = 2;
+  // Encrypted.
+  string puuid = 7;
   string name = 3;
 
   int64 revision_date = 4;

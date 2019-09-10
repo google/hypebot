@@ -39,30 +39,61 @@ from hypebot.protos.channel_pb2 import Channel
 @command_lib.CommandRegexParser(r'8ball (.+)')
 class AskFutureCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, question):
     if not question:
       return 'You must ask a question.'
     return random.choice(messages.BALL_ANSWERS)
 
 
+@command_lib.CommandRegexParser(r'coin-(flip|toss)')
+class CoinFlipCommand(command_lib.BaseCommand):
+  """Throw currency around."""
+
+  def _Handle(self, channel, user, verb):
+    action = 'flips' if verb == 'flip' else 'tosses'
+    coin_side = 'heads' if random.random() >= 0.5 else 'tails'
+    return '%s %s a coin, it lands on %s!' % (self._core.name, action,
+                                              coin_side)
+
+
+@command_lib.CommandRegexParser(r'debug (.+)')
+class DebugCommand(command_lib.BaseCommand):
+
+  @command_lib.PrivateOnly
+  def _Handle(self, channel, user, subcommand):
+    subcommand = subcommand.lower().strip()
+    subcommands = subcommand.split('.')
+    obj = self._core
+    while subcommands:
+      token = subcommands.pop(0)
+      available_properties = obj.__dict__
+      if token in available_properties:
+        try:
+          obj = getattr(obj, token)
+        except AttributeError:
+          logging.warning('Tried to access %s on %s with ap: %s', token, obj,
+                          available_properties)
+          return str(obj)
+      else:
+        return 'Unknown property: %s' % subcommand
+    return str(obj)
+
+
 @command_lib.CommandRegexParser(r'disappoint (.+?)')
 class DisappointCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, son):
     normalized_son = util_lib.CanonicalizeName(son)
     if normalized_son == 'me':
       son = user
-    if normalized_son == self._core.nick:
-      return '\x01ACTION feels its shame deeply\x01'
+    if normalized_son == self._core.name.lower():
+      return '%s feels its shame deeply' % self._core.params.name
     return '%s, I am disappoint.' % son
 
 
 @command_lib.CommandRegexParser(r'unlock (.+?)')
 class PrideAndAccomplishmentCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, unlockable):
     return ('The intent is to provide players with a sense of pride and '
             'accomplishment for unlocking different %s.') % unlockable
@@ -71,7 +102,6 @@ class PrideAndAccomplishmentCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'energy (.+?)')
 class EnergyCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user, energy_target):
     return '༼ つ ◕_◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕_◕ ༽つ' % energy_target
 
@@ -85,6 +115,10 @@ class JackpotCommand(command_lib.BaseCommand):
       {
           # Time to settle lottery [hour, minute, second].
           'lottery_time': [12, 0, 0],
+          # A maximum number of seconds to randomly offset the actual lottery
+          # settle time. Note that this number is added or subtracted from the
+          # lottery_time above.
+          'max_jitter_secs': 5,
           # Warning times in seconds before lottery_time.
           'warnings': [60, 3600],
       })
@@ -97,7 +131,7 @@ class JackpotCommand(command_lib.BaseCommand):
     lotto_time = util_lib.ArrowTime(*self._params.lottery_time,
                                     tz=self._core.timezone)
     self._core.scheduler.DailyCallback(
-        lotto_time, self._LotteryCallback, _jitter=10)
+        lotto_time, self._LotteryCallback, _jitter=self._params.max_jitter_secs)
     for warning_sec in self._params.warnings:
       warning_offset = timedelta(seconds=warning_sec)
       warning_time = lotto_time - warning_offset
@@ -105,22 +139,24 @@ class JackpotCommand(command_lib.BaseCommand):
           warning_time, self._LotteryWarningCallback, warning_offset,
           _jitter=0)
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, unused_user):
-    pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
+    pool = self._core.bets.LookupBets(
+        self._game.name, resolver=self._core.name.lower())
     jackpot, item = self._game.ComputeCurrentJackpot(pool)
-    responses = ['Current jackpot is %s and a(n) %s' % (
-        util_lib.FormatHypecoins(jackpot), item.human_name)]
+    item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
+    responses = ['Current jackpot is %s and %s' % (
+        util_lib.FormatHypecoins(jackpot), item_str)]
     for bet_user, user_bets in pool.items():
       for bet in user_bets:
         responses.append('- %s, %s' % (bet_user, self._game.FormatBet(bet)))
     return responses
 
   def _LotteryCallback(self):
-    notifications = self._core.bets.SettleBets(
-        self._game, self._core.nick, self._Reply)
+    notifications = self._core.bets.SettleBets(self._game,
+                                               self._core.name.lower(),
+                                               self._Reply)
     if notifications:
-      self._core.SendNotification('lottery', notifications)
+      self._core.PublishMessage('lottery', notifications)
 
   def _LotteryWarningCallback(self, remaining=None):
     logging.info('Running lottery warning callback.')
@@ -128,66 +164,67 @@ class JackpotCommand(command_lib.BaseCommand):
     if remaining is not None:
       warning_str += 'The lottery winner will be drawn in %s! ' % (
           util_lib.TimeDeltaToHumanDuration(remaining))
-    pool = self._core.bets.LookupBets(self._game.name, resolver=self._core.nick)
+    pool = self._core.bets.LookupBets(
+        self._game.name, resolver=self._core.name.lower())
     coins, item = self._game.ComputeCurrentJackpot(pool)
-    warning_str += 'Current jackpot is %s and a(n) %s' % (
-        util_lib.FormatHypecoins(coins), item.human_name)
-    self._core.SendNotification('lottery', warning_str)
+    item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
+    warning_str += 'Current jackpot is %s and %s' % (
+        util_lib.FormatHypecoins(coins), item_str)
+    self._core.PublishMessage('lottery', warning_str)
 
 
 @command_lib.CommandRegexParser(r'mains?')
 class MainCommand(command_lib.BaseCommand):
 
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
   def _Handle(self, channel, user):
     if (channel.visibility == Channel.PRIVATE or
-        command_lib.IsMainChannel(channel, self._core.params.main_channels)):
-      if channel.id.strip('#') == self._core.nick:
+        util_lib.MatchesAny(self._core.params.main_channels, channel)):
+      if channel.id.strip('#') == self._core.name.lower():
         return 'Of course I\'m a main, this whole place is named after me'
       else:
-        return '%s is a main bot for %s' % (
-            self._core.params.name, channel.name)
+        return '%s is a main bot for %s' % (self._core.name, channel.name)
 
 
 @command_lib.CommandRegexParser(r'(?:dank)?(?:meme)?(?:\s+v)?')
 class MemeCommand(command_lib.TextCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.TextCommand.DEFAULT_PARAMS,
-      {
-          'choices': ['Cake, and grief counseling, will be available at the '
-                      'conclusion of the test.'],
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': [
+              'Cake, and grief counseling, will be available at the '
+              'conclusion of the test.'
+          ],
+          'main_channel_only': False,
       })
-
-  def _Handle(self, *args, **kwargs):
-    return super(MemeCommand, self)._Handle(*args, **kwargs)
 
 
 @command_lib.CommandRegexParser(r'riot (.+)')
 class OrRiotCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, or_riot):
-    or_riot = util_lib.StripColor(or_riot).upper()
+    or_riot = util_lib.StripColor(or_riot)
     normalized_riot = util_lib.CanonicalizeName(or_riot)
     if normalized_riot == 'me':
       self._core.last_command = partial(self._Handle, or_riot=or_riot)
       or_riot = user.upper()
-    if normalized_riot == self._core.nick:
-      return 'ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.nick.upper()
+    if normalized_riot == self._core.name.lower():
+      return ('ヽ༼ຈلຈ༽ﾉ %s OR HYPE ヽ༼ຈلຈ༽ﾉ' % self._core.name).upper()
     else:
-      return 'ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot
+      return ('ヽ༼ຈل͜ຈ༽ﾉ %s OR RIOT ヽ༼ຈل͜ຈ༽ﾉ' % or_riot).upper()
 
 
 @command_lib.CommandRegexParser(r'rage')
 class RageCommand(command_lib.TextCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.TextCommand.DEFAULT_PARAMS,
-      {'choices': messages.RAGE_STRINGS})
-
-  @command_lib.MainChannelOnly
-  def _Handle(self, *args, **kwargs):
-    return super(RageCommand, self)._Handle(*args, **kwargs)
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': messages.RAGE_STRINGS,
+      })
 
 
 @command_lib.CommandRegexParser(r'ratelimit')
@@ -206,15 +243,14 @@ class RatelimitCommand(command_lib.TextCommand):
 class RaiseCommand(command_lib.BaseCommand):
   """Get hyped."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, dongs):
     dongs = util_lib.StripColor(dongs)
     normalized_dongs = util_lib.CanonicalizeName(dongs)
     if normalized_dongs == 'me':
       self._core.last_command = partial(self._Handle, dongs=dongs)
       normalized_dongs = user
-    if normalized_dongs == self._core.nick:
-      return 'Do not raise me, I am but a simple %s' % self._core.params.name
+    if normalized_dongs == self._core.name.lower():
+      return 'Do not raise me, I am but a simple %s' % self._core.name
     elif self._core.zombie_manager.GetCorpseForChannel(
         channel) == normalized_dongs:
       return self._core.zombie_manager.AnimateCorpse(channel)
@@ -256,7 +292,6 @@ class RipCommand(command_lib.BaseCommand):
     self._normalized_commands = [util_lib.CanonicalizeName(name) for name in
                                  self._core.params.commands.AsDict().keys()]
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, rip_target):
     normalized_rip_target = None
     rip_string = 'Here lies %s, a once-valued %s %s.'
@@ -265,27 +300,27 @@ class RipCommand(command_lib.BaseCommand):
       if normalized_rip_target == 'me':
         self._core.last_command = partial(self._Handle, rip_target=rip_target)
         normalized_rip_target = user
-      if normalized_rip_target == self._core.nick:
+      if normalized_rip_target == self._core.name.lower():
         self._Spook(user)
         normalized_rip_target = user
 
       if normalized_rip_target in self.RIP_HUMANS:
-        rip_vals = (normalized_rip_target, self._core.nick,
+        rip_vals = (normalized_rip_target, self._core.name,
                     self.RIP_HUMANS[normalized_rip_target])
       elif self._core.user_tracker.IsHuman(normalized_rip_target):
         if user == normalized_rip_target:
           rip_mod = 'noober'
         else:
           rip_mod = 'minion'
-        rip_vals = (normalized_rip_target, self._core.nick, rip_mod)
+        rip_vals = (normalized_rip_target, self._core.name, rip_mod)
       elif normalized_rip_target in self._normalized_commands:
-        rip_vals = (rip_target, self._core.nick, 'command')
+        rip_vals = (rip_target, self._core.name, 'command')
       else:
         rip_string = 'RIP in pepperonis %s, you will be missed.'
         rip_vals = rip_target
     else:
       rip_target, rip_mod = random.choice(list(self.RIP_HUMANS.items()))
-      rip_vals = (rip_target, self._core.nick, rip_mod)
+      rip_vals = (rip_target, self._core.name, rip_mod)
 
     self._core.zombie_manager.NewCorpse(
         channel, normalized_rip_target or rip_target)
@@ -303,7 +338,6 @@ class SameCommand(command_lib.BaseCommand):
           'enabled': False,
       }})
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user):
     if self._core.last_command:
       return self._core.last_command(channel=channel, user=user)  # pylint: disable=not-callable
@@ -344,7 +378,6 @@ class ScrabbleCommand(command_lib.BaseCommand):
       'Z': 10
   }
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user, msg):
     logging.info('Scrabbling: "%s"', msg)
     scrabble_msg = ''.join(msg.upper().split())
@@ -356,17 +389,17 @@ class ScrabbleCommand(command_lib.BaseCommand):
 
 @command_lib.RegexParser(r'¯\\_\(ツ\)_/¯')
 @command_lib.CommandRegexParser(r'shrug(?:gie)?')
-class ShruggieCommand(command_lib.BaseCommand):
+class ShruggieCommand(command_lib.TextCommand):
 
-  @command_lib.MainChannelOnly
-  def _Handle(self, channel, unused_user):
-    return r'¯\ˍ(ツ)ˍ/¯'
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': [r'¯\ˍ(ツ)ˍ/¯'],
+      })
 
 
 @command_lib.CommandRegexParser(r'sticks?')
 class SticksCommand(command_lib.BaseCommand):
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel, user):
     stick_description = messages.SPECIAL_STICK_USERS.get(user, 'stick')
     action_msg = '%s bangs two %ss together.' % (user, stick_description)
@@ -434,7 +467,8 @@ class StoryCommand(command_lib.BasePublicCommand):
       else:
         del self._active_stories[channel.id]
       return self._stories[story.name][story.line + 1]
-    elif not story and message == '%s, tell me a story' % self._core.nick:
+    elif (not story and
+          message == '%s, tell me a story' % self._core.name.lower()):
       story_name = util_lib.GetWeightedChoice(list(self._stories.keys()),
                                               self._probs)
       self._active_stories[channel.id] = _StoryProgress(story_name, t, 1)
@@ -444,8 +478,11 @@ class StoryCommand(command_lib.BasePublicCommand):
 @command_lib.CommandRegexParser(r'version')
 class VersionCommand(command_lib.BaseCommand):
 
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
+
   def _Handle(self, channel, unused_user):
     return '%s(c) Version %s. #%sVersionHype' % (
-        self._core.params.name,
-        self._core.params.version,
-        self._core.params.name)
+        self._core.name, self._core.params.version, self._core.name)

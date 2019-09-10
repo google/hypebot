@@ -20,15 +20,16 @@ from __future__ import unicode_literals
 
 from functools import partial
 import json
-from typing import Any, List, Optional, Tuple
+from typing import Any, AnyStr, List, Optional, Tuple
 
 from absl import logging
 import redis
+from redis.exceptions import WatchError
 
-from hypebot.types import HypeStr, JsonType  # pylint: disable=g-multiple-import
 from hypebot.core import cache_lib
 from hypebot.core import params_lib
 from hypebot.storage import storage_lib
+from hypebot.types import JsonType
 
 
 class RedisTransaction(storage_lib.HypeTransaction):
@@ -42,41 +43,40 @@ class RedisTransaction(storage_lib.HypeTransaction):
 
   def __init__(self, redis_pipeline: redis.client.StrictPipeline, *args,
                **kwargs):
-    super(RedisTransaction,
-          self).__init__(*args, **kwargs)  # pytype: disable=wrong-arg-count
+    super(RedisTransaction, self).__init__(*args, **kwargs)  # pytype: disable=wrong-arg-count
     self._pipe = redis_pipeline
     self._command_buffer = []
 
-  def watch(self, full_key: HypeStr) -> None:
+  def watch(self, full_key: AnyStr) -> None:
     self._pipe.watch(full_key)
 
-  def get(self, full_key: HypeStr) -> Optional[HypeStr]:
+  def get(self, full_key: AnyStr) -> Optional[AnyStr]:
     self._WatchKey(full_key)
     return self._pipe.get(full_key)
 
-  def set(self, full_key: HypeStr, value: HypeStr) -> bool:
+  def set(self, full_key: AnyStr, value: AnyStr) -> bool:
     if self._TryBuffer(full_key, partial(self.set, full_key, value)):
       return True
     return self._pipe.set(full_key, value)
 
-  def type(self, full_key: HypeStr) -> HypeStr:
+  def type(self, full_key: AnyStr) -> AnyStr:
     self._WatchKey(full_key)
     return self._pipe.type(full_key)
 
-  def lindex(self, full_key: HypeStr, index: int) -> Optional[HypeStr]:
+  def lindex(self, full_key: AnyStr, index: int) -> Optional[AnyStr]:
     self._WatchKey(full_key)
     return self._pipe.lindex(full_key, index)
 
-  def lpush(self, full_key: HypeStr, value: HypeStr) -> int:
+  def lpush(self, full_key: AnyStr, value: AnyStr) -> int:
     if self._TryBuffer(full_key, partial(self.lpush, full_key, value)):
       return 1
     return self._pipe.lpush(full_key, value)
 
-  def lrange(self, full_key: HypeStr, start: int, end: int) -> List[HypeStr]:
+  def lrange(self, full_key: AnyStr, start: int, end: int) -> List[AnyStr]:
     self._WatchKey(full_key)
     return self._pipe.lrange(full_key, start, end)
 
-  def ltrim(self, full_key: HypeStr, start: int, end: int) -> bool:
+  def ltrim(self, full_key: AnyStr, start: int, end: int) -> bool:
     if self._TryBuffer(full_key, partial(self.ltrim, full_key, start, end)):
       return True
     return self._pipe.ltrim(full_key, start, end)
@@ -87,11 +87,10 @@ class RedisTransaction(storage_lib.HypeTransaction):
                    len(self._command_buffer))
       self._pipe.multi()
       if not all(cmd() for cmd in self._command_buffer):
-        logging.info('%s Failed to set a value, commit aborting', self)
-        return False
-      return True
+        raise storage_lib.CommitAbortError(
+            '%s Failed to set a value, commit aborting' % self)
 
-  def _TryBuffer(self, full_key: HypeStr, command: partial) -> bool:
+  def _TryBuffer(self, full_key: AnyStr, command: partial) -> bool:
     """Returns if a mutating command was buffered for future execution."""
     if not self._pipe.explicit_transaction:
       self._command_buffer.append(command)
@@ -100,23 +99,25 @@ class RedisTransaction(storage_lib.HypeTransaction):
     # a mutating command is ok.
     return False
 
-  def _WatchKey(self, full_key: HypeStr) -> bool:
+  def _WatchKey(self, full_key: AnyStr) -> bool:
     """Adds full_key to transaction if no pending write for full_key exist."""
     if full_key in (cmd.args for cmd in self._command_buffer):
-      raise ValueError('Key %s already has a pending write in %s.' % (full_key,
-                                                                      self))
+      raise ValueError(
+          'Key %s already has a pending write in %s.' % (full_key, self))
     self.watch(full_key)
 
   def Commit(self):
-    if not self._ApplyBufferedCommands():
-      return False
+    self._ApplyBufferedCommands()
     try:
       status = self._pipe.execute()
       self._pipe.reset()
-      return status
-    except Exception:
-      logging.info('%s Commit aborted, due to watch failure, raising', self)
-      raise storage_lib.CommitAbortException
+      # status is a list of return values from the redis server. It's possible
+      # one of them actually demonstrates a failure, but most failures either
+      # raise or end up with an empty status, so we just return that.
+      return status is not None
+    except WatchError:
+      logging.info('%s Commit failed due to watch failure, retrying', self)
+      return False
 
 
 class RedisStore(storage_lib.HypeStore):
@@ -145,10 +146,10 @@ class RedisStore(storage_lib.HypeStore):
         decode_responses=True)
 
   @property
-  def engine(self) -> HypeStr:
+  def engine(self) -> AnyStr:
     return 'redis'
 
-  def GetValue(self, key, subkey, tx=None) -> HypeStr:
+  def GetValue(self, key, subkey, tx=None) -> AnyStr:
     if tx:
       return self._GetValue(key, subkey, tx)
     return self.RunInTransaction(self._GetValue, key, subkey)
@@ -167,7 +168,10 @@ class RedisStore(storage_lib.HypeStore):
       raise NotImplementedError(
           'RedisStore can\'t operate on redis type "%s" yet' % datatype)
 
-  def SetValue(self, key: HypeStr, subkey: HypeStr, value,
+  def SetValue(self,
+               key: AnyStr,
+               subkey: AnyStr,
+               value,
                tx: RedisTransaction = None):
     if tx:
       return self._SetValue(key, subkey, value, tx)
@@ -188,8 +192,8 @@ class RedisStore(storage_lib.HypeStore):
       return self._GetSubkey(subkey, tx)
     return self.RunInTransaction(self._GetSubkey, subkey)
 
-  def _GetSubkey(self, subkey: HypeStr,
-                 tx: RedisTransaction) -> List[Tuple[HypeStr, HypeStr]]:
+  def _GetSubkey(self, subkey: AnyStr,
+                 tx: RedisTransaction) -> List[Tuple[AnyStr, AnyStr]]:
     results = []
     for full_key in self._redis.scan_iter('%s:*' % subkey):
       key = full_key.replace('%s:' % subkey, '', 1)
@@ -198,8 +202,8 @@ class RedisStore(storage_lib.HypeStore):
 
   def GetHistoricalValues(
       self,
-      key: HypeStr,
-      subkey: HypeStr,
+      key: AnyStr,
+      subkey: AnyStr,
       num_past_values: int,
       tx: Optional[RedisTransaction] = None) -> List[JsonType]:
     if tx:
@@ -220,8 +224,8 @@ class RedisStore(storage_lib.HypeStore):
           'RedisStore can\'t operate on redis type "%s" yet' % datatype)
 
   def PrependValue(self,
-                   key: HypeStr,
-                   subkey: HypeStr,
+                   key: AnyStr,
+                   subkey: AnyStr,
                    new_value: JsonType,
                    max_length: Optional[int] = None,
                    tx: Optional[RedisTransaction] = None) -> None:
@@ -231,7 +235,7 @@ class RedisStore(storage_lib.HypeStore):
     return self.RunInTransaction(
         self._PrependValue, key, subkey, new_value, max_length, tx_name=tx_name)
 
-  def _PrependValue(self, key: HypeStr, subkey: HypeStr, new_value: JsonType,
+  def _PrependValue(self, key: AnyStr, subkey: AnyStr, new_value: JsonType,
                     max_length: Optional[int], tx: RedisTransaction) -> None:
     """Internal version of PrependValue that requires a transaction."""
     datatype, full_key = self._GetFullKey(key, subkey)
@@ -249,15 +253,14 @@ class RedisStore(storage_lib.HypeStore):
       raise NotImplementedError(
           'RedisStore can\'t operate on redis type "%s" yet' % datatype)
 
-  def NewTransaction(self, tx_name: HypeStr) -> RedisTransaction:
+  def NewTransaction(self, tx_name: AnyStr) -> RedisTransaction:
     return RedisTransaction(self._redis.pipeline(), tx_name)
 
-  def _GetFullKey(
-      self,
-      key: HypeStr,
-      subkey: HypeStr,
-      tx: Optional[RedisTransaction] = None) -> Tuple[
-          Optional[HypeStr], HypeStr]:
+  def _GetFullKey(self,
+                  key: AnyStr,
+                  subkey: AnyStr,
+                  tx: Optional[RedisTransaction] = None
+                 ) -> Tuple[Optional[AnyStr], AnyStr]:
     """Builds the full key for Redis from the key and subkey.
 
     Note, this function either adds a type lookup to the transaction, or makes
@@ -292,7 +295,8 @@ class ReadCacheRedisStore(RedisStore):
 
   def __init__(self, params, cache_max_age=30, cache_max_items=128):
     super(ReadCacheRedisStore, self).__init__(params)
-    self._cache = cache_lib.LRUCache(cache_max_items, max_age=cache_max_age)
+    self._cache = cache_lib.LRUCache(
+        cache_max_items, max_age_secs=cache_max_age)
     logging.info('RCRedisStore params =>\n%s', self._params.AsDict())
 
   def SetValue(self, key, subkey, value, tx=None):

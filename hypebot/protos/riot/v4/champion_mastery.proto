@@ -13,7 +13,7 @@
 // limitations under the License.
 syntax = "proto3";
 
-package hypebot.riot.v3;
+package hypebot.riot.v4;
 
 service ChampionMasteryService {
   rpc ListChampionMasteries(ListChampionMasteriesRequest)
@@ -27,7 +27,7 @@ service ChampionMasteryService {
 }
 
 message ListChampionMasteriesRequest {
-  int64 summoner_id = 1;
+  string encrypted_summoner_id = 1;
 }
 
 message ListChampionMasteriesResponse {
@@ -35,12 +35,14 @@ message ListChampionMasteriesResponse {
 }
 
 message GetChampionMasteryRequest {
-  int64 summoner_id = 1;
+  string encrypted_summoner_id = 1;
   int64 champion_id = 2;
 }
 
 message ChampionMastery {
-  int64 player_id = 1;
+  // Encrypted.
+  string summoner_id = 1;
+
   int64 champion_id = 2;
   int32 champion_level = 3;
   int32 champion_points = 4;
@@ -51,10 +53,12 @@ message ChampionMastery {
   int64 champion_points_since_last_level = 7;
 
   bool chest_granted = 8;
+
+  int32 tokens_earned = 9;
 }
 
 message GetChampionMasteryScoreRequest {
-  int64 summoner_id = 1;
+  string encrypted_summoner_id = 1;
 }
 
 message ChampionMasteryScore {

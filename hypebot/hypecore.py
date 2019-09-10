@@ -50,12 +50,6 @@ _MessageType = Union[
 MessageType = Optional[_MessageType]
 
 
-def _MakeMessage(response: _MessageType) -> types.Message:
-  msg = types.Message()
-  _AppendToMessage(msg, response)
-  return msg
-
-
 def _GetAlternateTextList(value: Union[Text, List[Text]]) -> List[Text]:
   if isinstance(value, Text):
     return value.split('\n')
@@ -71,6 +65,15 @@ def _AppendToMessage(msg: types.Message, response: _MessageType):
     assert isinstance(response, list)
     for line in response:
       _AppendToMessage(msg, line)
+
+
+class MessageUtil(object):
+  """Swappable utility for making the Message proto from the internal type."""
+
+  def MakeMessage(self, response: _MessageType) -> types.Message:
+    msg = types.Message()
+    _AppendToMessage(msg, response)
+    return msg
 
 
 class RequestTracker(object):
@@ -180,7 +183,7 @@ class UserPreferences(object):
       # Maps 'user/####' to '$ldap'.
       '_dynamite_ldap': None,
   }
-  _SUBKEY = 'preferences:'
+  _SUBKEY = 'preferences'
 
   def __init__(self, store: storage_lib.HypeStore):
     self._store = store
@@ -266,9 +269,10 @@ class Core(object):
         never intended for human consumption.
     """
     self.params = params
-    self.nick = self.params.name.lower()
+    self.name = self.params.name
     self.interface = interface
     self.output_util = OutputUtil(self.Reply)
+    self.message_util = MessageUtil()
 
     self.store = storage_factory.CreateFromParams(self.params.storage)
     cached_type = self.params.storage.get('cached_type')
@@ -289,17 +293,16 @@ class Core(object):
     self.proxy = proxy_factory.Create(self.params.proxy.type, self.store)
     self.zombie_manager = zombie_lib.ZombieManager()
     self.request_tracker = RequestTracker(self.Reply)
-    self.bank = coin_lib.Bank(self.store, self.nick)
+    self.bank = coin_lib.Bank(self.store, self.name.lower())
     self.bets = coin_lib.Bookie(self.store, self.bank, self.inventory)
     self.stocks = stock_factory.CreateFromParams(self.params.stocks, self.proxy)
     self.deployment_manager = deploy_lib.DeploymentManager(
-        self.nick, self.bets, self.output_util, self.executor)
+        self.name.lower(), self.bets, self.output_util, self.executor)
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
     self.betting_games = []
     self.last_command = None
-    self.default_channel = Channel(visibility=Channel.PUBLIC,
-                                   **self.params.default_channel.AsDict())
+    self.default_channel = self.params.default_channel
 
   def Reply(self,
             channel: types.Target,
@@ -348,37 +351,46 @@ class Core(object):
         isinstance(msg, list) and len(msg) > max_public_lines):
       if user:
         self.interface.SendMessage(
-            channel, _MakeMessage('It\'s long so I sent it privately.'))
+            channel,
+            self.message_util.MakeMessage('It\'s long so I sent it privately.'))
         self.interface.SendMessage(
             Channel(id=user, visibility=Channel.PRIVATE, name=user),
-            _MakeMessage(msg))
+            self.message_util.MakeMessage(msg))
       else:
         # If there is no user, just truncate and send to channel.
         self.interface.SendMessage(
-            channel, _MakeMessage(msg[:max_public_lines] + ['...']))
+            channel,
+            self.message_util.MakeMessage(msg[:max_public_lines] + ['...']))
     else:
-      self.interface.SendMessage(channel, _MakeMessage(msg))
+      self.interface.SendMessage(channel, self.message_util.MakeMessage(msg))
 
-  def SendNotification(self, topic: Text, msg: MessageType) -> None:
+  def PublishMessage(self,
+                     topic: Text,
+                     msg: MessageType,
+                     notice: bool = False) -> None:
     """Sends a message to the channels subscribed to a topic.
 
     Args:
       topic: Name of the topic on which to publish the message.
       msg: The message to send.
+      notice: If true, use interface.Notice instead of interface.SendMessage.
     """
     if not msg:
       return
     if not topic:
-      logging.warning('Attempted to send notification with no topic: %s', msg)
+      logging.warning('Attempted to publish message with no topic: %s', msg)
       return
     channels = self.params.subscriptions.get(topic, [])
     if not channels:
       logging.info('No subscriptions for topic %s, dropping: %s', topic, msg)
       return
-    message = _MakeMessage(msg)
+    message = self.message_util.MakeMessage(msg)
     for channel in channels:
       channel = Channel(visibility=Channel.PUBLIC, **channel)
-      self.interface.Notice(channel, message)
+      if notice:
+        self.interface.Notice(channel, message)
+      else:
+        self.interface.SendMessage(channel, message)
 
   def ReloadData(self) -> bool:
     """Asynchronous reload of all data on core.

@@ -13,9 +13,9 @@
 // limitations under the License.
 syntax = "proto3";
 
-package hypebot.riot.v3;
+package hypebot.riot.v4;
 
-import "hypebot/protos/riot/v3/constants.proto";
+import "hypebot/protos/riot/v4/constants.proto";
 
 service MatchService {
   rpc ListMatches(ListMatchesRequest)
@@ -30,7 +30,7 @@ service MatchService {
 
 message ListMatchesRequest {
   // REQUIRED
-  int64 account_id = 1;
+  string encrypted_account_id = 1;
 
   repeated QueueType.Enum queues = 2;
   repeated Season.Enum seasons = 3;
@@ -100,10 +100,13 @@ message Player {
   string summoner_name = 2;
   string match_history_uri = 3;
   string platform_id = 4;
-  int64 current_account_id = 5;
+  // Encrypted.
+  string current_account_id = 5;
   int32 profile_icon = 6;
-  int64 summoner_id = 7;
-  int64 account_id = 8;
+  // Encrypted.
+  string summoner_id = 7;
+  // Encrypted.
+  string account_id = 8;
 }
 
 message TeamStats {

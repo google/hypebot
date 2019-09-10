@@ -245,6 +245,7 @@ class Bookie(object):
 
     return bets
 
+  # TODO: PlaceBet needs to be fixed to throw on error.
   def PlaceBet(self, game, bet, msg_fn, more=False):
     """Places a bet for game on behalf of user.
 
@@ -263,7 +264,7 @@ class Bookie(object):
     return self._store.RunInTransaction(self._PlaceBet, game, bet, more, msg_fn)
 
   def _PlaceBet(self, game, bet, more, msg_fn, *unused_args, **kwargs):
-    """Internal version of SettleBets to be run with a transaction."""
+    """Internal version of PlaceBet to be run with a transaction."""
     bet.game = game.name
     with self._ledger_lock:
       tx = kwargs.get('tx')
@@ -434,10 +435,13 @@ class Bank(object):
   def GetUserBalances(self, plebs_only=False, account=None):
     """Returns dict of users mapping to their balance for all users."""
     user_balances = self._store.GetSubkey(self._BALANCE_SUBKEY)
-    return {user: util_lib.SafeCast(balance, int, 0)
-            for user, balance in user_balances
-            if (not plebs_only or user not in HYPECENTS) and
-            (not account or IsSubAccount(user, account))}
+    return {
+        user: util_lib.SafeCast(balance, int, 0)
+        for user, balance in user_balances
+        if (not plebs_only or user not in HYPECENTS) and
+        (not account or IsSubAccount(user, account)) and
+        not user.startswith('http')
+    }
 
   def GetTransactions(self, user):
     return self._store.GetHistoricalValues(user, self._TRANSACTION_SUBKEY, 5)

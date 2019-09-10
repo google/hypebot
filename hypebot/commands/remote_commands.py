@@ -25,14 +25,13 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
-from hypebot.stocks import stock_lib
+from hypebot.protos import stock_pb2
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  @command_lib.MainChannelOnly
   def _Handle(self, channel: types.Channel, user: str):
     data = self._core.proxy.FetchJson(
         'https://kittysales.herokuapp.com/data', {'offset': 0, 'count': 1},
@@ -52,8 +51,7 @@ class KittiesSalesCommand(command_lib.BaseCommand):
 class StocksCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS,
-      {
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'enable_betting': True,
       })
 
@@ -64,16 +62,15 @@ class StocksCommand(command_lib.BaseCommand):
       self._core.betting_games.append(self._game)
 
       self._core.scheduler.DailyCallback(
-          util_lib.ArrowTime(16, 0, 30, 'America/New_York'),
-          self._BetCallback)
+          util_lib.ArrowTime(16, 0, 30, 'America/New_York'), self._BetCallback)
 
   def _BetCallback(self):
-    notifications = self._core.bets.SettleBets(
-        self._game, self._core.nick, self._Reply)
+    notifications = self._core.bets.SettleBets(self._game,
+                                               self._core.name.lower(),
+                                               self._Reply)
     if notifications:
-      self._core.SendNotification('stocks', notifications)
+      self._core.PublishMessage('stocks', notifications)
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
               user: str,
@@ -82,9 +79,13 @@ class StocksCommand(command_lib.BaseCommand):
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
     if 'HYPE' in symbols:
-      quotes['HYPE'] = stock_lib.StockQuote(1337.0, 4.2, 0.315)
+      quotes['HYPE'] = stock_pb2.Quote(
+          symbol='HYPE',
+          price=13.37,
+          change=4.2,
+          change_percent=45.80)
     if not quotes:
-      if symbols[0].upper() == self._core.nick.upper():
+      if symbols[0].upper() == self._core.name.upper():
         return ('You can\'t buy a sentient AI for some vague promise of future '
                 'value, peon.')
       else:
@@ -92,44 +93,55 @@ class StocksCommand(command_lib.BaseCommand):
                 symbols[0])
 
     responses = []
-    if len(quotes) > 5:
-      responses.append(
-          'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
-          self._core.nick)
     histories = self._core.stocks.History(symbols)
     if 'HYPE' in symbols:
       histories['HYPE'] = [1, 2, 4, 8]
-    for symbol, quote in list(quotes.items())[:5]:
+    for symbol in symbols:
+      if symbol not in quotes:
+        continue
+      if len(responses) >= 5:
+        responses.insert(
+            0,
+            'Only displaying 5 quotes, I\'m a(n) %s not a financial advisor' %
+            self._core.name)
+        break
+      quote = quotes[symbol]
       history = histories.get(symbol)
-      change_str = '%0.2f (%0.2f%%)' % (quote.change, quote.percent)
-      if quote.change > 0:
-        change_str = util_lib.Colorize(u'⬆ %s' % change_str, 'green')
-      elif quote.change < 0:
-        change_str = util_lib.Colorize(u'⬇ %s' % change_str, 'red')
+      change_str = self._FormatChangeStr(quote.change, quote.change_percent)
+      response = 'One share of %s is currently worth %0.2f %s' % (
+          symbol, quote.price, change_str)
+      if quote.extended_change:
+        ext_change_str = self._FormatChangeStr(quote.extended_change,
+                                               quote.extended_change_percent)
+        response += ' [ext: %0.2f %s]' % (quote.extended_price, ext_change_str)
       if history:
-        change_str += ' %s' % util_lib.Sparkline(history)
-      responses.append('One share of %s is currently worth %0.2f [%s]' %
-                       (symbol, quote.price, change_str))
+        response += ' %s' % util_lib.Sparkline(history)
+      responses.append(response)
     return responses
+
+  def _FormatChangeStr(self, change, percent):
+    change_str = '%0.2f (%0.2f%%)' % (change, percent)
+    if change > 0:
+      change_str = util_lib.Colorize('⬆%s' % change_str, 'green')
+    elif change < 0:
+      change_str = util_lib.Colorize('⬇%s' % change_str, 'red')
+    return change_str
 
 
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')
 class WeatherCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS,
-      {
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'forecast_days': ['Today', 'Tomorrow', 'The next day'],
           'apixu_key': None,
       })
 
   def __init__(self, *args):
-    super(WeatherCommand,
-          self).__init__(*args)  # pytype: disable=wrong-arg-count
+    super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
     self._weather = weather_lib.WeatherLib(self._core.proxy,
                                            self._params.apixu_key)
 
-  @command_lib.MainChannelOnly
   def _Handle(self,
               channel: types.Channel,
               user: str,
@@ -142,32 +154,29 @@ class WeatherCommand(command_lib.BaseCommand):
     if location.lower() == 'mtv':
       location = 'mountain view'
 
-    weather = self._weather.GetForecast(location,
-                                        days=len(self._params.forecast_days))
+    weather = self._weather.GetForecast(
+        location, days=len(self._params.forecast_days))
     if not weather:
       return 'Unknown location.'
 
     responses = []
     responses.append('Currently %s and %s in %s' %
                      (self._FormatTemp(weather.current.temp_f, unit),
-                      weather.current.condition,
-                      weather.location))
+                      weather.current.condition, weather.location))
 
     weather.MergeFrom(self._weather.GetHistory(location, unused_days=1))
     if weather.hindsight:
       yesterday = weather.hindsight[0]
-      responses.append('Yesterday: %s (%s - %s)' % (
-          yesterday.condition,
-          self._FormatTemp(yesterday.min_temp_f, unit),
-          self._FormatTemp(yesterday.max_temp_f, unit)))
+      responses.append(
+          'Yesterday: %s (%s - %s)' %
+          (yesterday.condition, self._FormatTemp(yesterday.min_temp_f, unit),
+           self._FormatTemp(yesterday.max_temp_f, unit)))
 
     for index, day in enumerate(weather.forecast):
-      condition_str = '%s: %s' % (
-          self._params.forecast_days[index],
-          day.condition)
-      temp_str = '(%s - %s)' % (
-          self._FormatTemp(day.min_temp_f, unit),
-          self._FormatTemp(day.max_temp_f, unit))
+      condition_str = '%s: %s' % (self._params.forecast_days[index],
+                                  day.condition)
+      temp_str = '(%s - %s)' % (self._FormatTemp(day.min_temp_f, unit),
+                                self._FormatTemp(day.max_temp_f, unit))
       if index == 0:
         condition_str = util_lib.Bold(condition_str)
       responses.append('%s %s' % (condition_str, temp_str))
@@ -186,9 +195,9 @@ class WeatherCommand(command_lib.BaseCommand):
       color = 'orange'
 
     if unit == 'C':
-      raw_str = u'%.1f°C' % ((temp_f - 32) * 5 / 9)
+      raw_str = '%.1f°C' % ((temp_f - 32) * 5 / 9)
     elif unit == 'K':
-      raw_str = u'%.1fK' % ((temp_f - 32) * 5 / 9 + 273.15)
+      raw_str = '%.1fK' % ((temp_f - 32) * 5 / 9 + 273.15)
     else:
-      raw_str = u'%.1f°F' % temp_f
+      raw_str = '%.1f°F' % temp_f
     return util_lib.Colorize(raw_str, color)

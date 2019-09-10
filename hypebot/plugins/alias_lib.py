@@ -24,7 +24,7 @@ from __future__ import unicode_literals
 
 import re
 
-ALIAS_SUBKEY = 'aliases'
+ALIAS_SUBKEY = 'user_aliases'
 ME_REGEX = re.compile(r'\\me\b')
 ALL_ARGS_REGEX = re.compile(r'\\@:?')
 ALL_ARGS_RANGED_REGEX = re.compile(r'\\@(-?\d+)?:(-?\d+)?')

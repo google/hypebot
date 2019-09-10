@@ -52,7 +52,8 @@ class BaseBot(object):
           'type': 'DiscordInterface'
       },
       # Restrict some responses to only these channels.
-      'main_channels': ['.*'],
+      # Empty string matches all channels.
+      'main_channels': [''],
       # The default channel for announcements and discussion.
       'default_channel': {
           'id': '418098011445395462',
@@ -84,8 +85,11 @@ class BaseBot(object):
           'AliasListCommand': {},
           'AliasRemoveCommand': {},
           'AskFutureCommand': {},
+          'AutoReplySnarkCommand': {},
           'BuyHypeStackCommand': {},
+          'CoinFlipCommand': {},
           'CookieJarCommand': {},
+          'DebugCommand': {},
           'DisappointCommand': {},
           'EchoCommand': {},
           'EnergyCommand': {},
@@ -93,6 +97,7 @@ class BaseBot(object):
           'GreetingsCommand': {},
           'GrepCommand': {},
           'HypeCommand': {},
+          'HypeJackCommand': {},
           'HypeStackBalanceCommand': {},
           'InventoryList': {},
           'InventoryUse': {},

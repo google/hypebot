@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 import collections
 
 import arrow
-from typing import Any, Generator, Tuple
+from typing import Any, AnyStr, Generator, Tuple
 
 
 class _TimedCacheElement(object):
@@ -36,12 +36,19 @@ class _TimedCacheElement(object):
 class LRUCache(object):
   """LRU cache."""
 
-  def __init__(self, max_items: int, max_age: int = None):
+  def __init__(self, max_items: int, max_age_secs: int = None):
     if not isinstance(max_items, int) or max_items < 1:
       raise ValueError('The cache max_items must be >=1')
-    self._max_age = max_age
+    self._max_age_secs = max_age_secs
     self._max_items = max_items
     self._dict = collections.OrderedDict()
+
+  def __str__(self) -> AnyStr:
+    return '%s [%s/%s items, %ss TTL]' % (
+        self.__class__.__name__,
+        len(self._dict),
+        self._max_items,
+        self._max_age_secs)
 
   def Get(self, key: Any) -> Any:
     self._RemoveStaleElements()
@@ -69,13 +76,12 @@ class LRUCache(object):
     self._dict.clear()
 
   def _RemoveStaleElements(self):
-    if not self._max_age:
+    if not self._max_age_secs:
       return
-    evict_time = arrow.now().shift(seconds=0 - self._max_age)
+    evict_time = arrow.now().shift(seconds=0 - self._max_age_secs)
     while self._dict:
       last_element = next(iter(self._dict.values()))
       if last_element.timestamp < evict_time:
         del self._dict[last_element.key]
       else:
         return
-

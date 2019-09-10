@@ -26,6 +26,7 @@ import arrow
 
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
+from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
 from hypebot.plugins.league import summoner_lib
@@ -36,6 +37,11 @@ SUMMONER_REGEX = r'(all)?(?:-(\w+))? (.+)'
 
 class _BaseSummonerCommand(command_lib.BaseCommand):
   """Base class for commands that want to access summoners."""
+
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'main_channel_only': False,
+      })
 
   _hypebot_message = 'I deserve challenjour!'
 
@@ -114,8 +120,8 @@ class WhoCommand(_BaseSummonerCommand):
     responses = []  # type: List[card_lib.ContextCardMessage]
     for summoner in summoners:
       rito_data = self._core.summoner.Who(summoner)
-      grumble_data = None
-      responses.append(self._SummonerDataToText(rito_data, grumble_data))
+      team_data = self._core.esports.Who(summoner)
+      responses.append(self._SummonerDataToText(rito_data, team_data))
     return responses
 
   def _CreateHypebotMessage(self) -> Text:
@@ -151,8 +157,9 @@ class WhoCommand(_BaseSummonerCommand):
     if extra_info:
       info += ' [' + ', '.join(extra_info) + ']'
     if team_data:
-      rank = team_data['team_rank']
-      info += ' [(%s) %s, %d%s]' % (team_data['league_abbrev'],
-                                    team_data['team_name'], rank,
+      rank = team_data.rank
+      league = self._core.esports.leagues[team_data.team.league_id]
+      info += ' [(%s) %s, %d%s]' % (league.name,
+                                    team_data.team.name, rank,
                                     inflect_lib.Ordinalize(rank))
     return info

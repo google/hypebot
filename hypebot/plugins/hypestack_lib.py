@@ -57,7 +57,7 @@ class HypeStacks(object):
     logging.info('Decaying all hypestacks')
     for user, stacks in self._store.GetSubkey(self._STACK_COUNT_SUBKEY):
       retention_factor = random.uniform(0.5, 0.9)
-      new_value = int(int(stacks) * retention_factor)
+      new_value = int(int(stacks or 0) * retention_factor)
       logging.info('\t%s: %s => %s (%.2f%% retention)', user, stacks, new_value,
                    100 * retention_factor)
       self._store.SetValue(user, self._STACK_COUNT_SUBKEY, str(new_value))

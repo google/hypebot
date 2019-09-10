@@ -18,10 +18,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from typing import Dict, List, Text, Union
-
 from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
+
+from typing import Dict, List, Text, Union
 
 # Type aliases are named like classes, but pylint thinks they're variables, so
 # we have to disable name checking here.
@@ -31,9 +31,6 @@ from hypebot.protos import message_pb2
 Message = message_pb2.MessageList
 
 Channel = channel_pb2.Channel
-
-# TODO: Get rid of this since we are python3?
-HypeStr = Union[Text, bytes]
 
 User = Text
 

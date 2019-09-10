@@ -27,7 +27,6 @@ from hypebot.plugins import coin_lib
 class GreetingPurchaseCommand(command_lib.BaseCommand):
   """Let you buy some welcome bling."""
 
-  @command_lib.MainChannelOnly
   @command_lib.HumansOnly()
   def _Handle(self, channel, user, subcommand):
     greetings = self._UserGreetings(user)
@@ -66,7 +65,7 @@ class GreetingPurchaseCommand(command_lib.BaseCommand):
   def _HandleList(self, channel, user, all_greetings):
     msgs = [
         'You can purchase one of the following upgraded greetings from '
-        '%s' % self._core.params.name
+        '%s' % self._core.name
     ]
     for i, greeting in enumerate(all_greetings):
       msgs.append('  %sgreet %d [%s] - \'%s\'' %

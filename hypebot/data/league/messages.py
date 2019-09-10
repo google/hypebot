@@ -77,7 +77,7 @@ _MEME_TEAMS = [
 _DANK_WEIGHT = (len(_TEAM_MEMES) * len(_MEME_TEAMS)) // len(_DANK_MEMES) + 1
 ALL_MEMES = _DANK_MEMES * _DANK_WEIGHT + [
     meme.format(team=team) for team in _MEME_TEAMS for meme in _TEAM_MEMES]
-FALLBACK_LIVESTREAM_LINK = 'Check https://gaming.youtube.com for the link'
+FALLBACK_LIVESTREAM_LINK = 'Check https://www.youtube.com/gaming for the link'
 FREELO = [
     ('Did you know there are other ways to win besides stomping your lane '
      'opponent? Try typing "?" in all chat any time someone on the enemy team '

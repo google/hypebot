@@ -52,7 +52,25 @@ class BaseCommand(object):
           'interval': 5,
           # Will only ratelimit if _Handle returns a value.
           'return_only': False,
-      }
+      },
+      # Which channels (rooms) should handle the message.
+      #
+      # This operates in addition to the parsers and is useful for surfacing
+      # different commands for different communities. E.g., !who could be
+      # handled by different commands for a LoL or Overwatch channel.
+      #
+      # Default allows all channels to utilize command.  Otherwise, supply a
+      # list of channels where the specified id must be a prefix of the incoming
+      # message's channel.id.
+      'channels': [''],
+      # Alternatively, which channels should not handle the message. This takes
+      # precedence over 'channels'.
+      #
+      # Default allows all channels to handle the message.
+      'avoid_channels': [],
+      # If the command should be invoked in all channels that match channels
+      # above, or only the ones listed in core.params.main_channels.
+      'main_channel_only': True,
   })
 
   # Used to ignore a level of scoping.
@@ -75,7 +93,8 @@ class BaseCommand(object):
              message: Text) -> hypecore.MessageType:
     """Attempt to handle the message.
 
-    Compare message against all parsers. If one of them accepts the message,
+    First we check if this command is available for this channel. Then, we
+    compare message against all parsers. If one of them accepts the message,
     send the parsed command to the internal _Handle function.
 
     Args:
@@ -86,6 +105,8 @@ class BaseCommand(object):
     Returns:
       Response message from command.
     """
+    if not self._InScope(channel):
+      return
     for parser in self._parsers:
       take, args, kwargs = parser(channel, user, message)
       if take:
@@ -95,6 +116,21 @@ class BaseCommand(object):
 
         # Ensure we don't handle the same message twice.
         return self._Ratelimit(channel, user, *args, **kwargs)
+
+  def _InScope(self, channel: Channel):
+    # DMs are always allowed.
+    if channel.visibility == Channel.PRIVATE:
+      return True
+    # Channel scope
+    if (not util_lib.MatchesAny(self._params.channels, channel) or
+        util_lib.MatchesAny(self._params.avoid_channels, channel)):
+      return False
+    # MainChannelOnly
+    if (self._params.main_channel_only and
+        not util_lib.MatchesAny(self._core.params.main_channels, channel)):
+      return False
+
+    return True
 
   def _Ratelimit(self, channel: Channel, user: Text, *args, **kwargs):
     """Ratelimits calls/responses from Handling the message.
@@ -369,26 +405,6 @@ def LimitPublicLines(max_lines: int = 6):
   return Decorator
 
 
-def IsMainChannel(channel, main_ids):
-  for main_id in main_ids:
-    if re.match(main_id, channel.id):
-      return True
-  return False
-
-
-def MainChannelOnly(fn):
-  """Decorator to restrict handling to main channel or private channels."""
-
-  @wraps(fn)
-  def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
-    if (channel.visibility == Channel.PRIVATE or
-        IsMainChannel(channel,
-                      getattr(fn_self, '_core').params.main_channels)):
-      return fn(fn_self, channel, user, *args, **kwargs)
-
-  return Wrapped
-
-
 def HumansOnly(message='I\'m sorry %s, I\'m afraid I can\'t do that'):
   """Decorator to restrict handling to humans."""
 
@@ -430,12 +446,12 @@ def RequireReady(obj_name):
       if obj and obj.IsReady():
         return fn(fn_self, *args, **kwargs)
 
-      nick = getattr(fn_self, '_core').nick
+      bot_name = getattr(fn_self, '_core').name
       if not obj:
-        return '%s is not enabled for %s' % (obj_name, nick)
+        return '%s is not enabled for %s' % (obj_name, bot_name)
       else:
         return '%s.%s is still loading data, please try again later.' % (
-            nick, obj_name)
+            bot_name, obj_name)
 
     return Wrapped
 
@@ -460,5 +476,5 @@ class TextCommand(BaseCommand):
       if '{person}' in choice:
         choice = choice.format(choice, person=user)
       if choice.startswith('/me '):
-        choice = '\x01ACTION %s\x01' % choice[4:]
+        choice = [self._core.params.name, choice[4:]].join(' ')
       return choice
