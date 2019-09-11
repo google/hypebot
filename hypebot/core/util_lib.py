@@ -19,18 +19,19 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import collections
 import copy
 import datetime
 import math
 import random
 import re
-from threading import Lock
+import threading
 import unicodedata
 
 import arrow
 from dateutil.relativedelta import relativedelta
 import six
-from typing import Text, Union
+from typing import Optional, Text
 
 from hypebot.core import params_lib
 from hypebot.protos.user_pb2 import User
@@ -44,6 +45,8 @@ def Access(obj, path, default=None):
     try:
       obj = obj.get(k)
     except AttributeError:
+      if obj is None:
+        continue
       k = int(k)
       if k < len(obj):
         obj = obj[int(k)]
@@ -328,27 +331,38 @@ def Sparkline(values):
 
 
 class UserTracker(object):
-  """A class for tracking the type (human or bot) of users."""
+  """A class for tracking users (humans / bots) and their channels."""
 
   def __init__(self):
-    self._bots = set()
-    self._bots_lock = Lock()
-    self._humans = set()
-    self._humans_lock = Lock()
+    self._bots = collections.defaultdict(set)  # name -> channels
+    self._humans = collections.defaultdict(set)  # name -> channels
+    self._lock = threading.Lock()
 
-  def AddHuman(self, name):
+  def Reset(self):
+    """Forget all tracked users."""
+    with self._lock:
+      self._bots.clear()
+      self._humans.clear()
+
+  def AddHuman(self, name, channel=None):
     """Adds name as a known human."""
-    with self._humans_lock:
-      self._humans.add(name)
+    with self._lock:
+      if channel:
+        self._humans[name].add(channel.id)
+      else:
+        self._humans[name]  # pylint: disable=pointless-statement
 
-  def AddBot(self, bot_name):
-    """Adds bot_name as a known bot."""
-    with self._bots_lock:
-      self._bots.add(bot_name)
+  def AddBot(self, name, channel=None):
+    """Adds name as a known bot."""
+    with self._lock:
+      if channel:
+        self._bots[name].add(channel.id)
+      else:
+        self._bots[name]  # pylint: disable=pointless-statement
 
   def IsKnown(self, name):
     """Returns if name is known to this class, as either a bot or a human."""
-    return name in self._bots.union(self._humans)
+    return self.IsHuman(name) or self.IsBot(name)
 
   def IsBot(self, name):
     """Returns if name is a bot."""
@@ -358,13 +372,40 @@ class UserTracker(object):
     """Returns if name is a human."""
     return name in self._humans
 
-  def AllHumans(self):
-    """Returns a list of all users that are humans."""
-    return list(self._humans)
+  def AllHumans(self, channel: Optional[Text] = None):
+    """Returns a list of all users that are humans.
 
-  def AllUsers(self):
-    """Returns a list of all known users."""
-    return list(self._bots.union(self._humans))
+    Args:
+      channel: If specified, only return humans in the channel.
+    """
+    if channel:
+      return [
+          name for name, channels in self._humans.items()
+          if channel.id in channels
+      ]
+    return self._humans.keys()
+
+  def AllBots(self, channel: Optional[Text] = None):
+    """Returns a list of all users that are bots.
+
+    Args:
+      channel: If specified, only return bots in the channel.
+    """
+    if channel:
+      return [
+          name for name, channels in self._bots.items()
+          if channel.id in channels
+      ]
+    return self._bots.keys()
+
+  def AllUsers(self, channel: Optional[Text] = None):
+    """Returns a list of all known users.
+
+    Args:
+      channel: If specified, only return users in the channel.
+    """
+    return self.AllHumans(channel) + self.AllBots(channel)
+
 
 def MatchesAny(channels, channel):
   """Whether any channels' id is a prefix of channel.id."""
