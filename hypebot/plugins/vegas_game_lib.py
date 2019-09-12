@@ -261,7 +261,13 @@ class LCSGame(GameBase):
     bet.data.Unpack(lcs_data)
     return '%s for %s over %s' % (
         util_lib.FormatHypecoins(bet.amount),
-        lcs_data.winner.upper(), lcs_data.loser.upper())
+        self._TeamName(lcs_data.winner), self._TeamName(lcs_data.loser))
+
+  def _TeamName(self, team_id):
+    if team_id in self._esports.teams:
+      return self._esports.teams[team_id].abbreviation
+    # If the bet was placed with a TBD team.
+    return team_id.upper()
 
   def SettleBets(self, pool, msg_fn, *args, **kwargs):
     unused_bets = defaultdict(list)
@@ -280,10 +286,11 @@ class LCSGame(GameBase):
         logging.info('Game time: %s', match)
         if match and match.winner:
           logging.info('GambleLCS: %s bet %s for %s and %s won.', user,
-                       bet.amount, lcs_data.winner, match.winner)
+                       bet.amount, self._TeamName(lcs_data.winner),
+                       self._TeamName(match.winner))
           pool_value += bet.amount
           if lcs_data.winner == match.winner:
-            winning_teams.append(match.winner)
+            winning_teams.append(self._TeamName(match.winner))
             winnings = bet.amount * 2
             # HypeBookie takes a 5% cut (rounded down) of all bets over 100.
             if bet.amount > 100:
@@ -291,7 +298,7 @@ class LCSGame(GameBase):
             winners[user] += winnings
             net_amount += winnings - bet.amount
           else:
-            losing_teams.append(lcs_data.winner)
+            losing_teams.append(self._TeamName(lcs_data.winner))
             net_amount -= bet.amount
         else:
           logging.info('Unused bet: %s', bet)
