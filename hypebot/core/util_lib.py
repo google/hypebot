@@ -197,7 +197,7 @@ def TimeDeltaToHumanDuration(time_delta, precision=1):
     parts.append('%dm' % (time_delta.seconds / MINUTE_IN_SECONDS))
     time_delta = datetime.timedelta(seconds=time_delta.seconds %
                                     MINUTE_IN_SECONDS)
-  parts.append('%dm' % time_delta.seconds)
+  parts.append('%ds' % time_delta.seconds)
   return ' '.join(parts[0:precision])
 
 
