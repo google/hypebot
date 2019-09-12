@@ -28,6 +28,7 @@ import arrow
 
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
+from hypebot.core import name_complete_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
@@ -439,7 +440,18 @@ class LCSRosterCommand(command_lib.BaseCommand):
 
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, include_subs, region, team):
-    team = self._core.esports.teams[team]
+    teams = self._core.esports.teams
+    if region:
+      league = self._core.esports.leagues[region]
+      if not league:
+        return 'Unknown region'
+      teams = {team.team_id: team for team in league.teams}
+      teams = name_complete_lib.NameComplete(
+          dict({team.name: team_id for team_id, team in teams.items()}, **{
+              team.abbreviation: team_id for team_id, team in teams.items()
+          }), teams)
+
+    team = teams[team]
     if not team:
       return 'Unknown team.'
     response = ['%s Roster:' % team.name]
