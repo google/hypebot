@@ -30,12 +30,11 @@ import unicodedata
 
 import arrow
 from dateutil.relativedelta import relativedelta
-import six
-from typing import Optional, Text
-
-from hypebot.core import params_lib
+from hypebot import types
+from hypebot.protos import message_pb2
 from hypebot.protos.user_pb2 import User
-from hypebot.protos.channel_pb2 import Channel
+import six
+from typing import List, Optional, Text
 
 
 def Access(obj, path, default=None):
@@ -413,3 +412,53 @@ def MatchesAny(channels, channel):
     if channel.id.startswith(chan.id):
       return True
   return False
+
+
+def _CardAsTextList(card: message_pb2.Card) -> List[Text]:
+  """Make a reasonable text-only rendering of a card."""
+  text = []
+  if card.header.title:
+    text.append(card.header.title)
+  if card.header.subtitle:
+    text.append(card.header.subtitle)
+  # Separator between header and fields if both exist.
+  if text and card.fields:
+    text.append('---')
+  for field in card.fields:
+    line = ''
+    if field.HasField('title'):
+      line = '%s: ' % field.title
+    if field.HasField('text'):
+      line += field.text
+    elif field.HasField('image'):
+      line += field.image.alt_text
+    else:
+      line += ', '.join([
+          '[%s](%s)' % (button.text, button.action_url)
+          for button in card.buttons
+      ])
+    text.append(line)
+  return text
+
+
+def _AppendToMessage(msg: types.Message, response: types.CommandResponse):
+  """Append a single response to the message list."""
+  if isinstance(response, (bytes, Text)):
+    msg.messages.add(text=response.split('\n'))
+  elif isinstance(response, message_pb2.Message):
+    msg.messages.extend([response])
+  elif isinstance(response, message_pb2.Card):
+    msg.messages.add(card=response, text=_CardAsTextList(response))
+  elif isinstance(response, message_pb2.MessageList):
+    msg.messages.extend(response.messages)
+  else:
+    assert isinstance(response, list)
+    for line in response:
+      _AppendToMessage(msg, line)
+
+
+def MakeMessage(response: types.CommandResponse) -> types.Message:
+  """Converts from the highly permissible CommandResponse into a Message."""
+  msg = types.Message()
+  _AppendToMessage(msg, response)
+  return msg

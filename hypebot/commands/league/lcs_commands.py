@@ -32,6 +32,7 @@ from hypebot.core import name_complete_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
+from hypebot.protos import message_pb2
 
 LCS_TOPIC_STRING = u'#LcsHype | %s'
 
@@ -395,7 +396,39 @@ class LCSStandingsCommand(command_lib.BaseCommand):
     league = query[0] if query else self._params.default_region
     bracket = ' '.join(query[1:]) if len(query) > 1 else 'regular'
 
-    return self._core.esports.GetStandings(league, bracket)
+    standings = self._core.esports.GetStandings(league, bracket)
+
+    cards = []
+    for standing in standings:
+      has_ties = any([team.ties for team in standing['teams']])
+      format_str = '{0.wins}-{0.losses}'
+      if has_ties:
+        format_str += '-{0.ties}, {0.points}'
+      card = message_pb2.Card(
+          header={
+              'title': standing['league'].name,
+              'subtitle': '%s (%s)' % (standing['bracket'].name,
+                                       'W-L-D, Pts' if has_ties else 'W-L'),
+          },
+          # We will place the top-n teams into the first field separated by
+          # newlines so that we don't have extra whitespace.
+          visible_fields_count=1)
+      team_strs = [
+          ('*{0.rank}:* {0.team.abbreviation} (%s)' % format_str).format(team)
+          for team in standing['teams']
+      ]
+      # If there are a lot of teams in the bracket, only display the top few.
+      # 6 is chosen since many group stages and Grumble consist of 6 team
+      # brackets.
+      if len(team_strs) > 6:
+        # The number placed into the visible field is n-1 so that we don't only
+        # show a single team in the collapsed section.
+        card.fields.add(text='\n'.join(team_strs[:5]))
+        card.fields.add(text='\n'.join(team_strs[5:]))
+      else:
+        card.fields.add(text='\n'.join(team_strs))
+      cards.append(card)
+    return cards
 
 
 @command_lib.CommandRegexParser(r'results(full)? ?(.*?)')

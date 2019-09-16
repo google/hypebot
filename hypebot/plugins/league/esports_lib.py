@@ -1093,7 +1093,20 @@ class EsportsLib(object):
     return results[:num_games], display_qualifier
 
   def GetStandings(self, req_region, req_bracket):
-    """Gets the standings for a specified region."""
+    """Gets the standings for a specified region and bracket.
+
+    Args:
+      req_region: Search term for region. May be an alias, full name, or
+        anything that can uniquely identify the region.
+      req_bracket: Search term for bracket. Most regions have multiple brackets,
+        e.g., season and playoffs. International tournaments with groups tend to
+        have many brackets. This is a simplistic search with looks for the
+        characters anywhere in the bracket name.
+
+    Returns:
+      A list of standings for each matching bracket. Each standings is a dict
+      containing the `league`, `bracket`, and a sorted list of `teams`.
+    """
     league = self.leagues[req_region]
     if not league:
       return []
@@ -1104,18 +1117,11 @@ class EsportsLib(object):
               req_bracket in bracket.bracket_id):
         continue
 
-      teams = sorted(bracket.standings, key=lambda x: x.rank)
-      has_ties = any([team.ties for team in teams])
-      standings.append([
-          '%s-%s Standings (%s)' %
-          (league.name, bracket.name, 'W-L-D, Pts' if has_ties else 'W-L')
-      ])
-      for team in teams:
-        format_str = '{0.wins}-{0.losses}'
-        if has_ties:
-          format_str += '-{0.ties}, {0.points}'
-        standings.append(('{0.rank:2}: {0.team.abbreviation:3} (%s)' %
-                          format_str).format(team))
+      standings.append({
+          'league': league,
+          'bracket': bracket,
+          'teams': sorted(bracket.standings, key=lambda x: x.rank),
+      })
 
     return standings
 

@@ -28,7 +28,6 @@ import time
 
 from absl import logging
 
-from hypebot import hypecore
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
@@ -90,7 +89,7 @@ class BaseCommand(object):
   def Handle(self,
              channel: Channel,
              user: Text,
-             message: Text) -> hypecore.MessageType:
+             message: Text) -> types.CommandResponse:
     """Attempt to handle the message.
 
     First we check if this command is available for this channel. Then, we

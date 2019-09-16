@@ -30,9 +30,11 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
 from hypebot.plugins.league import summoner_lib
+from hypebot.protos import message_pb2
 
 
 SUMMONER_REGEX = r'(all)?(?:-(\w+))? (.+)'
+_U_GG = 'https://u.gg/lol/profile/{region}1/{summoner}/overview'
 
 
 class _BaseSummonerCommand(command_lib.BaseCommand):
@@ -121,45 +123,69 @@ class WhoCommand(_BaseSummonerCommand):
     for summoner in summoners:
       rito_data = self._core.summoner.Who(summoner)
       team_data = self._core.esports.Who(summoner)
-      responses.append(self._SummonerDataToText(rito_data, team_data))
+      responses.append(self._SummonerDataToMessage(rito_data, team_data))
     return responses
 
   def _CreateHypebotMessage(self) -> Text:
     return messages.WHO_IS_HYPEBOT_STRING
 
-  def _SummonerDataToText(self, summoner_data, team_data) -> Text:
-    info = summoner_data['summoner']
+  def _SummonerDataToMessage(self, summoner_data, team_data):
+    # Build a custom text response since the default card -> text is a bit
+    # verbose.
+    text_response = summoner_data['summoner']
     if summoner_data['username']:
-      info = summoner_data['username'] + ' = ' + info
-    extra_info = []
+      text_response = summoner_data['username'] + ' = ' + text_response
+    if 'rank' in summoner_data:
+      text_response += ', %s %s' % (
+          summoner_data['region'].upper(), summoner_data['rank'])
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(
+            title=summoner_data['summoner'],
+            subtitle='%s %s, %s' %
+            (summoner_data['region'].upper(),
+             summoner_data.get('rank', 'Unranked'),
+             summoner_data.get('username', 'HypeBot Pleb')),
+            image={
+                'url':
+                    self._core.game.GetImageUrl(
+                        'profileicon', '%d.png' %
+                        summoner_data.get('profile_icon_id', 0))
+            }))
+
+    last_game_info = []
+    win = '?'
+    when = '?'
     # Checking is not None because "False" == a loss
     if summoner_data['last_game'].get('win') is not None:
       win = 'W' if summoner_data['last_game']['win'] else 'L'
-    else:
-      win = '?'
     if summoner_data['last_game'].get('time'):
-      now = arrow.now(self._core.timezone)
-      delta = now - summoner_data['last_game']['time']
-      when = util_lib.TimeDeltaToHumanDuration(delta)
+      when = util_lib.TimeDeltaToHumanDuration(
+          arrow.now(self._core.timezone) - summoner_data['last_game']['time'])
     if summoner_data.get('penta'):
-      extra_info.append('PENTAKILL')
-    if 'rank' in summoner_data:
-      extra_info.append(summoner_data['rank'] + ' (' + summoner_data[
-          'region'].upper() + ')')
+      last_game_info.append('PENTAKILL')
     if 'champion' in summoner_data['last_game']:
-      extra_info.append('%s: %s' %
-                        (summoner_data['last_game'].get('type', 'Unknown'),
-                         summoner_data['last_game']['champion']))
+      last_game_info.append('%s: %s' % (summoner_data['last_game'].get(
+          'type', 'Unknown'), summoner_data['last_game']['champion']))
     if 'fantasy_points' in summoner_data['last_game']:
-      extra_info.append('%.1fpts (%s ago, %s)' %
-                        (summoner_data['last_game']['fantasy_points'], when,
-                         win))
-    if extra_info:
-      info += ' [' + ', '.join(extra_info) + ']'
+      last_game_info.append('%.1fpts (%s ago, %s)' % (
+          summoner_data['last_game']['fantasy_points'], when, win))
+    if last_game_info:
+      text_response += ' [%s]' % ', '.join(last_game_info)
+      card.fields.add(title='Last Game', text=', '.join(last_game_info))
+
     if team_data:
-      rank = team_data.rank
       league = self._core.esports.leagues[team_data.team.league_id]
-      info += ' [(%s) %s, %d%s]' % (league.name,
-                                    team_data.team.name, rank,
-                                    inflect_lib.Ordinalize(rank))
-    return info
+      team_text = '%s: %d%s' % (
+          team_data.team.name, team_data.rank,
+          inflect_lib.Ordinalize(team_data.rank))
+      card.fields.add(title=league.name, text=team_text)
+      text_response += ' [(%s) %s]' % (league.name, team_text)
+    if not card.fields:
+      card.fields.add(text='A very dedicated player.')
+
+    card.fields.add(
+        buttons=[{
+            'text': 'u.gg',
+            'action_url': _U_GG.format(**summoner_data),
+        }])
+    return message_pb2.Message(text=[text_response], card=card)
