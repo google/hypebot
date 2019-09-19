@@ -92,8 +92,10 @@ def _ParseChannels(channels):
   if channels is None:
     return None
   if isinstance(channels, list):
-    return filter(None, [_ParseChannel(channel) for channel in channels])
-  return filter(None, [_ParseChannel(channels)])
+    channels = [_ParseChannel(channel) for channel in channels]
+  else:
+    channels = [_ParseChannel(channels)]
+  return [c for c in channels if c is not None]
 
 
 class HypeParams(object):

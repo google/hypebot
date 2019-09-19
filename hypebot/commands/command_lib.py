@@ -28,6 +28,7 @@ import time
 
 from absl import logging
 
+from hypebot import types
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages

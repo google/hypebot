@@ -19,13 +19,14 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from absl import logging
-from hypebot import hypecore
+from hypebot import types
 from hypebot.commands import command_lib
 from hypebot.core import util_lib
 from hypebot.protos.channel_pb2 import Channel
+from typing import Text
 
 
-def DeployParser(prefix: str):
+def DeployParser(prefix: Text):
   """Wrap CommandRegexParser with CL number and bot name.
 
   Args:
@@ -42,7 +43,7 @@ class _BaseDeployCommand(command_lib.BaseCommand):
 
   def _DeployActionInProgress(self,
                               channel: Channel,
-                              bot_name: str = '') -> None:
+                              bot_name: Text = '') -> None:
     msg = ('%s deploy action already in progress.' % bot_name).capitalize()
     # TODO: Add logging ability to Reply. Commands shouldn't use
     # LogAndOutput, it is intended for HBDS.
@@ -51,9 +52,9 @@ class _BaseDeployCommand(command_lib.BaseCommand):
   @command_lib.HumansOnly()
   def _Handle(self,
               channel: Channel,
-              user: str,
-              raw_cl: str,
-              raw_bot: str) -> hypecore.MessageType:
+              user: Text,
+              raw_cl: Text,
+              raw_bot: Text) -> types.CommandResponse:
     """Validate and parse raw CL number and bot name."""
     if raw_cl:
       raw_cl = raw_cl.strip('@')
@@ -69,9 +70,9 @@ class _BaseDeployCommand(command_lib.BaseCommand):
 
   def _HandleParsed(self,
                     channel: Channel,
-                    user: str,
+                    user: Text,
                     cl: int,
-                    bot_name: str) -> hypecore.MessageType:
+                    bot_name: Text) -> types.CommandResponse:
     raise NotImplementedError('Must implement _HandleParsed.')
 
 
@@ -81,9 +82,9 @@ class BuildCommand(_BaseDeployCommand):
 
   def _HandleParsed(self,
                     channel: Channel,
-                    user: str,
+                    user: Text,
                     cl: int,
-                    bot_name: str) -> hypecore.MessageType:
+                    bot_name: Text) -> types.CommandResponse:
     if self._core.deployment_manager.RequestBuild(user, cl, bot_name, channel):
       return 'Build started, I\'ll let you know when I finish'
     else:
@@ -96,9 +97,9 @@ class DeployCommand(_BaseDeployCommand):
 
   def _HandleParsed(self,
                     channel: Channel,
-                    user: str,
+                    user: Text,
                     cl: int,
-                    bot_name: str) -> hypecore.MessageType:
+                    bot_name: Text) -> types.CommandResponse:
     if self._core.deployment_manager.RequestDeploy(user, cl, bot_name, [],
                                                    channel):
       return 'Deploying %s' % bot_name
@@ -112,9 +113,9 @@ class PushCommand(_BaseDeployCommand):
 
   def _HandleParsed(self,
                     channel: Channel,
-                    user: str,
+                    user: Text,
                     cl: int,
-                    bot_name: str) -> hypecore.MessageType:
+                    bot_name: Text) -> types.CommandResponse:
     if bot_name == self._core.name.lower():
       info_str = 'I\'m going to reload myself. The future is now.'
     else:
@@ -132,9 +133,9 @@ class SetSchemaCommand(_BaseDeployCommand):
 
   def _Handle(self,
               channel: Channel,
-              user: str,
-              raw_cl: str,
-              env: str) -> hypecore.MessageType:
+              user: Text,
+              raw_cl: Text,
+              env: Text) -> types.CommandResponse:
     if raw_cl:
       raw_cl = raw_cl.strip('@')
     cl = util_lib.SafeCast(raw_cl, int, -1)
@@ -151,9 +152,9 @@ class TestCommand(_BaseDeployCommand):
 
   def _HandleParsed(self,
                     channel: Channel,
-                    user: str,
+                    user: Text,
                     cl: int,
-                    bot_name: str) -> hypecore.MessageType:
+                    bot_name: Text) -> types.CommandResponse:
     if self._core.deployment_manager.RequestTest(user, cl, bot_name, channel):
       return 'Running tests, I\'ll let you know when they\'re finished'
     else:
