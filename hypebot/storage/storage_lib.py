@@ -346,7 +346,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     fn_return_val = {'value': None}
 
     @retrying.retry(
-        retry_on_result=lambda commit_retval: commit_retval,
+        retry_on_result=lambda commit_retval: not commit_retval,
         retry_on_exception=lambda exc: False,
         stop_max_attempt_number=6,
         wait_exponential_multiplier=200)

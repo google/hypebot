@@ -54,6 +54,7 @@ class AliasAddCommand(command_lib.BaseCommand):
         return
     had_command = alias_lib.AddOrUpdateAlias(
         self._core.cached_store, user, alias_name, alias_cmd)
+
     return '%s alias %s.' % ('Updated' if had_command else 'Added', alias_name)
 
 

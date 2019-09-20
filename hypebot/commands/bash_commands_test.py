@@ -24,6 +24,26 @@ from hypebot.commands import bash_commands
 from hypebot.commands import hypetest
 
 
+class AliasCommandsTest(hypetest.BaseCommandTestCase):
+
+  def testAddAlias(self):
+    command = bash_commands.AliasAddCommand({
+        'ratelimit': {
+            'enabled': False,
+        },
+    }, self.core)
+
+    response = command.Handle(
+        hypetest.TEST_CHANNEL, 'user',
+        '!alias add new original')
+    self.assertEqual('Added alias new.', response)
+
+    response = command.Handle(
+        hypetest.TEST_CHANNEL, 'user',
+        '!alias add new old')
+    self.assertEqual('Updated alias new.', response)
+
+
 class EchoCommandTest(hypetest.BaseCommandTestCase):
 
   def testRepeatsWhatItsTold(self):
