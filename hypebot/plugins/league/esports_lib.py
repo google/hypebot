@@ -34,6 +34,8 @@ from hypebot.core import util_lib
 from hypebot.data.league import messages
 from hypebot.data.league import nicknames
 from hypebot.protos import esports_pb2
+from hypebot.protos.riot.v4 import constants_pb2
+from hypebot.protos.riot.v4 import league_pb2
 
 # pylint: disable=line-too-long
 from google.protobuf import json_format
@@ -397,9 +399,10 @@ class BattlefyProvider(TournamentProvider):
 
   _BASE_URL = 'https://api.battlefy.com'
 
-  def __init__(self, proxy, league_id, alias, realm='NA1', **kwargs):
+  def __init__(self, proxy, rito, league_id, alias, realm='NA1', **kwargs):
     super(BattlefyProvider, self).__init__(**kwargs)
     self._proxy = proxy
+    self._rito = rito
     self._league_id = league_id
     self._alias = alias
     self._realm = realm
@@ -432,6 +435,24 @@ class BattlefyProvider(TournamentProvider):
     with self._lock:
       return self._teams.values()
 
+  def _PlayerRank(self, summoner_name):
+    """Returns rank of player, e.g., D4."""
+    rank = '?'
+    summoner = self._rito.GetSummoner(self._realm, summoner_name)
+    if not summoner:
+      return rank
+    response = self._rito.ListLeaguePositions(self._realm, summoner.id)
+    if not response:
+      return rank
+    for league in response.positions:
+      if league.queue_type == constants_pb2.QueueType.RANKED_SOLO_5x5:
+        tier = constants_pb2.Tier.Enum.Name(league.tier)[0].upper()
+        division = {'I': '1', 'II': '2', 'III': '3', 'IV': '4'}[
+            league_pb2.TierRank.Enum.Name(league.rank)]
+        rank = tier + division
+        break
+    return rank
+
   def _LoadTeams(self):
     """Load teams."""
     with self._lock:
@@ -451,12 +472,10 @@ class BattlefyProvider(TournamentProvider):
                 [word[0] for word in team['name'].split()]).upper(),
             league_id=team['tournamentID'])
         for player in team['players']:
-          rank = '%s%s' % (util_lib.Access(player, 'stats.tier', 'N')[0],
-                           util_lib.Access(player, 'stats.rank', 'A'))
           self._teams[team['_id']].players.add(
               summoner_name=player['inGameName'],
               team_id=team['_id'],
-              position=rank)
+              position=self._PlayerRank(player['inGameName']))
 
   def _UpdateStandings(self, bracket):
     stage_id = bracket.bracket_id.split('-')[-1]
@@ -802,15 +821,16 @@ class GrumbleProvider(TournamentProvider):
 class EsportsLib(object):
   """Electronic Sports Library."""
 
-  def __init__(self, proxy, executor, game_lib, rito_tz):
+  def __init__(self, proxy, executor, game_lib, rito_tz, rito_lib):
     self._proxy = proxy
     self._executor = executor
     self._game = game_lib
     self._timezone = rito_tz
+    self._rito = rito_lib
 
     self._providers = [
-        BattlefyProvider(self._proxy, '5d58669ea837004f58b095ad', 'CEA',
-                         stats_enabled=True),
+        BattlefyProvider(self._proxy, self._rito, '5d58669ea837004f58b095ad',
+                         'CEA', stats_enabled=True),
         # RitoProvider(self._proxy, 'IN', 'worlds',
         #              aliases=['International', 'Worlds'],
         #              stats_enabled=False),
