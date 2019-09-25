@@ -53,7 +53,7 @@ _DANK_MEMES = [
     '[chiming intensifies]',
     'Yo, {person}, body these fools!',
     '/me remains unconvinced.',
-    'Why do NA supports only play Soraka/Janna/Karma?! ¯\_(ツ)_/¯',
+    r'Why do NA supports only play Soraka/Janna/Karma?! ¯\_(ツ)_/¯',
     'Hypbot IV: A Nw Mm',
     '{person} is one of the generally "good guy owners" of HypeBot.',
     ('We do not mind at all if there is a massive delta between Hypebot and '
@@ -165,5 +165,5 @@ ROOSTERS = [
 ]
 SCHEDULE_NO_GAMES_STRING = ('Tune in next season to see if NA makes it out of '
                             'groups.')
-WHO_IS_HYPEBOT_STRING = ('HypeBot = ¯\_(ツ)_/¯ [DECAKILL, Challenjour (KR), '
+WHO_IS_HYPEBOT_STRING = (r'HypeBot = ¯\_(ツ)_/¯ [DECAKILL, Challenjour (KR), '
                          'Ranked LCK 1v9: Teemo, 1337pts (W)]')

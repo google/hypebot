@@ -80,7 +80,7 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     while True:
       channel = self._params.default_channel
       nick = self._params.default_user
-      message = raw_input('> ').decode('utf-8')
+      message = input('> ')
       overrides = self._ExtractOverrides(message)
       if overrides:
         channel, nick, message = overrides
