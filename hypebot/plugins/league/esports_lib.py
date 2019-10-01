@@ -831,9 +831,9 @@ class EsportsLib(object):
     self._providers = [
         BattlefyProvider(self._proxy, self._rito, '5d58669ea837004f58b095ad',
                          'CEA', stats_enabled=True),
-        # RitoProvider(self._proxy, 'IN', 'worlds',
-        #              aliases=['International', 'Worlds'],
-        #              stats_enabled=False),
+        RitoProvider(self._proxy, 'IN', 'worlds',
+                     aliases=['International', 'Worlds'],
+                     stats_enabled=True),
         RitoProvider(self._proxy, 'NA', 'lcs', aliases=['North America'],
                      stats_enabled=True),
         RitoProvider(self._proxy, 'EU', 'lec', aliases=['Europe'],
