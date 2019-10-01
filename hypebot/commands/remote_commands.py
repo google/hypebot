@@ -108,19 +108,21 @@ class StocksCommand(command_lib.BaseCommand):
       quote = quotes[symbol]
       history = histories.get(symbol)
       change_str = self._FormatChangeStr(quote.change, quote.change_percent)
-      response = 'One share of %s is currently worth %0.2f %s' % (
+      response = 'One share of %s is currently worth %0.2f%s' % (
           symbol, quote.price, change_str)
       if quote.extended_change:
         ext_change_str = self._FormatChangeStr(quote.extended_change,
                                                quote.extended_change_percent)
-        response += ' [ext: %0.2f %s]' % (quote.extended_price, ext_change_str)
+        response += ' [ext: %0.2f%s]' % (quote.extended_price, ext_change_str)
       if history:
         response += ' %s' % util_lib.Sparkline(history)
       responses.append(response)
     return responses
 
   def _FormatChangeStr(self, change, percent):
-    change_str = '%0.2f (%0.2f%%)' % (change, percent)
+    if not change and not percent:
+      return ''
+    change_str = ' %0.2f (%0.2f%%)' % (change, percent)
     if change > 0:
       change_str = util_lib.Colorize('⬆%s' % change_str, 'green')
     elif change < 0:

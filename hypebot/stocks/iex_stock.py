@@ -22,6 +22,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os
+
 from typing import Dict, List, Text
 
 from hypebot.core import params_lib
@@ -35,7 +37,7 @@ class IEXStock(stock_lib.StockLib):
   DEFAULT_PARAMS = params_lib.MergeParams(
       stock_lib.StockLib.DEFAULT_PARAMS,
       {
-          'base_url': 'https://cloud.iexapis.com/v1/stock/market/batch',
+          'base_url': 'https://cloud.iexapis.com/v1',
           # Sign up for token at iexcloud.io
           'token': None,
       })
@@ -53,9 +55,10 @@ class IEXStock(stock_lib.StockLib):
         'displayPercent': 'true',  # Keep string, not boolean.
         'token': self._params.token,
     }
-    response = self._proxy.FetchJson(self._params.base_url,
-                                     params=request_params,
-                                     force_lookup=True)
+    response = self._proxy.FetchJson(
+        os.path.join(self._params.base_url, 'stock/market/batch'),
+        params=request_params,
+        force_lookup=True)
 
     stock_info = {}
     for symbol, data in response.items():
@@ -74,7 +77,20 @@ class IEXStock(stock_lib.StockLib):
         stock.extended_change = realtime_price - stock.price
         stock.extended_change_percent = int(
             float(stock.extended_change) / stock.price * 100 + 0.5)
-      stock_info[symbol] = stock
+      if stock.price:
+        stock_info[symbol] = stock
+
+    # If it wasn't a stock symbol, try to look it up as a crypto.
+    for symbol in set(symbols) - set(stock_info):
+      response = self._proxy.FetchJson(
+          os.path.join(self._params.base_url, 'crypto', symbol, 'price'),
+          params={'token': self._params.token},
+          force_lookup=True)
+      if response:
+        stock_info[symbol] = stock_pb2.Quote(
+            symbol=symbol,
+            price=float(response.get('price', 0)))
+
     return stock_info
 
   def History(self,
@@ -87,9 +103,10 @@ class IEXStock(stock_lib.StockLib):
         'range': span,
         'token': self._params.token,
     }
-    response = self._proxy.FetchJson(self._params.base_url,
-                                     params=request_params,
-                                     force_lookup=True)
+    response = self._proxy.FetchJson(
+        os.path.join(self._params.base_url, 'stock/market/batch'),
+        params=request_params,
+        force_lookup=True)
     stock_info = {}
     for symbol, data in response.items():
       stock_info[symbol] = [day['close'] for day in data['chart']][-5:]
