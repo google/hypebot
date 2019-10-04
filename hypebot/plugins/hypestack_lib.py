@@ -55,7 +55,12 @@ class HypeStacks(object):
     Each user loses 10-50% of their current stacks. Amount is random per user.
     """
     logging.info('Decaying all hypestacks')
-    for user, stacks in self._store.GetSubkey(self._STACK_COUNT_SUBKEY):
+    users_with_stacks = [
+        x for x in self._store.GetSubkey(self._STACK_COUNT_SUBKEY)
+        if int(x[1] or 0) > 0
+    ]
+    logging.info('Found %s user(s) with stacks:', len(users_with_stacks))
+    for user, stacks in users_with_stacks:
       retention_factor = random.uniform(0.5, 0.9)
       new_value = int(int(stacks or 0) * retention_factor)
       logging.info('\t%s: %s => %s (%.2f%% retention)', user, stacks, new_value,
