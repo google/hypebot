@@ -490,6 +490,8 @@ class LCSRosterCommand(command_lib.BaseCommand):
     response = ['%s Roster:' % team.name]
     players = [player for player in team.players
                if not player.is_substitute or include_subs]
+    role_order = {'Top': 0, 'Jungle': 1, 'Mid': 2, 'ADC': 3, 'Support': 4}
+    players.sort(key=lambda p: role_order.get(p.position, 5))
     for player in players:
       response.append('%s - %s' % (
           self.NAME_SUBSTITUTIONS.get(player.summoner_name,
