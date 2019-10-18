@@ -67,7 +67,7 @@ class BuyHypeStackCommand(command_lib.BaseCommand):
               stack_amount: Text) -> types.CommandResponse:
     num_stacks = util_lib.SafeCast(stack_amount, int, 0)
     if not num_stacks:
-      self._core.bets.FineUser(user, 1, 'You must buy at least one HypeStack.',
+      self._core.bank.FineUser(user, 1, 'You must buy at least one HypeStack.',
                                self._Reply)
       return
     hypecoin_amount = self._core.hypestacks.PriceForHypeStacks(user, num_stacks)

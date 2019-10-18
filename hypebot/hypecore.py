@@ -262,7 +262,7 @@ class Core(object):
     self.bets = coin_lib.Bookie(self.store, self.bank, self.inventory)
     self.stocks = stock_factory.CreateFromParams(self.params.stocks, self.proxy)
     self.deployment_manager = deploy_lib.DeploymentManager(
-        self.name.lower(), self.bets, self.output_util, self.executor)
+        self.name.lower(), self.bank, self.output_util, self.executor)
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
     self.betting_games = []

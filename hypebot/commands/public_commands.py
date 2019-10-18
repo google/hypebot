@@ -315,7 +315,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
       return greeting.format(**greeting_params)
     except Exception as e:
       logging.info('GreetingCommand exception: %s', e)
-      self._core.bets.FineUser(user, 100, 'Bad greeting', self._Reply)
+      self._core.bank.FineUser(user, 100, 'Bad greeting', self._Reply)
       return ('%s has an invalid greeting and feels bad for trying to '
               'break %s' % (user, self._core.name))
 

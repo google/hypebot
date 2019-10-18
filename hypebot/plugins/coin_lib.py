@@ -98,12 +98,11 @@ class Thievery(object):
       return
 
     if victim.lower() in self._protected_peeps:
-      mafia_fee = max(amount, int(0.05 * self._bank.GetBalance(thief)))
       msg_fn(None, 'The Godfather protects his family.')
       self._bank.ProcessPayment(
-          thief, self._bot_name, mafia_fee,
+          thief, self._bot_name, 500,
           'In Soviet Russia, %s steals from you.' % self._bot_name,
-          msg_fn, can_overdraft=True)
+          msg_fn)
       return
 
     victim_balance = self._bank.GetBalance(victim)
@@ -373,11 +372,6 @@ class Bookie(object):
         self._inventory.AddItem(winner, winnings)
     return notifications
 
-  def FineUser(self, user, amount, details, msg_fn):
-    return self._bank.ProcessPayment(user, BOOKIE_ACCOUNT, amount,
-                                     'Fine: %s' % details, msg_fn,
-                                     can_overdraft=True)
-
   def _GetBets(self, row, tx=None):
     json_bets = self._store.GetJsonValue(row, self._BET_SUBKEY, tx) or {}
     bets = {u: [json_format.ParseDict(b, Bet()) for b in user_bets]
@@ -550,6 +544,15 @@ class Bank(object):
       amount = None
 
     return amount
+
+  def FineUser(self, user, amount, details, msg_fn):
+    return self.ProcessPayment(
+        user,
+        BOOKIE_ACCOUNT,
+        amount,
+        'Fine: %s' % details,
+        msg_fn,
+        can_overdraft=True)
 
   def ProcessPayment(self, customer, merchants, num_coins, details, msg_fn,
                      can_overdraft=False, merchant_weights=None):
