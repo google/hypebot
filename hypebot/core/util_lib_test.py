@@ -84,6 +84,27 @@ class UtilLibTest(unittest.TestCase):
     for falsey_value in ('', '  falSe', '0', 'NO  ', 0, False):
       self.assertFalse(util_lib.FuzzyBool(falsey_value))
 
+  def testExtractRegex_ReturnsNoneWhenNoMatch(self):
+    self.assertIsNone(util_lib.ExtractRegex(r'.+', ''))
+
+  def testExtractRegex_MultipleMatchesAreExtracted(self):
+    # pytype can't seem to figure out that result isn't None (or isn't None
+    # after asserting it isn't anyways). So we just use it directly instead of
+    # destructuring the tuple.
+    result = util_lib.ExtractRegex(r'[a-z]+', 'mone1234mtwo')
+    self.assertIsNotNone(result)
+    self.assertEqual(2, len(result[0]))
+    self.assertIn('mone', result[0])
+    self.assertIn('mtwo', result[0])
+    self.assertEqual('1234', result[1])
+
+  def testExtractRegex_NestedCapturesStillRemoveFullRegex(self):
+    result = util_lib.ExtractRegex(r'g(.+)', 'Captures with groups')
+    self.assertIsNotNone(result)
+    self.assertEqual(1, len(result[0]))
+    self.assertEqual('roups', result[0][0])
+    self.assertEqual('Captures with ', result[1])
+
 
 if __name__ == '__main__':
   unittest.main()

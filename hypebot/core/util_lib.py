@@ -34,7 +34,7 @@ from hypebot import types
 from hypebot.protos import message_pb2
 from hypebot.protos.user_pb2 import User
 import six
-from typing import List, Optional, Text
+from typing import List, Optional, Text, Tuple
 
 
 def Access(obj, path, default=None):
@@ -120,6 +120,25 @@ def UnformatHypecoins(value):
   if not scale:
     scale = 1
   return number * scale
+
+
+def ExtractRegex(pattern: Text,
+                 string: Text) -> Optional[Tuple[List[Text], Text]]:
+  """Searches for pattern in string and extracts all matches from the string.
+
+  Args:
+    pattern: a reguar expression in string format to search for in string.
+    string: the string to extract matches of pattern from.
+
+  Returns:
+    If pattern was found at least once in string, returns a tuple of the matches
+    and the string with the matches removed. Otherwise, returns None to match
+    the semantics of re.match/search.
+  """
+  pattern = re.compile(pattern)
+  m = pattern.search(string)
+  if m:
+    return (pattern.findall(string), pattern.sub('', string))
 
 
 def FormatHypecoins(amount, abbreviate=False):
