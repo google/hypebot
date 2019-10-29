@@ -296,13 +296,12 @@ class GameLib(object):
     passive = champ.passive
 
     # Make passives more dank.
-    passive_title = '{} Passive: {}'.format(champ.name,
-                                            util_lib.Dankify(passive.name))
     tooltip = util_lib.Dankify(self._Sanitize(passive.description))
 
     return message_pb2.Card(
         header={
-            'title': passive_title,
+            'title': util_lib.Dankify(passive.name),
+            'subtitle': '{} Passive'.format(champ.name),
             'image': {
                 'url': self.GetImageUrl('passive', passive.image.full),
             },
