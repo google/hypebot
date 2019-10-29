@@ -353,16 +353,16 @@ class GameLib(object):
     skill_name = util_lib.Dankify(skill.name)
     tooltip = util_lib.Dankify(self._Sanitize(skill.tooltip))
 
-    skill_title = '{} {}: {}'.format(champ.name, skill_button, skill_name)
+    skill_strs = []
+    skill_strs.append('{} {}: {}'.format(champ.name, skill_button, skill_name))
     card = message_pb2.Card(
         header={
-            'title': skill_title,
+            'title': skill_name,
+            'subtitle': '{} {}'.format(champ.name, skill_button),
             'image': {
                 'url': self.GetImageUrl('spell', skill.image.full),
             },
         })
-    skill_strs = []
-    skill_strs.append(skill_title)
 
     skill_range = skill.range_burn
     if skill_range != 'self':
