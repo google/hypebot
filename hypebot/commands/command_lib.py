@@ -499,5 +499,5 @@ class TextCommand(BaseCommand):
       if '{person}' in choice:
         choice = choice.format(choice, person=user)
       if choice.startswith('/me '):
-        choice = [self._core.params.name, choice[4:]].join(' ')
+        choice = '%s %s' % (self._core.params.name, choice[4:])
       return choice
