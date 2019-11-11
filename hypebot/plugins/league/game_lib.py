@@ -421,9 +421,11 @@ class GameLib(object):
           if scaling_type in self._SCALING_MAP:
             scaling_type = self._SCALING_MAP[scaling_type]
           tokens[i] = scaling_amount_str + ' ' + scaling_type
-      except KeyError:
+      except (KeyError, ValueError):
         # If a KeyError occurs (likely Rito's fault), proceed without
         # substituting this tag.
+        # If a ValueError occurs, an unknown key starting with e, a, or f caused
+        # some issues and we should not substitute this tag.
         pass
 
     return ''.join(tokens)
