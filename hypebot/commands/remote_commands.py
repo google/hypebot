@@ -136,13 +136,15 @@ class WeatherCommand(command_lib.BaseCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'forecast_days': ['Today', 'Tomorrow', 'The next day'],
-          'apixu_key': None,
+          'geocode_key': None,
+          'darksky_key': None,
       })
 
   def __init__(self, *args):
     super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
     self._weather = weather_lib.WeatherLib(self._core.proxy,
-                                           self._params.apixu_key)
+                                           self._params.darksky_key,
+                                           self._params.geocode_key)
 
   def _Handle(self,
               channel: types.Channel,
@@ -154,10 +156,9 @@ class WeatherCommand(command_lib.BaseCommand):
     location = location or self._core.user_prefs.Get(user, 'location')
     # Override airport code from pacific.
     if location.lower() == 'mtv':
-      location = 'mountain view'
+      location = 'mountain view, CA'
 
-    weather = self._weather.GetForecast(
-        location, days=len(self._params.forecast_days))
+    weather = self._weather.GetForecast(location)
     if not weather:
       return 'Unknown location.'
 
@@ -166,15 +167,8 @@ class WeatherCommand(command_lib.BaseCommand):
                      (self._FormatTemp(weather.current.temp_f, unit),
                       weather.current.condition, weather.location))
 
-    weather.MergeFrom(self._weather.GetHistory(location, unused_days=1))
-    if weather.hindsight:
-      yesterday = weather.hindsight[0]
-      responses.append(
-          'Yesterday: %s (%s - %s)' %
-          (yesterday.condition, self._FormatTemp(yesterday.min_temp_f, unit),
-           self._FormatTemp(yesterday.max_temp_f, unit)))
-
-    for index, day in enumerate(weather.forecast):
+    for index, day in enumerate(
+        weather.forecast[:len(self._params.forecast_days)]):
       condition_str = '%s: %s' % (self._params.forecast_days[index],
                                   day.condition)
       temp_str = '(%s - %s)' % (self._FormatTemp(day.min_temp_f, unit),
