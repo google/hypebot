@@ -297,36 +297,34 @@ def Underline(string):
 
 
 _MIRC_COLORS = {
-    'white': '#ffffff',
-    'black': '#000000',
-    'blue': '#000075',
-    'green': '#009300',
-    'red': '#ff0000',
-    'brown': '#750000',
-    'purple': '#9c009c',
-    'orange': '#fc7500',
-    'yellow': '#ffff00',
-    'light green': '#00fc00',
-    'cyan': '#009393',
-    'light cyan': '#00ffff',
-    'light blue': '#0000fc',
-    'pink': '#ff00ff',
-    'grey': '#757575',
-    'light grey': '#d2d2d2',
+    'white': (0, '#ffffff'),
+    'black': (1, '#000000'),
+    'blue': (2, '#000075'),
+    'green': (3, '#009300'),
+    'red': (4, '#ff0000'),
+    'brown': (5, '#750000'),
+    'purple': (6, '#9c009c'),
+    'orange': (7, '#fc7500'),
+    'yellow': (8, '#ffff00'),
+    'light green': (9, '#00fc00'),
+    'cyan': (10, '#009393'),
+    'light cyan': (11, '#00ffff'),
+    'light blue': (12, '#0000fc'),
+    'pink': (13, '#ff00ff'),
+    'grey': (14, '#757575'),
+    'light grey': (15, '#d2d2d2'),
 }
 
 
 def Colorize(string, color, irc=True):
   """Returns string wrapped in escape codes representing color."""
   try:
-    if irc:
-      code = _MIRC_COLORS.keys().index(color.lower())
-      return '\x03%02d%s\x0f' % (code, string)
-    else:
-      return '<font color="%s">%s</font>' % (
-          _MIRC_COLORS[color.lower()], string)
+    color = _MIRC_COLORS[color.lower()]
   except (KeyError, ValueError):
     return string
+  if irc:
+    return '\x03%02d%s\x0f' % (color[0], string)
+  return '<font color="%s">%s</font>' % (color[1], string)
 
 
 def StripColor(string):
