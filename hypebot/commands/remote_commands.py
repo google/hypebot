@@ -25,16 +25,21 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
+from hypebot.protos import message_pb2
 from hypebot.protos import stock_pb2
+from typing import Text
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  def _Handle(self, channel: types.Channel, user: str):
+  def _Handle(self, channel: types.Channel, user: Text):
     data = self._core.proxy.FetchJson(
-        'https://kittysales.herokuapp.com/data', {'offset': 0, 'count': 1},
+        'https://kittysales.herokuapp.com/data', {
+            'offset': 0,
+            'count': 1
+        },
         force_lookup=True)
     if data:
       totals = data['totals']
@@ -71,19 +76,13 @@ class StocksCommand(command_lib.BaseCommand):
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
-  def _Handle(self,
-              channel: types.Channel,
-              user: str,
-              symbols: str):
+  def _Handle(self, channel: types.Channel, user: Text, symbols: Text):
     symbols = symbols or self._core.user_prefs.Get(user, 'stocks')
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
     if 'HYPE' in symbols:
       quotes['HYPE'] = stock_pb2.Quote(
-          symbol='HYPE',
-          price=13.37,
-          change=4.2,
-          change_percent=45.80)
+          symbol='HYPE', price=13.37, change=4.2, change_percent=45.80)
     if not quotes:
       if symbols[0].upper() == self._core.name.upper():
         return ('You can\'t buy a sentient AI for some vague promise of future '
@@ -140,17 +139,16 @@ class WeatherCommand(command_lib.BaseCommand):
           'darksky_key': None,
       })
 
+  _ICON_URL = 'https://darksky.net/images/weather-icons/%s.png'
+
   def __init__(self, *args):
     super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
     self._weather = weather_lib.WeatherLib(self._core.proxy,
                                            self._params.darksky_key,
                                            self._params.geocode_key)
 
-  def _Handle(self,
-              channel: types.Channel,
-              user: str,
-              unit: str,
-              location: str):
+  def _Handle(self, channel: types.Channel, user: Text, unit: Text,
+              location: Text):
     unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()
     location = location or self._core.user_prefs.Get(user, 'location')
@@ -162,22 +160,27 @@ class WeatherCommand(command_lib.BaseCommand):
     if not weather:
       return 'Unknown location.'
 
-    responses = []
-    responses.append('Currently %s and %s in %s' %
-                     (self._FormatTemp(weather.current.temp_f, unit),
-                      weather.current.condition, weather.location))
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(
+            title=weather.location,
+            subtitle='%s and %s' %
+            (self._FormatTemp(weather.current.temp_f, unit),
+             weather.current.condition),
+            image={
+                'url': self._ICON_URL % weather.current.icon,
+                'alt_text': weather.current.icon,
+            }))
 
     for index, day in enumerate(
         weather.forecast[:len(self._params.forecast_days)]):
-      condition_str = '%s: %s' % (self._params.forecast_days[index],
-                                  day.condition)
-      temp_str = '(%s - %s)' % (self._FormatTemp(day.min_temp_f, unit),
-                                self._FormatTemp(day.max_temp_f, unit))
-      if index == 0:
-        condition_str = util_lib.Bold(condition_str)
-      responses.append('%s %s' % (condition_str, temp_str))
+      card.fields.add(
+          icon_url=self._ICON_URL % day.icon,
+          text='%s: %s - %s %s' %
+          (self._params.forecast_days[index],
+           self._FormatTemp(day.min_temp_f, unit),
+           self._FormatTemp(day.max_temp_f, unit), day.condition))
 
-    return responses
+    return card
 
   def _FormatTemp(self, temp_f, unit):
     color = ''
@@ -195,5 +198,5 @@ class WeatherCommand(command_lib.BaseCommand):
     elif unit == 'K':
       raw_str = '%.1fK' % ((temp_f - 32) * 5 / 9 + 273.15)
     else:
-      raw_str = '%.1f°F' % temp_f
-    return util_lib.Colorize(raw_str, color)
+      raw_str = '%.0f°F' % temp_f
+    return util_lib.Colorize(raw_str, color, irc=False)

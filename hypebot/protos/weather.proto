@@ -18,12 +18,18 @@ package hypebot;
 message Day {
   float min_temp_f = 1;
   float max_temp_f = 2;
+  // Human readable description of the condition.
   string condition = 3;
+  // Machine readable description suitable for displaying an icon.
+  string icon = 4;
 }
 
 message Current {
   float temp_f = 1;
+  // Human readable description of the condition.
   string condition = 2;
+  // Machine readable description suitable for displaying an icon.
+  string icon = 3;
 }
 
 message Weather {

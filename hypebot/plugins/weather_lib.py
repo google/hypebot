@@ -101,12 +101,14 @@ class WeatherLib(object):
         location=location['formatted_address'],
         current=weather_pb2.Current(
             temp_f=forecast['currently']['temperature'],
-            condition=forecast['currently']['summary']))
+            condition=forecast['currently']['summary'],
+            icon=forecast['currently']['icon']))
 
     for day in forecast['daily']['data']:
       weather.forecast.add(
           min_temp_f=day['temperatureLow'],
           max_temp_f=day['temperatureHigh'],
-          condition=day['summary'])
+          condition=day['summary'],
+          icon=day['icon'])
 
     return weather
