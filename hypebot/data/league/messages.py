@@ -105,7 +105,7 @@ FREELO = [
     ('Chasing after Singed is a great way to make your Spectre\'s Cowl as '
      'gold efficient as possible!'),
     ('When playing Mordekaiser, be sure to feed the enemy marksmen early to '
-     'increase the strength of your puppet.'),
+     'steal more stats with your ult.'),
     ('When playing Blitzcrank, prioritize hooking the enemy Amumu so your team '
      'can burst him down before he can ult.'),
     'Remember to spam AOE abilities under the tower to help your ADC last hit.',
