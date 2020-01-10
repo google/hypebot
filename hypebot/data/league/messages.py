@@ -64,6 +64,11 @@ _DANK_MEMES = [
     ('I\'m not allowed to disclose the numbers but trust me, it wasn\'t a '
      'close race.'),
     '👹 You look familiar.',
+    'Not a single person at Riot believes {person}\'s damage is too low.',
+    ('I\m sorry you feel that way, but I don\'t know what to tell you when 20+ '
+     'professionals are confidently saying otherwise.'),
+    ('I\'ll take the 200+ collective years of professional game design '
+     'experience.'),
 ]
 _TEAM_MEMES = [
     '#{team}Hype!',
