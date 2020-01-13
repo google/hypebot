@@ -46,8 +46,7 @@ class IEXStock(stock_lib.StockLib):
     super(IEXStock, self).__init__(params)
     self._proxy = proxy
 
-  def Quotes(self,
-             symbols: List[Text]) -> Dict[Text, stock_pb2.Quote]:
+  def Quotes(self, symbols: List[Text]) -> Dict[Text, stock_pb2.Quote]:
     """See StockLib.Quotes for details."""
     request_params = {
         'symbols': ','.join(symbols),
@@ -67,10 +66,13 @@ class IEXStock(stock_lib.StockLib):
       stock = stock_pb2.Quote(
           symbol=symbol,
           open=quote.get('open', 0),
-          close=quote.get('close', 0),
-          price=quote.get('latestPrice', 0),
-          change=quote.get('change', 0),
-          change_percent=quote.get('changePercent', 0))
+          close=quote.get('previousClose', 0),
+          price=quote.get('latestPrice', 0))
+      # These fields may exist and be `null` in the JSON, so we set the default
+      # outside of `get()`.
+      stock.change = quote.get('change') or stock.price - stock.close
+      stock.change_percent = quote.get('changePercent') or (
+          stock.change / (stock.close or 1) * 100)
       realtime_price = quote.get('iexRealtimePrice')
       if realtime_price and realtime_price != stock.price:
         stock.extended_price = realtime_price
@@ -88,8 +90,7 @@ class IEXStock(stock_lib.StockLib):
           force_lookup=True)
       if response:
         stock_info[symbol] = stock_pb2.Quote(
-            symbol=symbol,
-            price=float(response.get('price', 0)))
+            symbol=symbol, price=float(response.get('price', 0)))
 
     return stock_info
 
