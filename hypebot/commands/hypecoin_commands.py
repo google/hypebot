@@ -86,6 +86,8 @@ class HCBetCommand(command_lib.BaseCommand):
     amount = self._core.bank.ParseAmount(user, amount_str, msg_fn)
     if amount is None:
       return
+    elif amount <= 0:
+      return 'Try being positive for a change.'
 
     more = more_str == ' more' or amount_str in messages.GAMBLE_STRINGS
     if direction == 'on':
