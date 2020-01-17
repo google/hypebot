@@ -1,3 +1,4 @@
+# Lint as: python3
 # coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
@@ -314,9 +315,9 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     store.RunInTransaction(self._DoWorkThatNeedsToBeAtomic, arg_1, arg_2)
     ...
     def _DoWorkThatNeedsToBeAtomic(self, arg_1, arg_2, tx=None):
-      a = store.GetValue(arg_1, arg_2)
+      a = store.GetValue(arg_1, arg_2, tx)
       a += '-foo'
-      store.SetValue(arg_1, arg_2, a)
+      store.SetValue(arg_1, arg_2, a, tx)
 
     With the above, _DoWorkThatNeedsToBeAtomic will be done inside a transaction
     and retried if committing the transaction fails for a storage-engine defined
@@ -337,13 +338,9 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
 
     Returns:
       If fn does not raise an Exception and the transaction (eventually) commits
-      successfully. Note that fn's return value is ignored, as there is no
-      simple way to pass this value back to the caller in all storage
-      implementations.
+      successfully, returns the return value of fn.
     """
-    # For py2 this needs to be a mutable object, in py3 we could just use the
-    # `nonlocal` keyword on a raw reference.
-    fn_return_val = {'value': None}
+    fn_return_val = None
 
     @retrying.retry(
         retry_on_result=lambda commit_retval: not commit_retval,
@@ -351,8 +348,9 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
         stop_max_attempt_number=6,
         wait_exponential_multiplier=200)
     def _Internal(tx):
+      nonlocal fn_return_val
       kwargs['tx'] = tx
-      fn_return_val['value'] = fn(*args, **kwargs)
+      fn_return_val = fn(*args, **kwargs)
       return tx.Commit()  # Must return True/False to indicate success or retry
 
     tx_name = kwargs.pop('tx_name', '%s: %s %s' % (fn.__name__, args, kwargs))
@@ -365,7 +363,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     except Exception:
       logging.error('%s threw, aborting %s:', fn.__name__, tx)
       raise
-    return fn_return_val['value']
+    return fn_return_val
 
 
 class CommitAbortError(RuntimeError):

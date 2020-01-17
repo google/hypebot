@@ -230,9 +230,10 @@ class RedisStore(storage_lib.HypeStore):
                    max_length: Optional[int] = None,
                    tx: Optional[RedisTransaction] = None) -> None:
     if tx:
-      return self._PrependValue(key, subkey, new_value, max_length, tx)
+      self._PrependValue(key, subkey, new_value, max_length, tx)
+      return
     tx_name = 'PrependValue: %s/%s' % (key, subkey)
-    return self.RunInTransaction(
+    self.RunInTransaction(
         self._PrependValue, key, subkey, new_value, max_length, tx_name=tx_name)
 
   def _PrependValue(self, key: AnyStr, subkey: AnyStr, new_value: JsonType,
