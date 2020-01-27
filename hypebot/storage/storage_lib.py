@@ -24,6 +24,7 @@ from __future__ import unicode_literals
 
 import abc
 import json
+from typing import Any, AnyStr, Callable, List, Optional, Tuple, Union
 
 from absl import logging
 from six import with_metaclass
@@ -31,8 +32,6 @@ import retrying
 
 from hypebot.core import params_lib
 from hypebot.types import JsonType
-
-from typing import Any, AnyStr, Callable, List, Optional, Tuple, Union
 
 
 class HypeTransaction(with_metaclass(abc.ABCMeta)):
@@ -197,19 +196,11 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
                   delta: int,
                   tx: Optional[HypeTransaction] = None) -> None:
     """Reads the current value for key/subkey and adds delta, atomically."""
-    if tx:
-      self._UpdateValue(key, subkey, delta, tx)
-    else:
+    if not tx:
+      tx_name = '%s/%s += %s' % (key, subkey, delta)
       self.RunInTransaction(
-          self._UpdateValue,
-          key,
-          subkey,
-          delta,
-          tx_name='%s/%s += %s' % (key, subkey, delta))
-
-  def _UpdateValue(self, key: AnyStr, subkey: AnyStr, delta: int,
-                   tx: HypeTransaction) -> None:
-    """Internal version of UpdateValue which requires a transaction."""
+          self.UpdateValue, key, subkey, delta, tx_name=tx_name)
+      return
     cur_value = self.GetValue(key, subkey, tx) or '0'
     cur_type = type(cur_value)
     try:
@@ -280,23 +271,17 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
       The result of success_fn applied to the JSON object as it was when fetched
       from table.
     """
-    if tx:
-      return self._UpdateJson(key, subkey, transform_fn, success_fn, is_set, tx)
-    tx_name = 'UpdateJson on %s/%s' % (key, subkey)
-    return self.RunInTransaction(
-        self._UpdateJson,
-        key,
-        subkey,
-        transform_fn,
-        success_fn,
-        is_set,
-        tx_name=tx_name)
+    if not tx:
+      tx_name = 'UpdateJson on %s/%s' % (key, subkey)
+      return self.RunInTransaction(
+          self.UpdateJson,
+          key,
+          subkey,
+          transform_fn,
+          success_fn,
+          is_set,
+          tx_name=tx_name)
 
-  def _UpdateJson(self, key: AnyStr, subkey: AnyStr,
-                  transform_fn: Callable[[JsonType], Any],
-                  success_fn: Callable[[JsonType], bool], is_set: bool,
-                  tx: HypeTransaction) -> bool:
-    """Internal version of UpdateJson, requiring a transaction."""
     raw_structure = self.GetJsonValue(key, subkey, tx) or {}
     if is_set:
       raw_structure = set(raw_structure)
