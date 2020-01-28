@@ -368,7 +368,7 @@ class LCSScheduleCommand(command_lib.BaseCommand):
     if full == 'full':
       num_games = self._params.full_num_games
     schedule, subcommand = self._core.esports.GetSchedule(
-        subcommand, include_playoffs, num_games)
+        subcommand or 'All', include_playoffs, num_games)
 
     lines = ['%s Upcoming Matches' % subcommand]
     lines.extend(schedule)
@@ -449,7 +449,7 @@ class LCSResultsCommand(command_lib.BaseCommand):
     num_games = self._params.num_games
     if full == 'full':
       num_games = self._params.full_num_games
-    schedule, region = self._core.esports.GetResults(region.upper(), num_games)
+    schedule, region = self._core.esports.GetResults(region or 'All', num_games)
 
     schedule.insert(0, '%s Past Matches' % region)
     return schedule
@@ -490,7 +490,7 @@ class LCSRosterCommand(command_lib.BaseCommand):
     response = ['%s Roster:' % team.name]
     players = [player for player in team.players
                if not player.is_substitute or include_subs]
-    role_order = {'Top': 0, 'Jungle': 1, 'Mid': 2, 'ADC': 3, 'Support': 4}
+    role_order = {'Top': 0, 'Jungle': 1, 'Mid': 2, 'Bottom': 3, 'Support': 4}
     players.sort(key=lambda p: role_order.get(p.position, 5))
     for player in players:
       response.append('%s - %s' % (

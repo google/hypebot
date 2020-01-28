@@ -23,6 +23,7 @@ from __future__ import unicode_literals
 from collections import Counter
 from collections import defaultdict
 import copy
+import os
 import random
 from threading import RLock
 
@@ -128,6 +129,9 @@ class RitoProvider(TournamentProvider):
   Scrapes lolesports.com undocumented APIs.
   """
 
+  # This was pulled from dev-tools. Uncertain how long before it changes.
+  _API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
+
   _POSITIONS = {
       'toplane': 'Top',
       'jungle': 'Jungle',
@@ -136,22 +140,21 @@ class RitoProvider(TournamentProvider):
       'support': 'Support',
   }
 
-  def __init__(self, proxy, region, league, aliases=None, **kwargs):
+  def __init__(self, proxy, region, league_id, aliases=None, **kwargs):
     super(RitoProvider, self).__init__(**kwargs)
     self._proxy = proxy
     self._region = region
-    self._league = league
+    self._league_id = league_id
     self._aliases = aliases or []
 
     self._lock = RLock()
     self._teams = {}
     self._brackets = {}
     self._matches = {}
-    self._rosters = {}
 
   @property
   def league_id(self):
-    return self._region
+    return self._league_id
 
   @property
   def name(self):
@@ -173,198 +176,188 @@ class RitoProvider(TournamentProvider):
 
   def _FetchEsportsData(self,
                         api_endpoint,
-                        api_id=None,
-                        force_lookup=False,
+                        params=None,
+                        force_lookup=True,
                         use_storage=False):
-    """Gets eSports data from rito, bypassing the cache if force_lookup."""
-    if api_endpoint != 'streamgroups' and not api_id:
+    """Gets eSports data from rito, bypassing the cache if force_lookup.
+
+    Args:
+      api_endpoint: Which endpoint to call.  Known endpoints:
+        * getLeagues
+        * getTournamentsForLeague: leagueId
+        * getStandings: tournamentId
+        * getCompletedEvents: tournamentId
+      params: GET params to populate for endpoint.
+      force_lookup: Whether to force lookup or to allow caching.
+      use_storage: Whether to store result in data store for caching.
+
+    Returns:
+      Dictionary of JSON response from endpoint.
+    """
+    base_esports_url = 'https://esports-api.lolesports.com/persisted/gw/'
+    full_url = os.path.join(base_esports_url, api_endpoint)
+    headers = {
+        'x-api-key': self._API_KEY,
+    }
+    request_params = {
+        'hl': 'en-US',
+    }
+    if params:
+      request_params.update(params)
+    data = self._proxy.FetchJson(
+        full_url,
+        params=request_params,
+        headers=headers,
+        force_lookup=force_lookup,
+        use_storage=use_storage)
+    if data:
+      return data['data']
+    return {}
+
+  def _LoadTeam(self, slug):
+    """Loads information about a team from Rito."""
+    team_data = self._FetchEsportsData('getTeams', {'id': slug})
+    team_data = util_lib.Access(team_data, 'teams.0')
+    if not team_data:
+      logging.warning('Failed to load team: %s', slug)
       return
-    base_esports_url = 'http://api.lolesports.com/api/'
-    endpoint_urls = {
-        'leagues': 'v1/leagues?slug=%s',
-        'matchDetails': 'v2/highlanderMatchDetails?tournamentId=%s&matchId=%s',
-        'scheduleItems': 'v1/scheduleItems?id=%s',
-        'streamgroups': 'v2/streamgroups%s',
-        'teams': 'v1/teams?slug=%s&tournament=%s'
-    }
-    endpoint_fields_to_erase = {
-        'teams': ['players.bios', 'teams.bios', 'highlanderTournaments']
-    }
-    full_url = base_esports_url + endpoint_urls[api_endpoint] % (api_id or '')
-    return self._proxy.FetchJson(
-        full_url, force_lookup=force_lookup, use_storage=use_storage,
-        fields_to_erase=endpoint_fields_to_erase.get(api_endpoint))
+    team = esports_pb2.Team(
+        team_id=team_data['id'],
+        name=team_data['name'],
+        abbreviation=team_data['code'])
+    observed_positions = set()
+    for player_data in team_data['players']:
+      position = player_data['role'].title()
+      team.players.add(
+          summoner_name=player_data['summonerName'],
+          position=position,
+          is_substitute=position in observed_positions,
+          team_id=team.team_id)
+      observed_positions.add(position)
+    self._teams[team.team_id] = team
+
+  def _LoadStandings(self, tournament_id):
+    """(Re)loads standings for a given tournament_id.
+
+    Note: If no bracket exists for the given `stage` of the tournament, this
+    will create one, otherwise it will simply clear the existing standings for
+    the bracket and update in place.
+
+    Args:
+      tournament_id: ID of tournament.
+    """
+    standings_data = self._FetchEsportsData(
+        'getStandings', {'tournamentId': tournament_id})
+    if not standings_data or 'standings' not in standings_data:
+      logging.error('Failed to get standings.')
+      return
+    for stage in standings_data['standings'][0]['stages']:
+      bracket_id = self._MakeBracketId(stage['name'])
+      if bracket_id in self._brackets:
+        b = self._brackets[bracket_id]
+      else:
+        b = esports_pb2.Bracket(
+            bracket_id=self._MakeBracketId(stage['name']),
+            name=stage['name'],
+            league_id=self._league_id,
+            is_playoffs=stage['slug'] == 'playoffs')
+        self._brackets[b.bracket_id] = b
+
+      del b.standings[:]
+      rankings = util_lib.Access(stage, 'sections.0.rankings')
+      if not rankings:
+        continue
+      for group in rankings:
+        for team in group['teams']:
+          if team['id'] not in self._teams:
+            self._LoadTeam(team['slug'])
+          b.standings.add(
+              rank=group['ordinal'],
+              wins=team['record']['wins'],
+              losses=team['record']['losses'],
+              team=self._teams[team['id']])
+
+  def _LoadSchedule(self, bracket):
+    """Loads schedule for given bracket.
+
+    This is a lie. It loads the schedule for the bracket's tournament and
+    pretends like all matches belong to this bracket since Rito no longer
+    provides indication which bracket a match belongs to.
+
+    Args:
+      bracket: The bracket for which the schedule should be loaded.
+
+    Returns:
+      List of matches that were updated i.e., completed since the last time that
+      _LoadSchedule was called.
+    """
+    updated_matches = []
+    schedule_data = self._FetchEsportsData(
+        'getSchedule', {'leagueId': bracket.league_id})
+    schedule_data = util_lib.Access(schedule_data, 'schedule.events')
+    if not schedule_data:
+      logging.warning('Failed to load schedule for %s', bracket.name)
+      return []
+    for event in schedule_data:
+      winner = 'TIE' if event['state'] == 'completed' else None
+      if util_lib.Access(event, 'match.teams.0.result.outcome') == 'win':
+        winner = self._FindTeamId(event['match']['teams'][0]['code'])
+      elif util_lib.Access(event, 'match.teams.1.result.outcome') == 'win':
+        winner = self._FindTeamId(event['match']['teams'][1]['code'])
+      match_id = event['match']['id']
+      if match_id in self._matches:
+        match = self._matches[match_id]
+        if winner and not match.winner:
+          match.winner = winner
+          updated_matches.append(match)
+      else:
+        match = bracket.schedule.add(
+            match_id=event['match']['id'],
+            bracket_id=bracket.bracket_id,
+            red=self._FindTeamId(event['match']['teams'][0]['code']),
+            blue=self._FindTeamId(event['match']['teams'][1]['code']),
+            timestamp=arrow.get(event['startTime']).timestamp,
+            winner=winner)
+        self._matches[match.match_id] = match
+    return updated_matches
+
+  def _FindTeamId(self, code):
+    for team in self._teams.values():
+      if team.abbreviation == code:
+        return team.team_id
+    return 'TBD'
 
   def LoadData(self):
     with self._lock:
       self._teams = {}
       self._matches = {}
-      self._rosters = {}
+      self._brackets = {}
+      self._LoadData()
 
-      league_data = self._FetchEsportsData('leagues', self._league)
-      if not league_data or 'leagues' not in league_data:
-        return
-
-      for team in league_data['teams']:
-        # team['id'] is a number (sometimes a string) used by rito to identify
-        # the team. We prefer to use acronyms since it's easier to bet on TSM
-        # than 11.
-        team_id = str(team['id'])
-        self._teams[team_id] = esports_pb2.Team(
-            team_id=team['acronym'],
-            abbreviation=team['acronym'],
-            name=team['name'],
-            league_id=self.league_id)
-
-      for tournament in self._FindActiveTournaments(
-          league_data['highlanderTournaments']):
-        logging.info('Pulling esports data from %s for %s/%s',
-                     tournament['title'], self._region, self._league)
-        for roster_id, roster in tournament['rosters'].items():
-          if 'team' in roster:
-            t = self._teams[roster['team']]
-            self._rosters[roster_id] = t
-            team = ([
-                x for x in league_data['teams']
-                if str(x['id']) == roster['team']
-            ] or [None])[0]
-            if t.players or not team:
-              continue
-            team_data = self._FetchEsportsData(
-                'teams', (team['slug'], tournament['id']), use_storage=True)
-            if not team_data or 'players' not in team_data:  # pylint: disable=unsupported-membership-test
-              continue
-            for player in team_data['players']:
-              t.players.add(
-                  summoner_name=player['name'],
-                  team_id=t.team_id,
-                  position=self._POSITIONS.get(player['roleSlug'], 'Feed'),
-                  is_substitute=player['id'] in team['subs'])
-          else:
-            # It's a player at All-Stars.
-            self._rosters[roster_id] = esports_pb2.Team(
-                team_id=roster['name'],
-                abbreviation=roster['name'],
-                name=roster['name'])
-
-        for bracket in tournament['brackets'].values():
-
-          def _ExtractStandings(record, rank=None):
-            return esports_pb2.TeamStanding(
-                rank=rank,
-                team=self._rosters[record['roster']],
-                wins=record.get('wins', 0),
-                losses=record.get('losses', 0),
-                ties=record.get('ties', 0),
-                points=record.get('score', 0))
-
-          b = esports_pb2.Bracket(
-              bracket_id=self._MakeBracketId(bracket['name']),
-              name=bracket['name'].replace('_', ' ').title(),
-              league_id=self.league_id,
-              is_playoffs='playoff' in bracket['name'].lower())
-          self._brackets[b.bracket_id] = b
-          if 'standings' in bracket:
-            for group in bracket['standings']['result']:
-              rank = len(b.standings) + 1
-              for roster in group:
-                record = ([
-                    r for r in league_data['highlanderRecords']
-                    if r['tournament'] == tournament['id'] and r['bracket'] ==
-                    bracket['id'] and r['roster'] == roster['roster']
-                ] or [None])[0]
-                if record:
-                  b.standings.extend([_ExtractStandings(record, rank)])
-          else:
-            for record in league_data['highlanderRecords']:
-              if (record['tournament'] == tournament['id'] and
-                  record['bracket'] == bracket['id']):
-                b.standings.extend([_ExtractStandings(record)])
-
-          for match in bracket['matches'].values():
-            match_teams = self._ExtractMatchTeams(match)
-            if not match_teams:
-              continue
-            m = b.schedule.add(
-                match_id=match['id'],
-                bracket_id=b.bracket_id,
-                blue=match_teams[0],
-                red=match_teams[1])
-            self._matches[m.match_id] = m
-
-            for game in match['games'].values():
-              if 'id' not in game:
-                continue
-              # Rito has 2 different ids for the game, we temporarily store the
-              # one needed to find the hash as the hash field.
-              m.games.add(
-                  game_id=game.get('gameId'),
-                  realm=game.get('gameRealm'),
-                  hash=game['id'])
-
-            if 'standings' in match:
-              top_group = match['standings']['result'][0]
-              if len(top_group) > 1:
-                m.winner = 'TIE'
-              elif len(top_group) == 1:
-                m.winner = self._rosters[top_group[0]['roster']].team_id
-
-              game_id_mappings = self._FetchEsportsData(
-                  'matchDetails', (tournament['id'], m.match_id),
-                  use_storage=True).get('gameIdMappings', [])
-              for game in m.games:
-                game_id = game.hash
-                game.ClearField('hash')
-                for mapping in game_id_mappings:
-                  if mapping['id'] == game_id:
-                    game.hash = mapping['gameHash']
-
-          # Go back and fetch match time, because rito :^).
-          schedule_data = self._FetchEsportsData(
-              'scheduleItems', league_data['leagues'][0]['id'])
-          if not schedule_data or 'scheduleItems' not in schedule_data:
-            continue
-          for match in schedule_data['scheduleItems']:
-            match_id = match.get('match', 0)
-            if match_id in self._matches:
-              self._matches[match_id].timestamp = arrow.get(
-                  match['scheduledTime']).timestamp
+  def _LoadData(self):
+    """Helper method to load data."""
+    updated_matches = []
+    tournament_data = self._FetchEsportsData('getTournamentsForLeague',
+                                             {'leagueId': self._league_id})
+    if not tournament_data or 'leagues' not in tournament_data:
+      logging.error('Could not get tournaments for league: %s', self._region)
+      return []
+    for tournament in self._FindActiveTournaments(
+        # We requested a single league so we try to take the first.
+        util_lib.Access(tournament_data, 'leagues.0.tournaments', [])):
+      self._LoadStandings(tournament['id'])
+      updated_matches.extend(
+          self._LoadSchedule(list(self._brackets.values())[0]))
+    return updated_matches
 
   def UpdateMatches(self):
-    updated_matches = []
     with self._lock:
-      league_data = self._FetchEsportsData(
-          'leagues', self._league, force_lookup=True)
-      if not league_data or 'leagues' not in league_data:
-        return []
-
-      for tournament in self._FindActiveTournaments(
-          league_data['highlanderTournaments']):
-        for bracket in tournament['brackets'].values():
-          for match in bracket['matches'].values():
-            old_match = self._matches.get(match['id'])
-            if not old_match:
-              continue
-            # Try to update 'TBD' teams in the match.
-            if 'TBD' in (old_match.blue, old_match.red):
-              match_teams = self._ExtractMatchTeams(match)
-              if match_teams:
-                old_match.blue = match_teams[0]
-                old_match.red = match_teams[1]
-
-            if not old_match.winner and 'standings' in match:
-              top_group = match['standings']['result'][0]
-              if len(top_group) > 1:
-                old_match.winner = 'TIE'
-              elif len(top_group) == 1:
-                old_match.winner = self._rosters[top_group[0]['roster']].team_id
-              updated_matches.append(old_match)
-    return updated_matches
+      return self._LoadData()
 
   def _FindActiveTournaments(self, tournaments):
     """From a list of highlanderTournaments, finds all active or most recent."""
     active_tournaments = []
-    tournament = None
+    most_recent_tournament = None
     newest_start_date = arrow.Arrow.min
     t_now = arrow.utcnow()
     for t in tournaments:
@@ -374,24 +367,10 @@ class RitoProvider(TournamentProvider):
       t_end_date = arrow.get(t['endDate'])
       if t_start_date > newest_start_date:
         newest_start_date = t_start_date
-        tournament = t
+        most_recent_tournament = t
       if t_start_date <= t_now <= t_end_date:
         active_tournaments.append(t)
-    return active_tournaments or [tournament]
-
-  def _ExtractMatchTeams(self, match):
-    """Returns a (red_team, blue_team) tuple of acroynms for teams in match."""
-    match_teams = match.get('input', [])
-    if len(match_teams) != 2:
-      return
-
-    def _FindTeam(team):
-      if 'roster' in team:
-        return self._rosters[team['roster']].team_id
-      return 'TBD'
-
-    match_teams = [_FindTeam(t) for t in match_teams]
-    return match_teams
+    return active_tournaments or [most_recent_tournament]
 
 
 class BattlefyProvider(TournamentProvider):
@@ -447,8 +426,12 @@ class BattlefyProvider(TournamentProvider):
     for league in response.positions:
       if league.queue_type == constants_pb2.QueueType.RANKED_SOLO_5x5:
         tier = constants_pb2.Tier.Enum.Name(league.tier)[0].upper()
-        division = {'I': '1', 'II': '2', 'III': '3', 'IV': '4'}[
-            league_pb2.TierRank.Enum.Name(league.rank)]
+        division = {
+            'I': '1',
+            'II': '2',
+            'III': '3',
+            'IV': '4'
+        }[league_pb2.TierRank.Enum.Name(league.rank)]
         rank = tier + division
         break
     return rank
@@ -468,8 +451,8 @@ class BattlefyProvider(TournamentProvider):
             # collisions, and not all names produce desirable/informative
             # abbreviations.  E.g., Adobe #FF0000 -> A#. Poor abbreviations may
             # require using the full team name for auto-complete.
-            abbreviation=''.join(
-                [word[0] for word in team['name'].split()]).upper(),
+            abbreviation=''.join([word[0] for word in team['name'].split()
+                                 ]).upper(),
             league_id=team['tournamentID'])
         for player in team['players']:
           self._teams[team['_id']].players.add(
@@ -480,8 +463,8 @@ class BattlefyProvider(TournamentProvider):
   def _UpdateStandings(self, bracket):
     stage_id = bracket.bracket_id.split('-')[-1]
     standings = self._proxy.FetchJson(
-        '/'.join(
-            [self._BASE_URL, 'stages', stage_id, 'latest-round-standings']),
+        '/'.join([self._BASE_URL, 'stages', stage_id,
+                  'latest-round-standings']),
         force_lookup=True)
     del bracket.standings[:]
     for rank, standing in enumerate(standings):
@@ -829,18 +812,24 @@ class EsportsLib(object):
     self._rito = rito_lib
 
     self._providers = [
-        RitoProvider(self._proxy, 'IN', 'worlds',
-                     aliases=['International', 'Worlds'],
-                     stats_enabled=True),
-        RitoProvider(self._proxy, 'NA', 'lcs', aliases=['North America'],
-                     stats_enabled=True),
-        RitoProvider(self._proxy, 'EU', 'lec', aliases=['Europe'],
-                     stats_enabled=True),
-        # China is broken right now.
-        # RitoProvider(self._proxy,
-        #              'CN', 'lpl-china', aliases=['LPL', 'China']),
-        RitoProvider(self._proxy, 'LCK', 'lck', aliases=['LCK', 'Korea', 'KR'],
-                     stats_enabled=True),
+        RitoProvider(
+            self._proxy,
+            'LCS',
+            '98767991299243165',
+            aliases=['NA', 'North America'],
+            stats_enabled=False),
+        RitoProvider(
+            self._proxy,
+            'LEC',
+            '98767991302996019',
+            aliases=['EU', 'Europe'],
+            stats_enabled=False),
+        RitoProvider(
+            self._proxy,
+            'LCK',
+            '98767991310872058',
+            aliases=['KR', 'Korea'],
+            stats_enabled=False),
     ]
 
     self._lock = RLock()
