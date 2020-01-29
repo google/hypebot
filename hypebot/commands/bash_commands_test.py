@@ -24,34 +24,26 @@ from hypebot.commands import bash_commands
 from hypebot.commands import hypetest
 
 
+@hypetest.ForCommand(bash_commands.AliasAddCommand)
 class AliasCommandsTest(hypetest.BaseCommandTestCase):
 
   def testAddAlias(self):
-    command = bash_commands.AliasAddCommand({
-        'ratelimit': {
-            'enabled': False,
-        },
-    }, self.core)
-
-    response = command.Handle(
-        hypetest.TEST_CHANNEL, 'user',
-        '!alias add new original')
+    response = self.command.Handle(hypetest.TEST_CHANNEL, 'user',
+                                   '!alias add new original')
     self.assertEqual('Added alias new.', response)
 
-    response = command.Handle(
-        hypetest.TEST_CHANNEL, 'user',
-        '!alias add new old')
+    response = self.command.Handle(hypetest.TEST_CHANNEL, 'user',
+                                   '!alias add new old')
     self.assertEqual('Updated alias new.', response)
 
 
+@hypetest.ForCommand(bash_commands.EchoCommand)
 class EchoCommandTest(hypetest.BaseCommandTestCase):
 
   def testRepeatsWhatItsTold(self):
-    command = bash_commands.EchoCommand({}, self.core)
-
     message = 'Pete and repeat were in a boat, Pete fell out who was left?'
-    response = command.Handle(hypetest.TEST_CHANNEL, 'testuser',
-                              '!echo %s' % message)
+    response = self.command.Handle(hypetest.TEST_CHANNEL, 'testuser',
+                                   '!echo %s' % message)
 
     self.assertEqual([message], response)
 
