@@ -34,6 +34,16 @@ TEST_CHANNEL = channel_pb2.Channel(
     id='#test', name='Test', visibility=channel_pb2.Channel.PUBLIC)
 
 
+def ForCommand(command_cls):
+  """Decorator to enable setting the command for each test class."""
+
+  def _Internal(test_cls):
+    test_cls._command_cls = command_cls
+    return test_cls
+
+  return _Internal
+
+
 class BaseCommandTestCase(unittest.TestCase):
 
   # Set the default bot params (used by core) to something sane for testing.
@@ -56,9 +66,23 @@ class BaseCommandTestCase(unittest.TestCase):
       'subscriptions': {},
   })
 
+  @classmethod
+  def setUpClass(cls):
+    super(BaseCommandTestCase, cls).setUpClass()
+    if not hasattr(cls, '_command_cls'):
+      raise AttributeError(
+          ('%s is missing command initializer. All BaseCommandTestCases must'
+           ' be decorated with @ForCommand and given the command they are'
+           ' testing. For example:\n\n@ForCommand(simple_commands.HelpCommand'
+           ')\nclass HelpCommandTest(BaseCommandTestCase):\n  ...') %
+          cls.__name__)
+
   def setUp(self):
     super(BaseCommandTestCase, self).setUp()
     self.interface = interface_factory.CreateFromParams(
         self.BOT_PARAMS.interface)
     self.core = hypecore.Core(self.BOT_PARAMS, self.interface)
-
+    # We disable ratelimiting for tests.
+    self.command = self._command_cls({'ratelimit': {
+        'enabled': False
+    }}, self.core)
