@@ -85,7 +85,7 @@ class BaseCommand(object):
     self._parsers = []
     self._last_called = defaultdict(lambda: defaultdict(float))
     self._ratelimit_lock = Lock()
-    self._spook_probs = []
+    self._spook_replies = util_lib.WeightedCollection(messages.SPOOKY_STRINGS)
 
   def Handle(self,
              channel: Channel,
@@ -202,9 +202,7 @@ class BaseCommand(object):
   def _Spook(self, user: Text) -> None:
     """Creates a spooky encounter with user."""
     logging.info('Spooking %s', user)
-    self._Reply(
-        user,
-        util_lib.GetWeightedChoice(messages.SPOOKY_STRINGS, self._spook_probs))
+    self._Reply(user, self._spook_replies.GetAndDownweightItem())
 
   def _Handle(self, channel: Channel, user: Text, *args, **kwargs):
     """Internal method that handles the command.
@@ -490,14 +488,13 @@ class TextCommand(BaseCommand):
 
   def __init__(self, *args):
     super(TextCommand, self).__init__(*args)
-    self._choices = self._params.choices
-    self._probs = []
+    self._choices = util_lib.WeightedCollection(self._params.choices)
 
   def _Handle(self, channel, user):
     if self._choices:
-      choice = util_lib.GetWeightedChoice(self._choices, self._probs)
-      if '{person}' in choice:
-        choice = choice.format(choice, person=user)
-      if choice.startswith('/me '):
-        choice = '%s %s' % (self._core.params.name, choice[4:])
-      return choice
+      item = self._choices.GetAndDownweightItem()
+      if '{person}' in item:
+        item = item.format(item, person=user)
+      if item.startswith('/me '):
+        item = '%s %s' % (self._core.params.name, item[4:])
+      return item

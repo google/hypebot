@@ -34,7 +34,7 @@ from hypebot import types
 from hypebot.protos import message_pb2
 from hypebot.protos.user_pb2 import User
 import six
-from typing import List, Optional, Text, Tuple
+from typing import Callable, Iterable, List, Optional, Text, Tuple
 
 
 def Access(obj, path, default=None):
@@ -231,54 +231,82 @@ def SafeUrl(url, params=None):
   return url
 
 
-def GetWeightedChoice(options, prob_table, prob_table_lock=None):
-  """Returns an option given its probability table, adjusting it for the future.
+class WeightedCollection(object):
+  """A thread-safe collection of choices and associated weights."""
 
-  The probability table is adjusted by spreading the current option's
-  probability evenly across the other unfortunate options (including itself)
-  that haven't had an opportunity to be picked.
+  def __init__(self, items: Iterable[Text]):
+    self._prob_table = {i: 1.0 for i in items}
+    self._prob_table_lock = threading.RLock()
+    self._NormalizeProbs()
 
-  Args:
-    options: List of options from where to pick a value.
-    prob_table: Probability table for the options. It is a list where the
-      element at index `i` has the probability for `options[i]`.
-    prob_table_lock: (optional) The probability table may be accessed by several
-      threads, in which case a lock may be provided.
+  def GetItem(self) -> Text:
+    """Returns an item at random (biased by associated weights)."""
+    with self._prob_table_lock:
+      ordered_choices = sorted(self._prob_table.items(), key=lambda x: x[1])
 
-  Returns:
-    The selected option.
-  """
-  if prob_table_lock:
-    with prob_table_lock:
-      return _GetWeightedChoice(options, prob_table)
-  else:
-    return _GetWeightedChoice(options, prob_table)
+    r = random.random()
+    total = 0
+    for item, weight in ordered_choices:
+      total += weight
+      if r < total:
+        return item
 
+  def GetAndDownweightItem(self) -> Text:
+    """Returns a random item while increasing the weight of every other item.
 
-def _GetWeightedChoice(options, prob_table):
-  """Gets weighted choice without worrying about a lock."""
-  # Initialize if this is not initialized
-  if not prob_table:
-    prob_table.extend([1.0 / len(options)] * len(options))
+    The exact way the non-selected item weights are modified is an
+    implementation detail and subject to change.
 
-  # Get a random number and find which option matches such probability.
-  r, p = random.random(), 0.0
-  for i, opt_prob in enumerate(prob_table):
-    p += opt_prob
-    if p > r:
-      break
+    Returns:
+      A random item from the collection.
+    """
+    r = random.random()
+    total = 0
+    selection = None
+    with self._prob_table_lock:
+      weight_addition = 1 / len(self._prob_table)
+      for item, weight in self._prob_table.items():
+        total += weight
+        if r < total:
+          selection = item
+          # Set r > any possible total to ensure we finish updating all of the
+          # weights.
+          r = sum(self._prob_table.values()) + 1
+        else:
+          self._prob_table[item] += weight_addition
+      self._NormalizeProbs()
+    return selection
 
-  # pylint: disable=undefined-loop-variable
-  # Mitigate rounding errors.
-  option = options[i % len(options)]
+  def ModifyWeight(self, item: Text, update_fn: Callable[[float],
+                                                         float]) -> float:
+    """Modifies the weight of item using update_fn.
 
-  # Adjust the probability table.
-  p, prob_table[i] = prob_table[i] / len(options), 0.0
-  # pylint: enable=undefined-loop-variable
-  for i, opt_prob in enumerate(prob_table):
-    prob_table[i] = opt_prob + p
+    Args:
+      item: Item in collection to update.
+      update_fn: Function that takes the current weight of item as an input and
+        returns the new weight. An example to add 1 to the current weight:
 
-  return option
+          ModifyWeight('my-item', lambda cur_weight: cur_weight + 1.0)
+
+    Returns:
+      The updated weight for item.
+
+    Raises:
+      KeyError if item is not already in the collection.
+    """
+    with self._prob_table_lock:
+      cur_weight = self._prob_table[item]
+      new_weight = update_fn(cur_weight)
+      self._prob_table[item] = new_weight
+      self._NormalizeProbs()
+    return new_weight
+
+  def _NormalizeProbs(self):
+    with self._prob_table_lock:
+      normalize_denom = sum(self._prob_table.values())
+      self._prob_table = {
+          k: v / normalize_denom for k, v in self._prob_table.items()
+      }
 
 
 def Bold(string):
