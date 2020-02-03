@@ -29,6 +29,9 @@ override, you can simulate private messages:
 
 Note order of channel and user override does not matter.
 
+Any channel name starting with '#sys' will have its visibility set to SYSTEM
+(see channel.proto).
+
 If you need to see the full proto Message response, you can set
 `return_text_only` to False in the params for the interface.
 """
@@ -101,6 +104,8 @@ class TerminalInterface(interface_lib.BaseChatInterface):
         break
       if nick_or_channel.startswith('#'):
         channel_name = nick_or_channel
+        if channel_name.startswith('#sys'):
+          visibility = Channel.SYSTEM
       else:
         nick = nick_or_channel
     if nick.lower() == channel_name.strip('#').lower():
