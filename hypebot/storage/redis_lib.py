@@ -59,6 +59,11 @@ class RedisTransaction(storage_lib.HypeTransaction):
       return True
     return self._pipe.set(full_key, value)
 
+  def delete(self, full_key: AnyStr) -> None:
+    if self._TryBuffer(full_key, partial(self.delete, full_key)):
+      return
+    self._pipe.delete(full_key)
+
   def type(self, full_key: AnyStr) -> AnyStr:
     self._WatchKey(full_key)
     return self._pipe.type(full_key)
@@ -186,6 +191,16 @@ class RedisStore(storage_lib.HypeStore):
     else:
       raise NotImplementedError(
           'RedisStore can\'t operate on redis type "%s" yet' % datatype)
+
+  def Delete(self, key: AnyStr, tx: Optional[RedisTransaction] = None) -> None:
+    if not tx:
+      self.RunInTransaction(self.Delete, key)
+      return
+    datatype, full_key = self._GetFullKey(key, '', tx)
+    if not datatype:
+      # full_key doesn't exist, do nothing
+      return
+    tx.delete(full_key)
 
   def GetSubkey(self, subkey, tx=None):
     if tx:

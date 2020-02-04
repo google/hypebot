@@ -123,6 +123,12 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
     """
 
   @abc.abstractmethod
+  def DeleteKey(self,
+                key: AnyStr,
+                tx: Optional[HypeTransaction] = None) -> None:
+    """Removes key from the store."""
+
+  @abc.abstractmethod
   def GetSubkey(self, subkey: AnyStr, tx: Optional[HypeTransaction] = None
                ) -> List[Tuple[AnyStr, AnyStr]]:
     """Returns (key, value) tuples for all keys with a value for subkey."""

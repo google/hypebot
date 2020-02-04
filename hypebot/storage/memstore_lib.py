@@ -66,6 +66,9 @@ class MemStore(storage_lib.HypeStore):
                tx: Optional[MemTransaction] = None) -> None:
     self._memory.Put('%s:%s' % (key, subkey), value)
 
+  def DeleteKey(self, key: AnyStr, tx: Optional[MemTransaction] = None) -> None:
+    self._memory.Del(key)
+
   def GetSubkey(self, subkey: AnyStr,
                 tx: Optional[MemTransaction] = None) -> List[Tuple]:
     items = []
