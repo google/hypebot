@@ -31,6 +31,7 @@ from hypebot.core import schedule_lib
 from hypebot.core import util_lib
 from hypebot.core import zombie_lib
 from hypebot.interfaces import interface_lib
+from hypebot.news import news_factory
 from hypebot.plugins import coin_lib
 from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
@@ -265,6 +266,7 @@ class Core(object):
         self.name.lower(), self.bank, self.output_util, self.executor)
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
+    self.news = news_factory.CreateFromParams(self.params.news, self.proxy)
     self.betting_games = []
     self.last_command = None
     self.default_channel = self.params.default_channel

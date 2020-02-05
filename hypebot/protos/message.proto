@@ -81,6 +81,11 @@ message Card {
     // within a oneof and having a wrapper message is verbose.
     // Prefer to float buttons horizontally
     repeated Button buttons = 5;
+
+    // Flavor text that should appear below the title (if provided). Card
+    // implementations may not render this field and it shouldn't be used for
+    // important data.
+    string bottom_text = 6;
   }
   repeated Field fields = 2;
   // If specified, collapse the fields beyond this count to prevent the card

@@ -19,6 +19,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import arrow
+
 from hypebot import types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
@@ -50,6 +52,45 @@ class KittiesSalesCommand(command_lib.BaseCommand):
           num_kitties, usd, eth)
     else:
       return 'I don\'t know right now, but we\'ll say, a lot.'
+
+
+@command_lib.CommandRegexParser(r'(?:news|headlines)(?: (.*))?')
+class NewsCommand(command_lib.BaseCommand):
+  """If it's on the internet, it must be true."""
+
+  def _Handle(self, channel, user, query):
+    if not query:
+      raw_results = self._core.news.GetTrending()
+      return self._BuildHeadlineCard('Here are today\'s top stories',
+                                     raw_results)
+
+    raw_results = self._core.news.GetHeadlines(query)
+    return self._BuildHeadlineCard('Stories about "%s"' % query, raw_results)
+
+  def _BuildHeadlineCard(self, header_text, raw_results):
+    # TODO: Abstract out NYT-specific data.
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(
+            title=header_text,
+            image=message_pb2.Card.Image(
+                url='https://developer.nytimes.com/files/poweredby_nytimes_30a.png',
+                alt_text='Data provided by The New York Times')),
+        visible_fields_count=6)
+
+    for article in raw_results:
+      field = message_pb2.Card.Field(text=article['title'])
+      if article.get('pub_date'):
+        field.title = 'Published %s ago' % util_lib.TimeDeltaToHumanDuration(
+            arrow.utcnow() - arrow.get(article['pub_date']))
+      source = article.get('source')
+      if source and source != 'The New York Times':
+        field.bottom_text = source
+      card.fields.append(field)
+      card.fields.append(message_pb2.Card.Field(buttons=[
+          message_pb2.Card.Field.Button(
+              text='Read article', action_url=article['url'])]))
+
+    return card
 
 
 @command_lib.CommandRegexParser(r'stocks?(?: (.*))?')

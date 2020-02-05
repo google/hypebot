@@ -221,12 +221,14 @@ def TimeDeltaToHumanDuration(time_delta, precision=1):
 
 def SafeUrl(url, params=None):
   """Returns url with any sensitive information (API key) stripped."""
-  if 'api_key' in url:
-    url = ''.join((url.split('api_key')[0], '<redacted>'))
+  m = re.search(url, '(api[-_]key)')
+  if m:
+    url = ''.join((url.split(m.group(1))[0], '<redacted>'))
   if params:
     params = copy.copy(params)
-    if 'api_key' in params:
-      params['api_key'] = '<redacted>'
+    for key in ('api-key', 'api_key'):
+      if key in params:
+        params[key] = '<redacted>'
     url += ','.join(['%s=%s' % (k, v) for k, v in params.items()])
   return url
 
@@ -497,7 +499,7 @@ def _CardAsTextList(card: message_pb2.Card) -> List[Text]:
     else:
       line += ', '.join([
           '[%s](%s)' % (button.text, button.action_url)
-          for button in card.buttons
+          for button in field.buttons
       ])
     text.append(line)
   return text

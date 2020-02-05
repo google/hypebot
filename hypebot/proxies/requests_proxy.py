@@ -20,9 +20,9 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import requests
-
 from hypebot.proxies import proxy_lib
+
+import requests
 
 
 class RequestsProxy(proxy_lib.Proxy):
