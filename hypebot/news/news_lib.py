@@ -37,6 +37,18 @@ class NewsLib(with_metaclass(abc.ABCMeta)):
     self._params.Lock()
     self._proxy = proxy
 
+  @abc.abstractproperty
+  def source(self) -> Text:
+    """The human-readable name of this source.
+
+    If the API provides news from multiple sources, this should be the "default"
+    source. If no logical default exists, this can simply be the empty string.
+    """
+
+  @abc.abstractproperty
+  def icon(self) -> 'message_pb2.Card.Image':
+    """Returns an icon used to identify this news source."""
+
   @abc.abstractmethod
   def GetHeadlines(self,
                    query: Text,

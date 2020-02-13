@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.news import news_lib
+from hypebot.protos import message_pb2
 
 
 class NYTimesNews(news_lib.NewsLib):
@@ -33,6 +34,16 @@ class NYTimesNews(news_lib.NewsLib):
           # Sign up for token at https://developer.nytimes.com
           'api_key': None,
       })
+
+  @property
+  def source(self):
+    return 'The New York Times'
+
+  @property
+  def icon(self):
+    return message_pb2.Card.Image(
+        url='https://developer.nytimes.com/files/poweredby_nytimes_30a.png',
+        alt_text='Data provided by The New York Times')
 
   def GetHeadlines(self, query, max_results=5):
     endpoint_url = self._params.base_url + 'search/v2/articlesearch.json'

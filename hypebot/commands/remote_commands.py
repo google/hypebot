@@ -68,13 +68,9 @@ class NewsCommand(command_lib.BaseCommand):
     return self._BuildHeadlineCard('Stories about "%s"' % query, raw_results)
 
   def _BuildHeadlineCard(self, header_text, raw_results):
-    # TODO: Abstract out NYT-specific data.
     card = message_pb2.Card(
         header=message_pb2.Card.Header(
-            title=header_text,
-            image=message_pb2.Card.Image(
-                url='https://developer.nytimes.com/files/poweredby_nytimes_30a.png',
-                alt_text='Data provided by The New York Times')),
+            title=header_text, image=self._core.news.icon),
         visible_fields_count=6)
 
     for article in raw_results:
@@ -83,7 +79,7 @@ class NewsCommand(command_lib.BaseCommand):
         field.title = 'Published %s ago' % util_lib.TimeDeltaToHumanDuration(
             arrow.utcnow() - arrow.get(article['pub_date']))
       source = article.get('source')
-      if source and source != 'The New York Times':
+      if source and source != self._core.news.source:
         field.bottom_text = source
       card.fields.append(field)
       card.fields.append(message_pb2.Card.Field(buttons=[
