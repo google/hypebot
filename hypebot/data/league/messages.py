@@ -53,7 +53,7 @@ _DANK_MEMES = [
     '[chiming intensifies]',
     'Yo, {person}, body these fools!',
     '/me remains unconvinced.',
-    'Why do NA supports only play Soraka/Janna/Karma?! ¯\_(ツ)_/¯',
+    r'Why do NA supports only play Soraka/Janna/Karma?! ¯\_(ツ)_/¯',
     'Hypbot IV: A Nw Mm',
     '{person} is one of the generally "good guy owners" of HypeBot.',
     ('We do not mind at all if there is a massive delta between Hypebot and '
@@ -64,6 +64,11 @@ _DANK_MEMES = [
     ('I\'m not allowed to disclose the numbers but trust me, it wasn\'t a '
      'close race.'),
     '👹 You look familiar.',
+    'Not a single person at Riot believes {person}\'s damage is too low.',
+    ('I\m sorry you feel that way, but I don\'t know what to tell you when 20+ '
+     'professionals are confidently saying otherwise.'),
+    ('I\'ll take the 200+ collective years of professional game design '
+     'experience.'),
 ]
 _TEAM_MEMES = [
     '#{team}Hype!',
@@ -100,7 +105,7 @@ FREELO = [
     ('Chasing after Singed is a great way to make your Spectre\'s Cowl as '
      'gold efficient as possible!'),
     ('When playing Mordekaiser, be sure to feed the enemy marksmen early to '
-     'increase the strength of your puppet.'),
+     'steal more stats with your ult.'),
     ('When playing Blitzcrank, prioritize hooking the enemy Amumu so your team '
      'can burst him down before he can ult.'),
     'Remember to spam AOE abilities under the tower to help your ADC last hit.',
@@ -165,5 +170,5 @@ ROOSTERS = [
 ]
 SCHEDULE_NO_GAMES_STRING = ('Tune in next season to see if NA makes it out of '
                             'groups.')
-WHO_IS_HYPEBOT_STRING = ('HypeBot = ¯\_(ツ)_/¯ [DECAKILL, Challenjour (KR), '
+WHO_IS_HYPEBOT_STRING = (r'HypeBot = ¯\_(ツ)_/¯ [DECAKILL, Challenjour (KR), '
                          'Ranked LCK 1v9: Teemo, 1337pts (W)]')

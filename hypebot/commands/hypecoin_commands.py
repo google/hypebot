@@ -86,6 +86,8 @@ class HCBetCommand(command_lib.BaseCommand):
     amount = self._core.bank.ParseAmount(user, amount_str, msg_fn)
     if amount is None:
       return
+    elif amount <= 0:
+      return 'Try being positive for a change.'
 
     more = more_str == ' more' or amount_str in messages.GAMBLE_STRINGS
     if direction == 'on':
@@ -102,14 +104,14 @@ class HCBetCommand(command_lib.BaseCommand):
       if taken:
         if isinstance(taken, six.string_types):
           details = '%s Please do not waste my time.' % taken
-          self._core.bets.FineUser(user, 1, details, msg_fn)
+          self._core.bank.FineUser(user, 1, details, msg_fn)
           return
         if not self._core.bets.PlaceBet(game, bet, msg_fn, more):
           logging.error('Placing bet failed: %s => %s', user, bet)
           return
         return
     details = 'Unknown target for betting. Please do not waste my time.'
-    self._core.bets.FineUser(user, 1, details, msg_fn)
+    self._core.bank.FineUser(user, 1, details, msg_fn)
 
 
 @command_lib.CommandRegexParser(r'%s (my)?bets ?(.+)?' % _HC_PREFIX)

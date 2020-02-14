@@ -57,26 +57,6 @@ class UtilLibTest(unittest.TestCase):
                                                 microsecond=0)
     self.assertNotEqual(morning_tomorrow, morning_in_local)
 
-  @mock.patch('random.random')
-  def testGetWeightedChoice(self, random_call):
-    random_call.return_value = 0.25
-    memes = ['ayyy', 'lmao', 'rito pls', 'who needs a test?']
-    prob_table = []
-
-    meme = util_lib.GetWeightedChoice(memes, prob_table)
-
-    expected = [0.3125, 0.0625, 0.3125, 0.3125]
-
-    self.assertEqual(expected, prob_table)
-    self.assertEqual('lmao', meme)
-
-    meme = util_lib.GetWeightedChoice(memes, prob_table)
-
-    expected = [0.078125, 0.140625, 0.390625, 0.390625]
-
-    self.assertEqual(expected, prob_table)
-    self.assertEqual('ayyy', meme)
-
   def testFuzzyBool(self):
     for truthy_value in ('True', ' true', '1', 'ok', 'any_thing  ', 1, True):
       self.assertTrue(util_lib.FuzzyBool(truthy_value))
@@ -84,6 +64,81 @@ class UtilLibTest(unittest.TestCase):
     for falsey_value in ('', '  falSe', '0', 'NO  ', 0, False):
       self.assertFalse(util_lib.FuzzyBool(falsey_value))
 
+  def testExtractRegex_ReturnsNoneWhenNoMatch(self):
+    self.assertIsNone(util_lib.ExtractRegex(r'.+', ''))
+
+  def testExtractRegex_MultipleMatchesAreExtracted(self):
+    # pytype can't seem to figure out that result isn't None (or isn't None
+    # after asserting it isn't anyways). So we just use it directly instead of
+    # destructuring the tuple.
+    result = util_lib.ExtractRegex(r'[a-z]+', 'mone1234mtwo')
+    self.assertIsNotNone(result)
+    self.assertEqual(2, len(result[0]))
+    self.assertIn('mone', result[0])
+    self.assertIn('mtwo', result[0])
+    self.assertEqual('1234', result[1])
+
+  def testExtractRegex_NestedCapturesStillRemoveFullRegex(self):
+    result = util_lib.ExtractRegex(r'g(.+)', 'Captures with groups')
+    self.assertIsNotNone(result)
+    self.assertEqual(1, len(result[0]))
+    self.assertEqual('roups', result[0][0])
+    self.assertEqual('Captures with ', result[1])
+
+
+class WeightedCollectionTest(unittest.TestCase):
+
+  def testEmptyCollection(self):
+    c = util_lib.WeightedCollection([])
+
+    i = c.GetItem()
+
+    self.assertIsNone(i)
+
+  def testSingleItem(self):
+    c = util_lib.WeightedCollection(['a'])
+
+    i = c.GetItem()
+
+    self.assertEqual(i, 'a')
+    self.assertEqual(c._prob_table[i], 1.0)
+
+  def testInitialProbabilities(self):
+    c = util_lib.WeightedCollection(['a', 'b', 'c', 'd'])
+
+    self.assertTrue(all(v == 0.25 for v in c._prob_table.values()))
+
+  @mock.patch('random.random', lambda: 0.4)
+  def testGetAndDownweightItem_updatesProbabilities(self):
+    choices = ['a', 'b', 'c', 'd']
+    c = util_lib.WeightedCollection(choices)
+    initial_weight = 1 / len(choices)
+
+    r = c.GetAndDownweightItem()
+
+    self.assertEqual(r, 'b')
+    self.assertGreater(c._prob_table['a'], initial_weight)
+    self.assertLess(c._prob_table['b'], initial_weight)
+    self.assertGreater(c._prob_table['c'], initial_weight)
+    self.assertGreater(c._prob_table['d'], initial_weight)
+    self.assertAlmostEqual(sum(c._prob_table.values()), 1.0)
+
+  def testModifyWeight_usesUpdateFn(self):
+    c = util_lib.WeightedCollection(('one', 'two', 'four'))
+    expected_weight = 2 / 3
+
+    new_weight = c.ModifyWeight('four', lambda _: expected_weight)
+
+    self.assertAlmostEqual(new_weight, expected_weight)
+    self.assertAlmostEqual(sum(c._prob_table.values()), 1.0)
+
+  def testGetItem_doesNotModifyWeights(self):
+    c = util_lib.WeightedCollection(str(x) for x in range(5))
+
+    c.GetItem()
+    c.GetItem()
+
+    self.assertTrue(all(v == 0.2 for v in c._prob_table.values()))
 
 if __name__ == '__main__':
   unittest.main()

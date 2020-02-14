@@ -19,9 +19,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from functools import partial
+import functools
 
-from hypebot import hypecore
 from hypebot import types
 from hypebot.commands import command_lib
 
@@ -39,10 +38,11 @@ class PreferencesCommand(command_lib.BaseCommand):
   def _Handle(self,
               unused_channel: types.Channel,
               user: Text,
-              target_user: Text) -> hypecore.MessageType:
+              target_user: Text) -> types.CommandResponse:
     target_user = target_user or user
     if target_user == 'me':
-      self._core.last_command = partial(self._Handle, target_user=target_user)
+      self._core.last_command = functools.partial(
+          self._Handle, target_user=target_user)
       target_user = user
     prefs = self._core.user_prefs.GetAll(target_user)
     if all([_IsProtected(pref) for pref in prefs]):
@@ -60,7 +60,7 @@ class SetPreferenceCommand(command_lib.BaseCommand):
               unused_channel: types.Channel,
               user: Text,
               pref: Text,
-              value: Text) -> hypecore.MessageType:
+              value: Text) -> types.CommandResponse:
     if _IsProtected(pref) or not self._core.user_prefs.IsValid(pref):
       return 'Unrecognized preference.'
     self._core.user_prefs.Set(user, pref, value)

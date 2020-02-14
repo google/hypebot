@@ -29,6 +29,9 @@ override, you can simulate private messages:
 
 Note order of channel and user override does not matter.
 
+Any channel name starting with '#sys' will have its visibility set to SYSTEM
+(see channel.proto).
+
 If you need to see the full proto Message response, you can set
 `return_text_only` to False in the params for the interface.
 """
@@ -43,7 +46,6 @@ import re
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
 from hypebot.protos.channel_pb2 import Channel
-from hypebot.protos.message_pb2 import MessageList
 
 _COLOR_PATTERN = re.compile(
     r'\x03(?P<fg>\d\d)(?:|,(?P<bg>\d\d))(?P<txt>.*?)\x0f')
@@ -81,7 +83,7 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     while True:
       channel = self._params.default_channel
       nick = self._params.default_user
-      message = raw_input('> ').decode('utf-8')
+      message = input('> ')
       overrides = self._ExtractOverrides(message)
       if overrides:
         channel, nick, message = overrides
@@ -102,6 +104,8 @@ class TerminalInterface(interface_lib.BaseChatInterface):
         break
       if nick_or_channel.startswith('#'):
         channel_name = nick_or_channel
+        if channel_name.startswith('#sys'):
+          visibility = Channel.SYSTEM
       else:
         nick = nick_or_channel
     if nick.lower() == channel_name.strip('#').lower():
@@ -118,8 +122,8 @@ class TerminalInterface(interface_lib.BaseChatInterface):
 
   def SendMessage(self, channel, message_list):
     if self._params.return_text_only:
-      message_list = self._TranslateColors(message_list)
-      print('%s' % '\n'.join(msg.text for msg in message_list.messages))
+      lines = self._TranslateColors(message_list)
+      print('\n'.join(lines))
     else:
       print('%s\n%s' % (channel, message_list))
 
@@ -130,20 +134,18 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     print('TOPIC\n%s\n%s' % (channel, new_topic))
 
   def _TranslateColors(self, message_list):
-    colored_messages = MessageList()
-    for m in message_list.messages:
-      msg = m.text
-      pos = 0
-      colored_message = ''
-      while True:
-        match = _COLOR_PATTERN.search(msg, pos=pos)
-        if not match:
-          break
-        colored_message += msg[pos:match.start()]
-        colored_message += '\033[%sm%s\033[0m' % (
-            _IRC_TO_TERM_COLORS[match.group('fg')], match.group('txt'))
-        pos = match.end()
-      if colored_message:
-        colored_message += msg[pos:]
-      colored_messages.messages.add(text=colored_message or m.text)
-    return colored_messages
+    lines = []
+    for msg in message_list.messages:
+      for line in msg.text:
+        pos = 0
+        colored_line = ''
+        while True:
+          match = _COLOR_PATTERN.search(line, pos=pos)
+          if not match:
+            break
+          colored_line += line[pos:match.start()]
+          colored_line += '\033[%sm%s\033[0m' % (
+              _IRC_TO_TERM_COLORS[match.group('fg')], match.group('txt'))
+          pos = match.end()
+        lines.append(colored_line + line[pos:])
+    return lines

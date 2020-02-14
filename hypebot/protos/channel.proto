@@ -26,6 +26,7 @@ message Channel {
   enum Visibility {
     PUBLIC = 0;
     PRIVATE = 1;
+    SYSTEM = 2;
   }
 
   // Indicates who can see messages sent to the channel. Certain behavior (spam)

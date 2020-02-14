@@ -19,22 +19,22 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import collections
 import copy
 import datetime
 import math
 import random
 import re
-from threading import Lock
+import threading
 import unicodedata
 
 import arrow
 from dateutil.relativedelta import relativedelta
-import six
-from typing import Text, Union
-
-from hypebot.core import params_lib
+from hypebot import types
+from hypebot.protos import message_pb2
 from hypebot.protos.user_pb2 import User
-from hypebot.protos.channel_pb2 import Channel
+import six
+from typing import Callable, Iterable, List, Optional, Text, Tuple
 
 
 def Access(obj, path, default=None):
@@ -44,6 +44,8 @@ def Access(obj, path, default=None):
     try:
       obj = obj.get(k)
     except AttributeError:
+      if obj is None:
+        continue
       k = int(k)
       if k < len(obj):
         obj = obj[int(k)]
@@ -120,6 +122,25 @@ def UnformatHypecoins(value):
   return number * scale
 
 
+def ExtractRegex(pattern: Text,
+                 string: Text) -> Optional[Tuple[List[Text], Text]]:
+  """Searches for pattern in string and extracts all matches from the string.
+
+  Args:
+    pattern: a reguar expression in string format to search for in string.
+    string: the string to extract matches of pattern from.
+
+  Returns:
+    If pattern was found at least once in string, returns a tuple of the matches
+    and the string with the matches removed. Otherwise, returns None to match
+    the semantics of re.match/search.
+  """
+  pattern = re.compile(pattern)
+  m = pattern.search(string)
+  if m:
+    return (pattern.findall(string), pattern.sub('', string))
+
+
 def FormatHypecoins(amount, abbreviate=False):
   """Format hypecoins to a human readable amount.
 
@@ -194,70 +215,100 @@ def TimeDeltaToHumanDuration(time_delta, precision=1):
     parts.append('%dm' % (time_delta.seconds / MINUTE_IN_SECONDS))
     time_delta = datetime.timedelta(seconds=time_delta.seconds %
                                     MINUTE_IN_SECONDS)
-  parts.append('%dm' % time_delta.seconds)
+  parts.append('%ds' % time_delta.seconds)
   return ' '.join(parts[0:precision])
 
 
 def SafeUrl(url, params=None):
   """Returns url with any sensitive information (API key) stripped."""
-  if 'api_key' in url:
-    url = ''.join((url.split('api_key')[0], '<redacted>'))
+  m = re.search(url, '(api[-_]key)')
+  if m:
+    url = ''.join((url.split(m.group(1))[0], '<redacted>'))
   if params:
     params = copy.copy(params)
-    if 'api_key' in params:
-      params['api_key'] = '<redacted>'
+    for key in ('api-key', 'api_key'):
+      if key in params:
+        params[key] = '<redacted>'
     url += ','.join(['%s=%s' % (k, v) for k, v in params.items()])
   return url
 
 
-def GetWeightedChoice(options, prob_table, prob_table_lock=None):
-  """Returns an option given its probability table, adjusting it for the future.
+class WeightedCollection(object):
+  """A thread-safe collection of choices and associated weights."""
 
-  The probability table is adjusted by spreading the current option's
-  probability evenly across the other unfortunate options (including itself)
-  that haven't had an opportunity to be picked.
+  def __init__(self, items: Iterable[Text]):
+    self._prob_table = {i: 1.0 for i in items}
+    self._prob_table_lock = threading.RLock()
+    self._NormalizeProbs()
 
-  Args:
-    options: List of options from where to pick a value.
-    prob_table: Probability table for the options. It is a list where the
-      element at index `i` has the probability for `options[i]`.
-    prob_table_lock: (optional) The probability table may be accessed by several
-      threads, in which case a lock may be provided.
+  def GetItem(self) -> Text:
+    """Returns an item at random (biased by associated weights)."""
+    with self._prob_table_lock:
+      ordered_choices = sorted(self._prob_table.items(), key=lambda x: x[1])
 
-  Returns:
-    The selected option.
-  """
-  if prob_table_lock:
-    with prob_table_lock:
-      return _GetWeightedChoice(options, prob_table)
-  else:
-    return _GetWeightedChoice(options, prob_table)
+    r = random.random()
+    total = 0
+    for item, weight in ordered_choices:
+      total += weight
+      if r < total:
+        return item
 
+  def GetAndDownweightItem(self) -> Text:
+    """Returns a random item while increasing the weight of every other item.
 
-def _GetWeightedChoice(options, prob_table):
-  """Gets weighted choice without worrying about a lock."""
-  # Initialize if this is not initialized
-  if not prob_table:
-    prob_table.extend([1.0 / len(options)] * len(options))
+    The exact way the non-selected item weights are modified is an
+    implementation detail and subject to change.
 
-  # Get a random number and find which option matches such probability.
-  r, p = random.random(), 0.0
-  for i, opt_prob in enumerate(prob_table):
-    p += opt_prob
-    if p > r:
-      break
+    Returns:
+      A random item from the collection.
+    """
+    r = random.random()
+    total = 0
+    selection = None
+    with self._prob_table_lock:
+      weight_addition = 1 / len(self._prob_table)
+      for item, weight in self._prob_table.items():
+        total += weight
+        if r < total:
+          selection = item
+          # Set r > any possible total to ensure we finish updating all of the
+          # weights.
+          r = sum(self._prob_table.values()) + 1
+        else:
+          self._prob_table[item] += weight_addition
+      self._NormalizeProbs()
+    return selection
 
-  # pylint: disable=undefined-loop-variable
-  # Mitigate rounding errors.
-  option = options[i % len(options)]
+  def ModifyWeight(self, item: Text, update_fn: Callable[[float],
+                                                         float]) -> float:
+    """Modifies the weight of item using update_fn.
 
-  # Adjust the probability table.
-  p, prob_table[i] = prob_table[i] / len(options), 0.0
-  # pylint: enable=undefined-loop-variable
-  for i, opt_prob in enumerate(prob_table):
-    prob_table[i] = opt_prob + p
+    Args:
+      item: Item in collection to update.
+      update_fn: Function that takes the current weight of item as an input and
+        returns the new weight. An example to add 1 to the current weight:
 
-  return option
+          ModifyWeight('my-item', lambda cur_weight: cur_weight + 1.0)
+
+    Returns:
+      The updated weight for item.
+
+    Raises:
+      KeyError if item is not already in the collection.
+    """
+    with self._prob_table_lock:
+      cur_weight = self._prob_table[item]
+      new_weight = update_fn(cur_weight)
+      self._prob_table[item] = new_weight
+      self._NormalizeProbs()
+    return new_weight
+
+  def _NormalizeProbs(self):
+    with self._prob_table_lock:
+      normalize_denom = sum(self._prob_table.values())
+      self._prob_table = {
+          k: v / normalize_denom for k, v in self._prob_table.items()
+      }
 
 
 def Bold(string):
@@ -275,20 +326,35 @@ def Underline(string):
   return '\x1F%s\x0F' % string
 
 
-_MIRC_COLORS = [
-    'white', 'black', 'blue', 'green', 'red', 'brown', 'purple', 'orange',
-    'yellow', 'light green', 'cyan', 'light cyan', 'light blue', 'pink', 'grey',
-    'light grey'
-]
+_MIRC_COLORS = {
+    'white': (0, '#ffffff'),
+    'black': (1, '#000000'),
+    'blue': (2, '#000075'),
+    'green': (3, '#009300'),
+    'red': (4, '#ff0000'),
+    'brown': (5, '#750000'),
+    'purple': (6, '#9c009c'),
+    'orange': (7, '#fc7500'),
+    'yellow': (8, '#ffff00'),
+    'light green': (9, '#00fc00'),
+    'cyan': (10, '#009393'),
+    'light cyan': (11, '#00ffff'),
+    'light blue': (12, '#0000fc'),
+    'pink': (13, '#ff00ff'),
+    'grey': (14, '#757575'),
+    'light grey': (15, '#d2d2d2'),
+}
 
 
-def Colorize(string, color):
+def Colorize(string, color, irc=True):
   """Returns string wrapped in escape codes representing color."""
   try:
-    code = _MIRC_COLORS.index(color.lower())
-    return '\x03%02d%s\x0f' % (code, string)
-  except ValueError:
+    color = _MIRC_COLORS[color.lower()]
+  except (KeyError, ValueError):
     return string
+  if irc:
+    return '\x03%02d%s\x0f' % (color[0], string)
+  return '<font color="%s">%s</font>' % (color[1], string)
 
 
 def StripColor(string):
@@ -328,27 +394,38 @@ def Sparkline(values):
 
 
 class UserTracker(object):
-  """A class for tracking the type (human or bot) of users."""
+  """A class for tracking users (humans / bots) and their channels."""
 
   def __init__(self):
-    self._bots = set()
-    self._bots_lock = Lock()
-    self._humans = set()
-    self._humans_lock = Lock()
+    self._bots = collections.defaultdict(set)  # name -> channels
+    self._humans = collections.defaultdict(set)  # name -> channels
+    self._lock = threading.Lock()
 
-  def AddHuman(self, name):
+  def Reset(self):
+    """Forget all tracked users."""
+    with self._lock:
+      self._bots.clear()
+      self._humans.clear()
+
+  def AddHuman(self, name, channel=None):
     """Adds name as a known human."""
-    with self._humans_lock:
-      self._humans.add(name)
+    with self._lock:
+      if channel:
+        self._humans[name].add(channel.id)
+      else:
+        self._humans[name]  # pylint: disable=pointless-statement
 
-  def AddBot(self, bot_name):
-    """Adds bot_name as a known bot."""
-    with self._bots_lock:
-      self._bots.add(bot_name)
+  def AddBot(self, name, channel=None):
+    """Adds name as a known bot."""
+    with self._lock:
+      if channel:
+        self._bots[name].add(channel.id)
+      else:
+        self._bots[name]  # pylint: disable=pointless-statement
 
   def IsKnown(self, name):
     """Returns if name is known to this class, as either a bot or a human."""
-    return name in self._bots.union(self._humans)
+    return self.IsHuman(name) or self.IsBot(name)
 
   def IsBot(self, name):
     """Returns if name is a bot."""
@@ -358,13 +435,40 @@ class UserTracker(object):
     """Returns if name is a human."""
     return name in self._humans
 
-  def AllHumans(self):
-    """Returns a list of all users that are humans."""
-    return list(self._humans)
+  def AllHumans(self, channel: Optional[Text] = None):
+    """Returns a list of all users that are humans.
 
-  def AllUsers(self):
-    """Returns a list of all known users."""
-    return list(self._bots.union(self._humans))
+    Args:
+      channel: If specified, only return humans in the channel.
+    """
+    if channel:
+      return [
+          name for name, channels in self._humans.items()
+          if channel.id in channels
+      ]
+    return self._humans.keys()
+
+  def AllBots(self, channel: Optional[Text] = None):
+    """Returns a list of all users that are bots.
+
+    Args:
+      channel: If specified, only return bots in the channel.
+    """
+    if channel:
+      return [
+          name for name, channels in self._bots.items()
+          if channel.id in channels
+      ]
+    return self._bots.keys()
+
+  def AllUsers(self, channel: Optional[Text] = None):
+    """Returns a list of all known users.
+
+    Args:
+      channel: If specified, only return users in the channel.
+    """
+    return self.AllHumans(channel) + self.AllBots(channel)
+
 
 def MatchesAny(channels, channel):
   """Whether any channels' id is a prefix of channel.id."""
@@ -372,3 +476,53 @@ def MatchesAny(channels, channel):
     if channel.id.startswith(chan.id):
       return True
   return False
+
+
+def _CardAsTextList(card: message_pb2.Card) -> List[Text]:
+  """Make a reasonable text-only rendering of a card."""
+  text = []
+  if card.header.title:
+    text.append(card.header.title)
+  if card.header.subtitle:
+    text.append(card.header.subtitle)
+  # Separator between header and fields if both exist.
+  if text and card.fields:
+    text.append('---')
+  for field in card.fields:
+    line = ''
+    if field.HasField('title'):
+      line = '%s: ' % field.title
+    if field.HasField('text'):
+      line += field.text
+    elif field.HasField('image'):
+      line += field.image.alt_text
+    else:
+      line += ', '.join([
+          '[%s](%s)' % (button.text, button.action_url)
+          for button in field.buttons
+      ])
+    text.append(line)
+  return text
+
+
+def _AppendToMessage(msg: types.Message, response: types.CommandResponse):
+  """Append a single response to the message list."""
+  if isinstance(response, (bytes, Text)):
+    msg.messages.add(text=response.split('\n'))
+  elif isinstance(response, message_pb2.Message):
+    msg.messages.extend([response])
+  elif isinstance(response, message_pb2.Card):
+    msg.messages.add(card=response, text=_CardAsTextList(response))
+  elif isinstance(response, message_pb2.MessageList):
+    msg.messages.extend(response.messages)
+  else:
+    assert isinstance(response, list)
+    for line in response:
+      _AppendToMessage(msg, line)
+
+
+def MakeMessage(response: types.CommandResponse) -> types.Message:
+  """Converts from the highly permissible CommandResponse into a Message."""
+  msg = types.Message()
+  _AppendToMessage(msg, response)
+  return msg

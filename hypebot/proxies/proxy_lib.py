@@ -46,12 +46,13 @@ class Proxy(with_metaclass(abc.ABCMeta)):
         self.__class__.__module__, self.__class__.__name__, self._request_cache)
 
   @abc.abstractmethod
-  def _GetUrl(self, url, params):
+  def _GetUrl(self, url, params, headers=None):
     """Fetches data from a specified URL.
 
     Args:
       url: (string) URL to request data from
       params: Dict of url GET params.
+      headers: Dict of custom headers.
 
     Returns:
       HTTP response body if it exists, otherwise None
@@ -110,18 +111,18 @@ class Proxy(with_metaclass(abc.ABCMeta)):
           logging.error('Error storing return_data: %s', e)
     return return_data
 
-  def FetchJson(self, url, params=None, force_lookup=False, use_storage=False,
-                fields_to_erase=None):
+  def FetchJson(self, url, params=None, headers=None, force_lookup=False,
+                use_storage=False, fields_to_erase=None):
     """Returns a python-native version of a JSON response from url."""
     try:
       params = params or {}
-      action = partial(self._JsonAction, url, params, fields_to_erase)
+      action = partial(self._JsonAction, url, params, headers, fields_to_erase)
       # By adding to params, we ensure that it gets added to the cache key.
       # Make a copy to avoid sending in the actual request.
       params = copy.copy(params)
       params['_fields_to_erase'] = fields_to_erase
       return json.loads(
-          self.HTTPFetch(url, params, action, self._ValidateJson,
+          self.HTTPFetch(url, params, headers, action, self._ValidateJson,
                          force_lookup, use_storage) or '{}')
     except Exception as e:  # pylint: disable=broad-except
       self._LogError(url, params, exception=e)
@@ -130,6 +131,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
   def _JsonAction(self,
                   url,
                   params,
+                  headers,
                   fields_to_erase=None):
     """Action function for fetching JSON.
 
@@ -147,12 +149,13 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     Args:
       url: The url to fetch data from.
       params: Data for URL query string.
+      headers: Headers for the HTTPRequest.
       fields_to_erase: Optional list of fields to erase.
 
     Returns:
       JSON string.
     """
-    response = json.loads(self._GetUrl(url, params) or '{}')
+    response = json.loads(self._GetUrl(url, params, headers) or '{}')
     for path in fields_to_erase or []:
       self._EraseField(response, path.split('.'))
     return json.dumps(response)
@@ -187,6 +190,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
   def HTTPFetch(self,
                 url,
                 params=None,
+                headers=None,
                 action=None,
                 validate_fn=None,
                 force_lookup=False,
@@ -196,6 +200,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     Args:
       url: The url to fetch data from.
       params: Data for URL query string.
+      headers: Dictionary of headers for HTTPRequest.
       action: The action to perform if the result is not cached against the key.
       validate_fn: Function used to validate if the response should be cached.
       force_lookup: If this lookup should bypass the cache and storage lookup.
@@ -208,7 +213,7 @@ class Proxy(with_metaclass(abc.ABCMeta)):
     """
     params = params or {}
     if action is None:
-      action = partial(self._GetUrl, url, params)
+      action = partial(self._GetUrl, url, params, headers)
     return self.RawFetch(
         util_lib.SafeUrl(url, params),
         action,

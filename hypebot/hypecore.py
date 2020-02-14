@@ -18,13 +18,12 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import itertools
 from threading import Lock
 import time
 
 from absl import logging
 from concurrent import futures
-from typing import Any, Callable, Dict, List, Optional, Text, Union
+from typing import Any, Callable, Dict, Optional, Text
 
 from hypebot import types
 from hypebot.core import async_lib
@@ -32,6 +31,7 @@ from hypebot.core import schedule_lib
 from hypebot.core import util_lib
 from hypebot.core import zombie_lib
 from hypebot.interfaces import interface_lib
+from hypebot.news import news_factory
 from hypebot.plugins import coin_lib
 from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
@@ -41,39 +41,6 @@ from hypebot.proxies import proxy_factory
 from hypebot.stocks import stock_factory
 from hypebot.storage import storage_factory
 from hypebot.storage import storage_lib
-
-
-# TODO: Remove and replace usage with direct dependency on types lib.
-_MessageType = Union[
-    Text,
-    List[Text]]
-MessageType = Optional[_MessageType]
-
-
-def _GetAlternateTextList(value: Union[Text, List[Text]]) -> List[Text]:
-  if isinstance(value, Text):
-    return value.split('\n')
-  # Flat map to expand newlines to separate list items.
-  return list(itertools.chain.from_iterable([x.split('\n') for x in value]))
-
-
-def _AppendToMessage(msg: types.Message, response: _MessageType):
-  if isinstance(response, (bytes, Text)):
-    for line in response.split('\n'):
-      msg.messages.add(text=line)
-  else:
-    assert isinstance(response, list)
-    for line in response:
-      _AppendToMessage(msg, line)
-
-
-class MessageUtil(object):
-  """Swappable utility for making the Message proto from the internal type."""
-
-  def MakeMessage(self, response: _MessageType) -> types.Message:
-    msg = types.Message()
-    _AppendToMessage(msg, response)
-    return msg
 
 
 class RequestTracker(object):
@@ -161,12 +128,12 @@ class OutputUtil(object):
   def LogAndOutput(self,
                    log_level: int,
                    channel: Channel,
-                   message: MessageType) -> None:
+                   message: types.CommandResponse) -> None:
     """Logs message at log_level, then sends it to channel via Output."""
     logging.log(log_level, message)
     self.Output(channel, message)
 
-  def Output(self, channel: Channel, message: MessageType) -> None:
+  def Output(self, channel: Channel, message: types.CommandResponse) -> None:
     """Outputs a message to channel."""
     self._output_fn(channel, message)
 
@@ -272,7 +239,6 @@ class Core(object):
     self.name = self.params.name
     self.interface = interface
     self.output_util = OutputUtil(self.Reply)
-    self.message_util = MessageUtil()
 
     self.store = storage_factory.CreateFromParams(self.params.storage)
     cached_type = self.params.storage.get('cached_type')
@@ -297,16 +263,17 @@ class Core(object):
     self.bets = coin_lib.Bookie(self.store, self.bank, self.inventory)
     self.stocks = stock_factory.CreateFromParams(self.params.stocks, self.proxy)
     self.deployment_manager = deploy_lib.DeploymentManager(
-        self.name.lower(), self.bets, self.output_util, self.executor)
+        self.name.lower(), self.bank, self.output_util, self.executor)
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
+    self.news = news_factory.CreateFromParams(self.params.news, self.proxy)
     self.betting_games = []
     self.last_command = None
     self.default_channel = self.params.default_channel
 
   def Reply(self,
             channel: types.Target,
-            msg: MessageType,
+            msg: types.CommandResponse,
             default_channel: Optional[Channel] = None,
             limit_lines: bool = False,
             max_public_lines: int = 6,
@@ -352,21 +319,21 @@ class Core(object):
       if user:
         self.interface.SendMessage(
             channel,
-            self.message_util.MakeMessage('It\'s long so I sent it privately.'))
+            util_lib.MakeMessage('It\'s long so I sent it privately.'))
         self.interface.SendMessage(
             Channel(id=user, visibility=Channel.PRIVATE, name=user),
-            self.message_util.MakeMessage(msg))
+            util_lib.MakeMessage(msg))
       else:
         # If there is no user, just truncate and send to channel.
         self.interface.SendMessage(
             channel,
-            self.message_util.MakeMessage(msg[:max_public_lines] + ['...']))
+            util_lib.MakeMessage(msg[:max_public_lines] + ['...']))
     else:
-      self.interface.SendMessage(channel, self.message_util.MakeMessage(msg))
+      self.interface.SendMessage(channel, util_lib.MakeMessage(msg))
 
   def PublishMessage(self,
                      topic: Text,
-                     msg: MessageType,
+                     msg: types.CommandResponse,
                      notice: bool = False) -> None:
     """Sends a message to the channels subscribed to a topic.
 
@@ -384,7 +351,7 @@ class Core(object):
     if not channels:
       logging.info('No subscriptions for topic %s, dropping: %s', topic, msg)
       return
-    message = self.message_util.MakeMessage(msg)
+    message = util_lib.MakeMessage(msg)
     for channel in channels:
       channel = Channel(visibility=Channel.PUBLIC, **channel)
       if notice:

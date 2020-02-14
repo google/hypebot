@@ -28,7 +28,7 @@ import time
 
 from absl import logging
 
-from hypebot import hypecore
+from hypebot import types
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
@@ -85,12 +85,12 @@ class BaseCommand(object):
     self._parsers = []
     self._last_called = defaultdict(lambda: defaultdict(float))
     self._ratelimit_lock = Lock()
-    self._spook_probs = []
+    self._spook_replies = util_lib.WeightedCollection(messages.SPOOKY_STRINGS)
 
   def Handle(self,
              channel: Channel,
              user: Text,
-             message: Text) -> hypecore.MessageType:
+             message: Text) -> types.CommandResponse:
     """Attempt to handle the message.
 
     First we check if this command is available for this channel. Then, we
@@ -118,8 +118,8 @@ class BaseCommand(object):
         return self._Ratelimit(channel, user, *args, **kwargs)
 
   def _InScope(self, channel: Channel):
-    # DMs are always allowed.
-    if channel.visibility == Channel.PRIVATE:
+    # DMs and system internal commands are always allowed.
+    if channel.visibility in [Channel.PRIVATE, Channel.SYSTEM]:
       return True
     # Channel scope
     if (not util_lib.MatchesAny(self._params.channels, channel) or
@@ -155,7 +155,7 @@ class BaseCommand(object):
       Optional message(s) to reply to the channel.
     """
     if (not self._params.ratelimit.enabled or
-        channel.visibility == Channel.PRIVATE):
+        channel.visibility in [Channel.PRIVATE, Channel.SYSTEM]):
       return self._Handle(channel, user, *args, **kwargs)
 
     scoped_channel = Channel()
@@ -202,9 +202,7 @@ class BaseCommand(object):
   def _Spook(self, user: Text) -> None:
     """Creates a spooky encounter with user."""
     logging.info('Spooking %s', user)
-    self._Reply(
-        user,
-        util_lib.GetWeightedChoice(messages.SPOOKY_STRINGS, self._spook_probs))
+    self._Reply(user, self._spook_replies.GetAndDownweightItem())
 
   def _Handle(self, channel: Channel, user: Text, *args, **kwargs):
     """Internal method that handles the command.
@@ -256,7 +254,8 @@ def _ParseArgs(match):
 def CommandRegexParser(pattern: Text,
                        flags: int = re.DOTALL,
                        reply_to_public: bool = True,
-                       reply_to_private: bool = True):
+                       reply_to_private: bool = True,
+                       reply_to_system: bool = False):
   """Decorator to add a command-style regex parser to a class.
 
   A command is case insensitive and takes the form <prefix><regex><whitespace>
@@ -267,6 +266,7 @@ def CommandRegexParser(pattern: Text,
     flags: Regular expression flags.
     reply_to_public: Whether to respond to public channels or not.
     reply_to_private: Whether to respond to private channels or not.
+    reply_to_system: Whether to respond to system channels or not.
 
   Returns:
     Decorator that adds parser to class.
@@ -286,16 +286,19 @@ def CommandRegexParser(pattern: Text,
       {tuple<boolean, *args, **kwargs} Whether to take message and parsed
         args/kwargs.
     """
+    is_public = channel.visibility == Channel.PUBLIC
     is_private = channel.visibility == Channel.PRIVATE
+    is_system = channel.visibility == Channel.SYSTEM
     # Cannot precompile since this depends on the channel.
     match = re.match(
-        r'(?i)^%s%s%s\s*$' % (command_prefix, '?'
-                              if is_private else '', pattern),
+        r'(?i)^%s%s%s\s*$' %
+        (command_prefix, '' if is_public else '?', pattern),
         message,
         flags=flags)
     if (match
+        and (reply_to_public or not is_public)
         and (reply_to_private or not is_private)
-        and (reply_to_public or is_private)):
+        and (reply_to_system or not is_system)):
       args, kwargs = _ParseArgs(match)
       return True, args, kwargs
     return False, [], {}
@@ -305,6 +308,24 @@ def CommandRegexParser(pattern: Text,
     return cls
 
   return Decorator
+
+
+def SystemCommandRegexParser(pattern: Text, flags: int = re.DOTALL):
+  """Shorthand for CommandRegexParser with only reply_to_system=True.
+
+  Args:
+    pattern: Regular expression to try to match against messages.
+    flags: Regular expression flags.
+
+  Returns:
+    Decorator that adds parser to class.
+  """
+  return CommandRegexParser(
+      pattern,
+      flags=flags,
+      reply_to_public=False,
+      reply_to_private=False,
+      reply_to_system=True)
 
 
 def RegexParser(pattern):
@@ -467,14 +488,13 @@ class TextCommand(BaseCommand):
 
   def __init__(self, *args):
     super(TextCommand, self).__init__(*args)
-    self._choices = self._params.choices
-    self._probs = []
+    self._choices = util_lib.WeightedCollection(self._params.choices)
 
   def _Handle(self, channel, user):
     if self._choices:
-      choice = util_lib.GetWeightedChoice(self._choices, self._probs)
-      if '{person}' in choice:
-        choice = choice.format(choice, person=user)
-      if choice.startswith('/me '):
-        choice = [self._core.params.name, choice[4:]].join(' ')
-      return choice
+      item = self._choices.GetAndDownweightItem()
+      if '{person}' in item:
+        item = item.format(item, person=user)
+      if item.startswith('/me '):
+        item = '%s %s' % (self._core.params.name, item[4:])
+      return item

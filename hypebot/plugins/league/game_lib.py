@@ -43,6 +43,7 @@ from hypebot.core import name_complete_lib
 from hypebot.core import util_lib
 from hypebot.data.league import client_vars
 from hypebot.data.league import nicknames
+from hypebot.protos import message_pb2
 
 
 BASE_DDRAGON_CDN_URL = 'http://ddragon.leagueoflegends.com/cdn/'
@@ -295,15 +296,19 @@ class GameLib(object):
     passive = champ.passive
 
     # Make passives more dank.
-    passive_name = util_lib.Dankify(passive.name)
     tooltip = util_lib.Dankify(self._Sanitize(passive.description))
 
-    passive_strs = []
-
-    passive_title = '{} Passive: {}'.format(champ.name, passive_name)
-    passive_strs.append(passive_title)
-    passive_strs.append(tooltip)
-    return '; '.join(passive_strs)
+    return message_pb2.Card(
+        header={
+            'title': util_lib.Dankify(passive.name),
+            'subtitle': '{} Passive'.format(champ.name),
+            'image': {
+                'url': self.GetImageUrl('passive', passive.image.full),
+            },
+        },
+        fields=[{
+            'text': tooltip
+        }])
 
   def GetChampSkillMessage(self, champ_name, skill_name):
     """Gets the given skill for a given champion.
@@ -348,28 +353,39 @@ class GameLib(object):
     skill_name = util_lib.Dankify(skill.name)
     tooltip = util_lib.Dankify(self._Sanitize(skill.tooltip))
 
-    skill_title = '{} {}: {}'.format(champ.name, skill_button, skill_name)
     skill_strs = []
-    skill_strs.append(skill_title)
+    skill_strs.append('{} {}: {}'.format(champ.name, skill_button, skill_name))
+    card = message_pb2.Card(
+        header={
+            'title': skill_name,
+            'subtitle': '{} {}'.format(champ.name, skill_button),
+            'image': {
+                'url': self.GetImageUrl('spell', skill.image.full),
+            },
+        })
 
     skill_range = skill.range_burn
     if skill_range != 'self':
       skill_strs.append('Range: {}'.format(skill_range))
+      card.fields.add(title='Range', text='{}'.format(skill_range))
 
     resource = skill.resource
     if resource:
       cost = self._FillinSkillDescription(resource, skill)
       skill_strs.append('Cost: {}'.format(cost))
+      card.fields.add(title='Cost', text=cost)
 
     skill_strs.append('CD: {}'.format(skill.cooldown_burn))
+    card.fields.add(title='Cooldown', text='{}'.format(skill.cooldown_burn))
 
     skill_text = self._FillinSkillDescription(tooltip, skill)
+    card.fields.add(text=skill_text)
 
-    skill_info = ['; '.join(skill_strs)]
+    skill_info = [u'; '.join(skill_strs)]
     # this description is sometimes too long.
     # split it into multiple lines if necessary.
     skill_info += self._CleanChampionWrap(skill_text)
-    return skill_info
+    return message_pb2.Message(text=skill_info, card=card)
 
   def _FillinSkillDescription(self, desc, skill):
     """Fills in {{ attr }} parts of the given description."""
@@ -405,9 +421,11 @@ class GameLib(object):
           if scaling_type in self._SCALING_MAP:
             scaling_type = self._SCALING_MAP[scaling_type]
           tokens[i] = scaling_amount_str + ' ' + scaling_type
-      except KeyError:
+      except (KeyError, ValueError):
         # If a KeyError occurs (likely Rito's fault), proceed without
         # substituting this tag.
+        # If a ValueError occurs, an unknown key starting with e, a, or f caused
+        # some issues and we should not substitute this tag.
         pass
 
     return ''.join(tokens)

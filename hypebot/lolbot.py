@@ -124,7 +124,7 @@ class HypeBot(basebot.BaseBot):
         self._core.rito)
     self._core.esports = esports_lib.EsportsLib(
         self._core.proxy, self._core.executor, self._core.game,
-        self._core.timezone)
+        self._core.timezone, self._core.rito)
     self._core.items = items_lib.ItemsLib(self._core.rito)
     self._core.lcs_channel = self._params.lcs_channel
     # Trivia can probably be self contained once multiple parsers exist.

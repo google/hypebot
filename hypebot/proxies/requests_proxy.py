@@ -20,23 +20,26 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import requests
-
 from hypebot.proxies import proxy_lib
+
+import requests
 
 
 class RequestsProxy(proxy_lib.Proxy):
   """Use python requests library to fetch urls."""
 
-  def _GetUrl(self, url, params):
+  def _GetUrl(self, url, params, headers=None):
+    request_headers = {'User-Agent': 'HypeBot'}
+    if headers:
+      request_headers.update(headers)
     try:
       req = requests.get(url,
                          params=params,
-                         headers={'User-Agent': 'HypeBot'})
+                         headers=request_headers)
       if req.status_code != requests.codes.ok:
-        self._LogError(url, req.status_code)
+        self._LogError(url, params, error_code=req.status_code)
         return None
     except Exception as e:
-      self._LogError(url, exception=e)
+      self._LogError(url, params, exception=e)
       return None
     return req.text

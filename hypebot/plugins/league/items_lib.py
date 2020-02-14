@@ -32,6 +32,7 @@ from __future__ import unicode_literals
 import re
 
 from hypebot.core import name_complete_lib
+from typing import Text
 
 
 class ItemsLib(object):

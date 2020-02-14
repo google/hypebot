@@ -23,22 +23,72 @@ message MessageList {
 
 // A single message from the ordered output of a Hypebot command's execution.
 message Message {
-  oneof message {
-    // A text-only message. Text messages may include IRC markup.
-    string text = 1;
+  // [Alternate] text to be displayed if no card is specified or if the chat
+  // interface does not support rendering of cards.
+  // Text may be formatted with markdown or IRC markup.
+  // If a `card` is specified with no `text` in a command response, the HypeCore
+  // will make a best effort to populate text with a reasonable text description
+  // of the card.
+  repeated string text = 1;
 
-    // A message that may be rendered as a card.
-    CardMessage card = 2;
-  }
+  // Structured message that some chat interfaces may be able to render.
+  Card card = 2;
 }
 
-// Specification for optionally rendering a message as a card.
-//
-// Client interfaces that support card rendering must only render `card`. All
-// other client interfaces must render the `alternate_text` specification
-// instead.
-message CardMessage {
-  // Alternate text-only specification for rendering the message. Text
-  // specifications may include IRC markup.
-  repeated string alternate_text = 2;
+// A generic specification of structured message response. While not all chat
+// interfaces will be able to support all of the functionality, they should
+// gracefully degrade if possible.
+message Card {
+  // An image that is specified by a URL.
+  message Image {
+    // The URL of the image.
+    string url = 1;
+    // Alternative text displayed if the interface cannot render an image or
+    // used for accessibility even if images are possible.
+    string alt_text = 2;
+  }
+
+  // Preferably render image on left, with title above subtitle on the right.
+  message Header {
+    string title = 1;
+    string subtitle = 2;
+    Image image = 3;
+  }
+  Header header = 1;
+
+  message Field {
+    // Specifying a key is optional.
+    oneof key {
+      string title = 1;
+      string icon_url = 2;
+    }
+
+    message Button {
+      oneof content {
+        string text = 1;
+        Image image = 2;
+      }
+      // The URL to open if action (click) is performed on the button.
+      string action_url = 3;
+    }
+
+    oneof value {
+      string text = 3;
+      // Note that some interfaces will ignore the key if an image is set.
+      Image image = 4;
+    }
+    // This is treated as a part of the oneof, but repeated is not allowed
+    // within a oneof and having a wrapper message is verbose.
+    // Prefer to float buttons horizontally
+    repeated Button buttons = 5;
+
+    // Flavor text that should appear below the title (if provided). Card
+    // implementations may not render this field and it shouldn't be used for
+    // important data.
+    string bottom_text = 6;
+  }
+  repeated Field fields = 2;
+  // If specified, collapse the fields beyond this count to prevent the card
+  // from taking up too much vertical space.
+  int32 visible_fields_count = 3;
 }

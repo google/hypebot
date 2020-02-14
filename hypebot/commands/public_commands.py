@@ -47,9 +47,13 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'probability': 0.25,
+          # How often to apply extra snark. Note this is only checked when an
+          # auto-reply is emitted. Thus the chance that an extra-snarky reply is
+          # returned is (probability * extra_snark_probability).
+          'extra_snark_probability': 0.5,
       })
 
-  _AUTO_REPLIES = [
+  _AUTO_REPLIES = (
       'Much appreciated',
       'Works fine',
       'Good point',
@@ -61,13 +65,20 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
       'Me too',
       'Noted!',
       'lol',
-      'Wow, thanks...',
+      'Wow, thanks',
       '💩',
       '💪',
       '😬',
       '🔥',
       'Cool story, bro',
-  ]
+  )
+
+  _SNARK_TEMPLATES = (
+      '{}...',
+      '{} /s',
+      '{} 🙄',
+      '{} 🤔',
+  )
 
   def __init__(self, *args):
     super(AutoReplySnarkCommand, self).__init__(*args)
@@ -76,7 +87,10 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
   def _Handle(self, channel, user, message):
     match = self._regex.search(message)
     if match and random.random() < self._params.probability:
-      return '%s (%s)' % (random.choice(self._AUTO_REPLIES), match.groups()[0])
+      reply = random.choice(self._AUTO_REPLIES)
+      if random.random() < self._params.extra_snark_probability:
+        reply = random.choice(self._SNARK_TEMPLATES).format(reply)
+      return '%s (%s)' % (reply, match.groups()[0])
 
 
 _SongLine = collections.namedtuple('SongLine', 'state lyric pattern')
@@ -301,7 +315,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
       return greeting.format(**greeting_params)
     except Exception as e:
       logging.info('GreetingCommand exception: %s', e)
-      self._core.bets.FineUser(user, 100, 'Bad greeting', self._Reply)
+      self._core.bank.FineUser(user, 100, 'Bad greeting', self._Reply)
       return ('%s has an invalid greeting and feels bad for trying to '
               'break %s' % (user, self._core.name))
 

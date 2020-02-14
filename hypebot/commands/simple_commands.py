@@ -448,7 +448,7 @@ class StoryCommand(command_lib.BasePublicCommand):
   def __init__(self, *args):
     super(StoryCommand, self).__init__(*args)
     self._stories = self._params.stories.AsDict()
-    self._probs = []
+    self._story_choices = util_lib.WeightedCollection(self._stories.keys())
     # Store active story keyed on channel id.
     self._active_stories = {}
 
@@ -469,8 +469,7 @@ class StoryCommand(command_lib.BasePublicCommand):
       return self._stories[story.name][story.line + 1]
     elif (not story and
           message == '%s, tell me a story' % self._core.name.lower()):
-      story_name = util_lib.GetWeightedChoice(list(self._stories.keys()),
-                                              self._probs)
+      story_name = self._story_choices.GetAndDownweightItem()
       self._active_stories[channel.id] = _StoryProgress(story_name, t, 1)
       return self._stories[story_name][0]
 

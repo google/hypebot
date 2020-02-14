@@ -101,21 +101,23 @@ SPECIAL_STICK_USERS = {}
 SPOOKY_STRINGS = [
     '( ͡° ͜ʖ ͡°) I AM WATCHING YOU ( ͡° ͜ʖ ͡°)',
     'I\'M DAVID S. PUMPKINS! ANY QUESTIONS?',
-    ['     ,',
-     '     \`-,      ,',
-     ' .-._/   \_____)\\',
-     '("              / =-',
-     ' \'-;   ,_____.-\'',
-     '  /__.\''
-    ],
+    '\n'.join([
+        '     ,',
+        '     \`-,      ,',
+        ' .-._/   \\_____)\\',
+        '("              / =-',
+        ' \'-;   ,_____.-\'',
+        '  /__.\''
+    ]),
     'BOO!',
     'ThIs Is A sPoOoOoOoKyGrAmMmMmM. YoU aRe VeRy ScArEd NoW.',
-    ['Spooky scary skeletons',
-     'Send shivers down your spine',
-     'Shrieking skulls will shock your soul',
-     'Seal your doom tonight',
-     'https://youtu.be/q6-ZGAGcJrk'
-    ],
+    '\n'.join([
+        'Spooky scary skeletons',
+        'Send shivers down your spine',
+        'Shrieking skulls will shock your soul',
+        'Seal your doom tonight',
+        'https://youtu.be/q6-ZGAGcJrk'
+    ]),
     'You\'ve been randomly selected! To be a blood donor!',
     ('I\'m here to scare you, but I think the ghastly figure behind you has me '
      'beat'),

@@ -28,9 +28,11 @@ import arrow
 
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
+from hypebot.core import name_complete_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
+from hypebot.protos import message_pb2
 
 LCS_TOPIC_STRING = u'#LcsHype | %s'
 
@@ -366,7 +368,7 @@ class LCSScheduleCommand(command_lib.BaseCommand):
     if full == 'full':
       num_games = self._params.full_num_games
     schedule, subcommand = self._core.esports.GetSchedule(
-        subcommand, include_playoffs, num_games)
+        subcommand or 'All', include_playoffs, num_games)
 
     lines = ['%s Upcoming Matches' % subcommand]
     lines.extend(schedule)
@@ -394,7 +396,39 @@ class LCSStandingsCommand(command_lib.BaseCommand):
     league = query[0] if query else self._params.default_region
     bracket = ' '.join(query[1:]) if len(query) > 1 else 'regular'
 
-    return self._core.esports.GetStandings(league, bracket)
+    standings = self._core.esports.GetStandings(league, bracket)
+
+    cards = []
+    for standing in standings:
+      has_ties = any([team.ties for team in standing['teams']])
+      format_str = '{0.wins}-{0.losses}'
+      if has_ties:
+        format_str += '-{0.ties}, {0.points}'
+      card = message_pb2.Card(
+          header={
+              'title': standing['league'].name,
+              'subtitle': '%s (%s)' % (standing['bracket'].name,
+                                       'W-L-D, Pts' if has_ties else 'W-L'),
+          },
+          # We will place the top-n teams into the first field separated by
+          # newlines so that we don't have extra whitespace.
+          visible_fields_count=1)
+      team_strs = [
+          ('*{0.rank}:* {0.team.abbreviation} (%s)' % format_str).format(team)
+          for team in standing['teams']
+      ]
+      # If there are a lot of teams in the bracket, only display the top few.
+      # 6 is chosen since many group stages and Grumble consist of 6 team
+      # brackets.
+      if len(team_strs) > 6:
+        # The number placed into the visible field is n-1 so that we don't only
+        # show a single team in the collapsed section.
+        card.fields.add(text='\n'.join(team_strs[:5]))
+        card.fields.add(text='\n'.join(team_strs[5:]))
+      else:
+        card.fields.add(text='\n'.join(team_strs))
+      cards.append(card)
+    return cards
 
 
 @command_lib.CommandRegexParser(r'results(full)? ?(.*?)')
@@ -415,7 +449,7 @@ class LCSResultsCommand(command_lib.BaseCommand):
     num_games = self._params.num_games
     if full == 'full':
       num_games = self._params.full_num_games
-    schedule, region = self._core.esports.GetResults(region.upper(), num_games)
+    schedule, region = self._core.esports.GetResults(region or 'All', num_games)
 
     schedule.insert(0, '%s Past Matches' % region)
     return schedule
@@ -439,12 +473,25 @@ class LCSRosterCommand(command_lib.BaseCommand):
 
   @command_lib.RequireReady('_core.esports')
   def _Handle(self, channel, user, include_subs, region, team):
-    team = self._core.esports.teams[team]
+    teams = self._core.esports.teams
+    if region:
+      league = self._core.esports.leagues[region]
+      if not league:
+        return 'Unknown region'
+      teams = {team.team_id: team for team in league.teams}
+      teams = name_complete_lib.NameComplete(
+          dict({team.name: team_id for team_id, team in teams.items()}, **{
+              team.abbreviation: team_id for team_id, team in teams.items()
+          }), teams)
+
+    team = teams[team]
     if not team:
       return 'Unknown team.'
     response = ['%s Roster:' % team.name]
     players = [player for player in team.players
                if not player.is_substitute or include_subs]
+    role_order = {'Top': 0, 'Jungle': 1, 'Mid': 2, 'Bottom': 3, 'Support': 4}
+    players.sort(key=lambda p: role_order.get(p.position, 5))
     for player in players:
       response.append('%s - %s' % (
           self.NAME_SUBSTITUTIONS.get(player.summoner_name,

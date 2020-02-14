@@ -66,6 +66,10 @@ class LRUCache(object):
       self._dict.popitem(last=False)
     self._dict[key] = _TimedCacheElement(key, value)
 
+  def Del(self, key: Any) -> None:
+    if key in self._dict:
+      del self._dict[key]
+
   def Iterate(self) -> Generator[Tuple[Any, Any], None, None]:
     """Iterating does not reset the timestamps of any objects."""
     self._RemoveStaleElements()

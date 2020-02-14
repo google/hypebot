@@ -1,0 +1,63 @@
+// Copyright 2020 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot;
+
+import "google/protobuf/timestamp.proto";
+
+// A single entry into a entity's ledger recording a HypeCoin transaction. When
+// HypeCoins pass between two entities, there is be a cooresponding LedgerEntry
+// for each side of the transaction. The entity sending HypeCoins will see a
+// LedgerEntry with a negative amount (denoting a withdrawl from their balance)
+// and the entity receiving the HypeCoins will see an entry with a positive
+// amount (a deposit). See the example below.
+//
+// Currently, LedgerEntries are stored keyed on the entity ID, but could be
+// stored in a different format in the future.
+//
+// Example:
+// HypeBot has paid Memelord 100₡ for their outstanding memery. Two
+// LedgerEntries are created:
+//
+// [HypeBot's ledger]
+// {
+//   create_time: ...
+//   counterparty: 'Memelord'
+//   amount: -100
+//   details: 'Outstanding memery'
+// }
+//
+// [Memelord's ledger]
+// {
+//   create_time: ...
+//   counterparty: 'HypeBot'
+//   amount: 100
+//   details: 'Outstanding memery'
+// }
+message LedgerEntry {
+  // An identifier for this transaction. Currently unused.
+  string transaction_id = 1;
+  // The time when this entry was created.
+  google.protobuf.Timestamp create_time = 2;
+  // The "other side" of the transaction. Currently always set, but could be
+  // omitted for privacy/spooky reasons.
+  string counterparty = 3;
+  // The amount of HypeCoins included in the transaction.
+  sint64 amount = 4;
+  // Human-readable reason for the transaction or other notes about the
+  // transaction. While not required, this is often identical for every ledger
+  // entry about the same transaction.
+  string details = 5;
+}

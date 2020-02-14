@@ -32,7 +32,7 @@ class CaptureInterface(interface_lib.BaseChatInterface):
     self._msgs = []  # type: List[Text]
 
   def MessageLog(self) -> Text:
-    return u'\n'.join(self._msgs)
+    return '\n'.join(self._msgs)
 
   # =======================
   # BaseInterface overrides
@@ -60,10 +60,9 @@ class CaptureInterface(interface_lib.BaseChatInterface):
 
   def SendMessage(self, unused_channel: types.Channel, message: types.Message):
     for msg in message.messages:
-      if msg.WhichOneof('message') == 'card':
-        self._msgs.extend(msg.card.alternate_text)
-      else:
-        self._msgs.append(msg.text)
+      # Messages with only cards and no text will have had default text already
+      # added by the HypeCore.
+      self._msgs.extend(msg.text)
 
   def Notice(self, unused_channel: types.Channel,
              unused_message: types.Message):

@@ -61,6 +61,9 @@ class BaseBot(object):
       },
       # Default time zone for display.
       'time_zone': 'America/Los_Angeles',
+      'news': {
+          'type': 'NYTimesNews',
+      },
       'proxy': {
           'type': 'RequestsProxy'
       },
@@ -106,6 +109,7 @@ class BaseBot(object):
           'MainCommand': {},
           'MemeCommand': {},
           'MissingPingCommand': {},
+          'NewsCommand': {},
           'OrRiotCommand': {},
           'PreferencesCommand': {},
           'PrideAndAccomplishmentCommand': {},
