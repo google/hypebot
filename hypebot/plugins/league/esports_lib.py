@@ -42,8 +42,6 @@ from hypebot.protos.riot.v4 import league_pb2
 from google.protobuf import json_format
 # pylint: enable=line-too-long
 
-LIVESTREAM_LINK_FORMAT = 'https://gaming.youtube.com/embed/%s'
-
 
 class Match(object):
   """Wraps protobuf match with business logic."""
@@ -1019,9 +1017,9 @@ class EsportsLib(object):
           if match.match_id in livestream_links:
             date_time += ' - %s' % livestream_links[match.match_id]
         else:
-          date_time = 'LIVE - ' + (
-              livestream_links.get(match.match_id) or
-              messages.FALLBACK_LIVESTREAM_LINK)
+          date_time = 'LIVE'
+          if match.match_id in livestream_links:
+            date_time += ' - %s' % livestream_links[match.match_id]
         num_games_str = ''
         if match.games:
           num_games_str = 'Bo%s - ' % len(match.games)
