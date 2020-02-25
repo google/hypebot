@@ -200,16 +200,16 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
       match_name = '%s v %s' % (blue, red)
     else:
       match_name = 'An LCS match'
-    livestream_str = messages.FALLBACK_LIVESTREAM_LINK
+    call_to_action_str = 'Get #Hyped!'
     livestream_link = self._core.esports.GetLivestreamLinks().get(
         match.match_id)
     if livestream_link:
-      livestream_str = 'Watch at %s' % livestream_link
+      call_to_action_str = 'Watch at %s and get #Hyped!' % livestream_link
       self._core.interface.Topic(
           self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
+
     self._core.PublishMessage(
-        topic, u'%s is starting soon. %s and get #Hyped!' %
-        (match_name, livestream_str))
+        topic, u'%s is starting soon. %s' % (match_name, call_to_action_str))
 
 
 @command_lib.CommandRegexParser(
