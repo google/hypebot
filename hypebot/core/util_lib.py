@@ -30,7 +30,7 @@ import unicodedata
 
 import arrow
 from dateutil.relativedelta import relativedelta
-from hypebot import types
+from hypebot import hype_types
 from hypebot.protos import message_pb2
 from hypebot.protos.user_pb2 import User
 import six
@@ -505,7 +505,8 @@ def _CardAsTextList(card: message_pb2.Card) -> List[Text]:
   return text
 
 
-def _AppendToMessage(msg: types.Message, response: types.CommandResponse):
+def _AppendToMessage(
+    msg: hype_types.Message, response: hype_types.CommandResponse):
   """Append a single response to the message list."""
   if isinstance(response, (bytes, Text)):
     msg.messages.add(text=response.split('\n'))
@@ -521,8 +522,8 @@ def _AppendToMessage(msg: types.Message, response: types.CommandResponse):
       _AppendToMessage(msg, line)
 
 
-def MakeMessage(response: types.CommandResponse) -> types.Message:
+def MakeMessage(response: hype_types.CommandResponse) -> hype_types.Message:
   """Converts from the highly permissible CommandResponse into a Message."""
-  msg = types.Message()
+  msg = hype_types.Message()
   _AppendToMessage(msg, response)
   return msg

@@ -20,7 +20,7 @@ from __future__ import unicode_literals
 
 import functools
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.plugins import hypejack_lib
@@ -56,6 +56,6 @@ class HypeJackCommand(command_lib.BasePublicCommand):
           functools.partial(self._Reply, default_channel=channel))
 
   def _Handle(self, channel: Channel, user: Text,
-              message: Text) -> types.CommandResponse:
+              message: Text) -> hype_types.CommandResponse:
     if channel.id in self._games:
       self._games[channel.id].HandleMessage(user, message)

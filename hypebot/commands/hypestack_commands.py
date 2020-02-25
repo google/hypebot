@@ -20,7 +20,7 @@ from __future__ import unicode_literals
 
 import functools
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import util_lib
@@ -37,7 +37,7 @@ class HypeStackBalanceCommand(command_lib.BaseCommand):
   def _Handle(self,
               channel: Channel,
               user: Text,
-              stack_user: Text) -> types.CommandResponse:
+              stack_user: Text) -> hype_types.CommandResponse:
     stack_user = stack_user or 'me'
     normalized_stack_user = util_lib.CanonicalizeName(stack_user)
     if normalized_stack_user == 'me':
@@ -64,7 +64,7 @@ class BuyHypeStackCommand(command_lib.BaseCommand):
   def _Handle(self,
               channel: Channel,
               user: Text,
-              stack_amount: Text) -> types.CommandResponse:
+              stack_amount: Text) -> hype_types.CommandResponse:
     num_stacks = util_lib.SafeCast(stack_amount, int, 0)
     if not num_stacks:
       self._core.bank.FineUser(user, 1, 'You must buy at least one HypeStack.',

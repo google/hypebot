@@ -23,7 +23,7 @@ import re
 
 from absl import logging
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.data import messages
 from hypebot.plugins import alias_lib
@@ -44,7 +44,7 @@ class AliasAddCommand(command_lib.BaseCommand):
               user: Text,
               add_prefix: Text,
               alias_name: Text,
-              alias_cmd: Text) -> types.CommandResponse:
+              alias_cmd: Text) -> hype_types.CommandResponse:
     alias_name = alias_name.lower()
     if alias_name == '!alias':
       return 'I don\'t think that would be a good idea.'
@@ -67,7 +67,7 @@ class AliasCloneCommand(command_lib.BaseCommand):
               channel: Channel,
               user: Text,
               alias_name: Text,
-              target_user: User) -> types.CommandResponse:
+              target_user: User) -> hype_types.CommandResponse:
     alias_name = alias_name.lower()
     aliases = alias_lib.GetAliases(self._core.cached_store, target_user.id)
 
@@ -86,7 +86,7 @@ class AliasRemoveCommand(command_lib.BaseCommand):
   def _Handle(self,
               channel: Channel,
               user: Text,
-              alias_name: Text) -> types.CommandResponse:
+              alias_name: Text) -> hype_types.CommandResponse:
     had_command = alias_lib.RemoveAlias(self._core.cached_store, user,
                                         alias_name)
     if had_command:
@@ -103,7 +103,7 @@ class AliasListCommand(command_lib.BaseCommand):
   def _Handle(self,
               channel: Channel,
               user: Text,
-              target_user: User) -> types.CommandResponse:
+              target_user: User) -> hype_types.CommandResponse:
     aliases = alias_lib.GetAliases(self._core.cached_store, target_user.id)
     logging.info('Aliases for user %s: %s', target_user.name, str(aliases))
     if not aliases:
@@ -120,7 +120,7 @@ class EchoCommand(command_lib.BaseCommand):
   def _Handle(self,
               channel: Channel,
               user: Text,
-              string: Text) -> types.CommandResponse:
+              string: Text) -> hype_types.CommandResponse:
     lines = string.split('\n')
     return lines
 
@@ -135,7 +135,7 @@ class GrepCommand(command_lib.BaseCommand):
               user: Text,
               multi_word: Text,
               single_word: Text,
-              message: Text) -> types.CommandResponse:
+              message: Text) -> hype_types.CommandResponse:
     needle = re.compile(multi_word or single_word, re.IGNORECASE)
     haystack = message.split('\n')
     replies = []
@@ -166,7 +166,7 @@ class SubCommand(command_lib.BaseCommand):
               multi_word_replace: Text,
               single_word_replace: Text,
               options: Text,
-              message: Text) -> types.CommandResponse:
+              message: Text) -> hype_types.CommandResponse:
     search_str = multi_word_search or single_word_search
     replace_str = multi_word_replace or single_word_replace or ''
     haystack = message.split('\n')
@@ -195,7 +195,7 @@ class WordCountCommand(command_lib.BaseCommand):
               channel: Channel,
               unused_user: Text,
               options: Text,
-              message: Text) -> types.CommandResponse:
+              message: Text) -> hype_types.CommandResponse:
     if options:
       try:
         options = self._parser.parse_args(options.strip().split())

@@ -21,11 +21,10 @@ from __future__ import unicode_literals
 import abc
 
 from absl import logging
+from hypebot import hype_types
+from hypebot.core import params_lib
 from six import with_metaclass
 from typing import Optional, Text
-
-from hypebot import types
-from hypebot.core import params_lib
 
 
 class BaseChatInterface(with_metaclass(abc.ABCMeta)):
@@ -64,7 +63,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     self._user_tracker = user_tracker
     self._user_prefs = user_prefs
 
-  def Join(self, channel: types.Channel):
+  def Join(self, channel: hype_types.Channel):
     """Bring the power of hype to the desired channel.
 
     The base class only maintains a list of active channels. Subclasses are
@@ -75,7 +74,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     """
     self._channels.add(channel.id)
 
-  def Leave(self, channel: types.Channel):
+  def Leave(self, channel: hype_types.Channel):
     """We do not condone this behavior.
 
     The base class only maintains a list of active channels. Subclasses are
@@ -98,7 +97,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     raise NotImplementedError()
 
   @abc.abstractmethod
-  def Who(self, user: types.User):
+  def Who(self, user: hype_types.User):
     """Request that `user` be added to the user tracker eventually.
 
     Subclasses are allowed (possibly encouraged) to implement this
@@ -116,8 +115,8 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
 
   # TODO: Eliminate Optional from the message type.
   @abc.abstractmethod
-  def SendMessage(self, channel: types.Channel,
-                  message: Optional[types.Message]):
+  def SendMessage(self, channel: hype_types.Channel,
+                  message: Optional[hype_types.Message]):
     """Send a message to the given channel.
 
     Args:
@@ -128,7 +127,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
 
   # TODO: Eliminate Optional from the message type.
   @abc.abstractmethod
-  def Notice(self, channel: types.Channel, message: types.Message):
+  def Notice(self, channel: hype_types.Channel, message: hype_types.Message):
     """Send a notice to the channel.
 
     Some applications (IRC) support a different type of message to a channel.
@@ -142,7 +141,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     raise NotImplementedError()
 
   @abc.abstractmethod
-  def Topic(self, channel: types.Channel, new_topic: Text):
+  def Topic(self, channel: hype_types.Channel, new_topic: Text):
     """Changes the "topic" of channel to new_topic.
 
     Args:

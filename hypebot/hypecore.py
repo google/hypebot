@@ -23,9 +23,8 @@ import time
 
 from absl import logging
 from concurrent import futures
-from typing import Any, Callable, Dict, Optional, Text
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.core import async_lib
 from hypebot.core import schedule_lib
 from hypebot.core import util_lib
@@ -41,6 +40,7 @@ from hypebot.proxies import proxy_factory
 from hypebot.stocks import stock_factory
 from hypebot.storage import storage_factory
 from hypebot.storage import storage_lib
+from typing import Any, Callable, Dict, Optional, Text
 
 
 class RequestTracker(object):
@@ -50,16 +50,16 @@ class RequestTracker(object):
 
   def __init__(self, reply_fn: Callable) -> None:
     self._reply_fn = reply_fn
-    self._pending_requests = {}  # type: Dict[types.User, Dict]
+    self._pending_requests = {}  # type: Dict[hype_types.User, Dict]
     self._pending_requests_lock = Lock()
 
-  def HasPendingRequest(self, user: types.User) -> bool:
+  def HasPendingRequest(self, user: hype_types.User) -> bool:
     with self._pending_requests_lock:
       return user in self._pending_requests
 
   def RequestConfirmation(self,
-                          user: types.User,
-                          summary: str,
+                          user: hype_types.User,
+                          summary: Text,
                           request_details: Dict,
                           action_fn: Callable,
                           parse_fn: Optional[Callable] = None) -> None:
@@ -100,7 +100,7 @@ class RequestTracker(object):
       self._pending_requests[user] = request_details
       self._reply_fn(user, 'Confirm %s?' % summary)
 
-  def ResolveRequest(self, user: types.User, user_msg: str) -> None:
+  def ResolveRequest(self, user: hype_types.User, user_msg: Text) -> None:
     """Resolves a pending request, taking the linked action if confirmed."""
     now = time.time()
     with self._pending_requests_lock:
@@ -112,9 +112,8 @@ class RequestTracker(object):
       elif now - request_details['timestamp'] >= self._REQUEST_TIMEOUT_SEC:
         self._reply_fn(user, 'You took too long to confirm, try again.')
       else:
-        self._reply_fn(user,
-                       request_details.get('action_text',
-                                           'Confirmation accepted.'))
+        self._reply_fn(
+            user, request_details.get('action_text', 'Confirmation accepted.'))
         request_details['action'](user, request_details)
       del self._pending_requests[user]
 
@@ -125,15 +124,14 @@ class OutputUtil(object):
   def __init__(self, output_fn: Callable) -> None:
     self._output_fn = output_fn
 
-  def LogAndOutput(self,
-                   log_level: int,
-                   channel: Channel,
-                   message: types.CommandResponse) -> None:
+  def LogAndOutput(self, log_level: int, channel: Channel,
+                   message: hype_types.CommandResponse) -> None:
     """Logs message at log_level, then sends it to channel via Output."""
     logging.log(log_level, message)
     self.Output(channel, message)
 
-  def Output(self, channel: Channel, message: types.CommandResponse) -> None:
+  def Output(self, channel: Channel,
+             message: hype_types.CommandResponse) -> None:
     """Outputs a message to channel."""
     self._output_fn(channel, message)
 
@@ -198,10 +196,7 @@ class UserPreferences(object):
       return
     self._store.RunInTransaction(self._Set, user, pref, value)
 
-  def _Set(self,
-           user: Text,
-           pref: Text,
-           value: Text,
+  def _Set(self, user: Text, pref: Text, value: Text,
            tx: storage_lib.HypeTransaction) -> None:
     """See Set(...) for details."""
     user_prefs = self._store.GetJsonValue(user, self._SUBKEY, tx) or {}
@@ -272,12 +267,12 @@ class Core(object):
     self.default_channel = self.params.default_channel
 
   def Reply(self,
-            channel: types.Target,
-            msg: types.CommandResponse,
+            channel: hype_types.Target,
+            msg: hype_types.CommandResponse,
             default_channel: Optional[Channel] = None,
             limit_lines: bool = False,
             max_public_lines: int = 6,
-            user: Optional[types.User] = None,
+            user: Optional[hype_types.User] = None,
             log: bool = False,
             log_level: int = logging.INFO) -> None:
     """Sends a message to the channel.
@@ -310,30 +305,27 @@ class Core(object):
     # Support legacy Reply to users as a string.
     if not isinstance(channel, Channel):
       # Send messages for sub-accounts to the real user.
-      channel = Channel(id=channel.split(':')[0],
-                        visibility=Channel.PRIVATE,
-                        name=channel)
+      channel = Channel(
+          id=channel.split(':')[0], visibility=Channel.PRIVATE, name=channel)
 
     if (limit_lines and channel.visibility == Channel.PUBLIC and
         isinstance(msg, list) and len(msg) > max_public_lines):
       if user:
         self.interface.SendMessage(
-            channel,
-            util_lib.MakeMessage('It\'s long so I sent it privately.'))
+            channel, util_lib.MakeMessage('It\'s long so I sent it privately.'))
         self.interface.SendMessage(
             Channel(id=user, visibility=Channel.PRIVATE, name=user),
             util_lib.MakeMessage(msg))
       else:
         # If there is no user, just truncate and send to channel.
         self.interface.SendMessage(
-            channel,
-            util_lib.MakeMessage(msg[:max_public_lines] + ['...']))
+            channel, util_lib.MakeMessage(msg[:max_public_lines] + ['...']))
     else:
       self.interface.SendMessage(channel, util_lib.MakeMessage(msg))
 
   def PublishMessage(self,
                      topic: Text,
-                     msg: types.CommandResponse,
+                     msg: hype_types.CommandResponse,
                      notice: bool = False) -> None:
     """Sends a message to the channels subscribed to a topic.
 

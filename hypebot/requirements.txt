@@ -1,12 +1,23 @@
+aiohttp
 arrow
+async_timeout
+attrs==19.3.0
 # APScheduler v3 has breaking API changes, so pin it to a v2 release.
 apscheduler==2.1.2
 backports.functools_lru_cache
-discord
+certifi
+chardet
+discord.py
 grpcio
+idna
 inflection
 mock
+multidict
+python-dateutil
 redis
 retrying
 requests
 six
+urllib3
+websockets
+yarl==1.4.2

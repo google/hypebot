@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 
 import arrow
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
@@ -36,7 +36,7 @@ from typing import Text
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  def _Handle(self, channel: types.Channel, user: Text):
+  def _Handle(self, channel: hype_types.Channel, user: Text):
     data = self._core.proxy.FetchJson(
         'https://kittysales.herokuapp.com/data', {
             'offset': 0,
@@ -113,7 +113,7 @@ class StocksCommand(command_lib.BaseCommand):
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
-  def _Handle(self, channel: types.Channel, user: Text, symbols: Text):
+  def _Handle(self, channel: hype_types.Channel, user: Text, symbols: Text):
     symbols = symbols or self._core.user_prefs.Get(user, 'stocks')
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
@@ -184,7 +184,7 @@ class WeatherCommand(command_lib.BaseCommand):
                                            self._params.darksky_key,
                                            self._params.geocode_key)
 
-  def _Handle(self, channel: types.Channel, user: Text, unit: Text,
+  def _Handle(self, channel: hype_types.Channel, user: Text, unit: Text,
               location: Text):
     unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()

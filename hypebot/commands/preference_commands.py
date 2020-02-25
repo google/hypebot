@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 
 import functools
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.commands import command_lib
 
 from typing import Text
@@ -36,9 +36,9 @@ class PreferencesCommand(command_lib.BaseCommand):
   """See preferences for a user."""
 
   def _Handle(self,
-              unused_channel: types.Channel,
+              unused_channel: hype_types.Channel,
               user: Text,
-              target_user: Text) -> types.CommandResponse:
+              target_user: Text) -> hype_types.CommandResponse:
     target_user = target_user or user
     if target_user == 'me':
       self._core.last_command = functools.partial(
@@ -57,10 +57,10 @@ class SetPreferenceCommand(command_lib.BaseCommand):
   """Set preference."""
 
   def _Handle(self,
-              unused_channel: types.Channel,
+              unused_channel: hype_types.Channel,
               user: Text,
               pref: Text,
-              value: Text) -> types.CommandResponse:
+              value: Text) -> hype_types.CommandResponse:
     if _IsProtected(pref) or not self._core.user_prefs.IsValid(pref):
       return 'Unrecognized preference.'
     self._core.user_prefs.Set(user, pref, value)

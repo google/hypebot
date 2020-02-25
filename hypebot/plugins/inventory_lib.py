@@ -41,7 +41,7 @@ from typing import Text
 
 from six import with_metaclass
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.core import factory_lib
 from hypebot.plugins import coin_lib
 from hypebot.storage import storage_lib
@@ -154,7 +154,7 @@ class InventoryManager(object):
   def __init__(self, store: storage_lib.HypeStore):
     self._store = store
 
-  def GetUserInventory(self, user: Text) -> types.JsonType:
+  def GetUserInventory(self, user: Text) -> hype_types.JsonType:
     return self._store.GetJsonValue(user, self.INVENTORY_SUBKEY) or {}
 
   def AddItem(self, user: Text, item: BaseItem) -> bool:

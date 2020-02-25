@@ -29,7 +29,7 @@ from redis.exceptions import WatchError
 from hypebot.core import cache_lib
 from hypebot.core import params_lib
 from hypebot.storage import storage_lib
-from hypebot.types import JsonType
+from hypebot.hype_types import JsonType
 
 
 class RedisTransaction(storage_lib.HypeTransaction):
@@ -41,7 +41,7 @@ class RedisTransaction(storage_lib.HypeTransaction):
   a value you've already written to, etc.).
   """
 
-  def __init__(self, redis_pipeline: redis.client.StrictPipeline, *args,
+  def __init__(self, redis_pipeline: redis.client.Pipeline, *args,
                **kwargs):
     super(RedisTransaction, self).__init__(*args, **kwargs)  # pytype: disable=wrong-arg-count
     self._pipe = redis_pipeline
@@ -144,7 +144,7 @@ class RedisStore(storage_lib.HypeStore):
 
   def __init__(self, params: Any, *args, **kwargs):
     super(RedisStore, self).__init__(params, *args, **kwargs)
-    self._redis = redis.StrictRedis(
+    self._redis = redis.Redis(
         self._params.host,
         self._params.port,
         password=self._params.auth_key,
