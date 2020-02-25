@@ -11,26 +11,40 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-package(default_visibility = ["//hypebot:private"])
+load("@hypebot_deps//:requirements.bzl", "requirement")
+load("@subpar//:subpar.bzl", "par_binary")
 
 licenses(["notice"])  # Apache 2.0
 
-load("@hypebot_deps//:requirements.bzl", "requirement")
-load("@org_pubref_rules_protobuf//python:rules.bzl", "py_proto_library")
-load("@subpar//:subpar.bzl", "par_binary")
+package(default_visibility = ["//hypebot:private"])
 
 package_group(
     name = "private",
     packages = [
         "//hypebot/...",
+        "//riot/...",
     ],
 )
 
-py_proto_library(
+py_library(
     name = "all_py_pb2",
-    proto_deps = ["//google/protobuf:any_py_pb2"],
-    protos = glob(["**/*.proto"]),
-    with_grpc = True,
+    deps = [
+        "//hypebot/protos:bank_py_pb2",
+        "//hypebot/protos:bet_py_pb2",
+        "//hypebot/protos:channel_py_pb2",
+        "//hypebot/protos:esports_py_pb2",
+        "//hypebot/protos:message_py_pb2",
+        "//hypebot/protos:stock_py_pb2",
+        "//hypebot/protos:user_py_pb2",
+        "//hypebot/protos:weather_py_pb2",
+        "//hypebot/protos/riot:platform_py_pb2",
+        "//hypebot/protos/riot/v3:static_data_py_pb2",
+        "//hypebot/protos/riot/v4:champion_mastery_py_pb2_grpc",
+        "//hypebot/protos/riot/v4:constants_py_pb2",
+        "//hypebot/protos/riot/v4:league_py_pb2_grpc",
+        "//hypebot/protos/riot/v4:match_py_pb2_grpc",
+        "//hypebot/protos/riot/v4:summoner_py_pb2_grpc",
+    ],
 )
 
 py_library(
@@ -39,27 +53,35 @@ py_library(
     data = glob(["**/*.json"]),
     deps = [
         ":all_py_pb2",
-        "@com_google_protobuf//:protobuf_python",
         "@io_abseil_py//absl/flags",
         "@io_abseil_py//absl/logging",
         "@six_archive//:six",
+        requirement("aiohttp"),
         requirement("arrow"),
+        requirement("async_timeout"),
+        requirement("attrs"),
         requirement("apscheduler"),
-        requirement("discord"),
+        requirement("certifi"),
+        requirement("chardet"),
+        requirement("discord.py"),
         requirement("grpcio"),
+        requirement("idna"),
         requirement("inflection"),
+        requirement("multidict"),
+        requirement("python-dateutil"),
         requirement("redis"),
         requirement("retrying"),
         requirement("requests"),
         requirement("six"),
+        requirement("urllib3"),
+        requirement("websockets"),
+        requirement("yarl"),
     ],
 )
 
 par_binary(
     name = "basebot",
     srcs = ["basebot.py"],
-    default_python_version = "PY3",
-    srcs_version = "PY3",
     # Required since cacert.pem is not extracted otherwise.
     zip_safe = False,
     deps = [
@@ -71,8 +93,6 @@ par_binary(
 par_binary(
     name = "lolbot",
     srcs = ["lolbot.py"],
-    default_python_version = "PY3",
-    srcs_version = "PY3",
     zip_safe = False,
     deps = [
         ":hypebot_lib",
