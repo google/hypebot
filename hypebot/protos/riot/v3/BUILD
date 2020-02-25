@@ -20,11 +20,11 @@ licenses(["notice"])  # Apache 2.0
 package(default_visibility = ["//hypebot:private"])
 
 proto_library(
-    name = "platform_proto",
-    srcs = ["platform.proto"],
+    name = "static_data_proto",
+    srcs = ["static_data.proto"],
 )
 
 py_proto_library(
-    name = "platform_py_pb2",
-    deps = [":platform_proto"],
+    name = "static_data_py_pb2",
+    deps = [":static_data_proto"],
 )
