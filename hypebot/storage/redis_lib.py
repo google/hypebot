@@ -192,7 +192,8 @@ class RedisStore(storage_lib.HypeStore):
       raise NotImplementedError(
           'RedisStore can\'t operate on redis type "%s" yet' % datatype)
 
-  def Delete(self, key: AnyStr, tx: Optional[RedisTransaction] = None) -> None:
+  def DeleteKey(self,
+                key: AnyStr, tx: Optional[RedisTransaction] = None) -> None:
     if not tx:
       self.RunInTransaction(self.Delete, key)
       return

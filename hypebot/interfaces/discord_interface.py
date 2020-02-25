@@ -25,7 +25,7 @@ import asyncio
 import discord
 from typing import Optional, Text
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
 from hypebot.protos.channel_pb2 import Channel
@@ -56,11 +56,20 @@ class DiscordInterface(interface_lib.BaseChatInterface):
       logging.info('Message from: %s - %s#%s - %s',
                    message.author.name, message.author.display_name,
                    message.author.discriminator, message.author.id)
-      channel = Channel(
-          id=message.channel.id,
-          visibility=(Channel.PRIVATE if message.channel.is_private
-                      else Channel.PUBLIC),
-          name=message.channel.name)
+      # Discord has DMChannel for single user interaction and GroupChannel for
+      # group DMs outside of traditional TextChannels within a guild. We only
+      # consider the DMChannel (single user) as private to prevent spam in Group
+      # conversations.
+      if isinstance(message.channel, discord.DMChannel):
+        channel = Channel(
+            id=str(message.channel.id),
+            visibility=Channel.PRIVATE,
+            name=message.channel.recipient.name)
+      else:
+        channel = Channel(
+            id=str(message.channel.id),
+            visibility=Channel.PUBLIC,
+            name=message.channel.name)
       self._on_message_fn(channel, message.author.name,
                           self._CleanContent(message))
 
@@ -95,9 +104,9 @@ class DiscordInterface(interface_lib.BaseChatInterface):
   def Loop(self):
     self._client.run(self._params.token)
 
-  def Who(self, user: types.User):
-    for server in self._client.servers:
-      for member in server.members:
+  def Who(self, user: hype_types.User):
+    for guild in self._client.guilds:
+      for member in guild.members:
         if member.name == user:
           if member.bot:
             self._user_tracker.AddBot(user)
@@ -105,15 +114,15 @@ class DiscordInterface(interface_lib.BaseChatInterface):
             self._user_tracker.AddHuman(user)
 
   def WhoAll(self):
-    for server in self._client.servers:
-      for member in server.members:
+    for guild in self._client.guilds:
+      for member in guild.members:
         if member.bot:
           self._user_tracker.AddBot(member.name)
         else:
           self._user_tracker.AddHuman(member.name)
 
   def _FindDiscordUser(self, user: Text) -> Optional[discord.Member]:
-    """Find the corresponding user on any of the connected servers.
+    """Find the corresponding user on any of the connected guilds.
 
     Args:
       user: Nick of user.
@@ -121,41 +130,44 @@ class DiscordInterface(interface_lib.BaseChatInterface):
     Returns:
       The corresponding discord member if they exist, otherwise None.
     """
-    for server in self._client.servers:
-      member = discord.utils.find(lambda m: m.name == user, server.members)
+    for guild in self._client.guilds:
+      member = discord.utils.find(lambda m: m.name == user, guild.members)
       if member:
         return member
 
-  def Notice(self, channel: types.Channel, message: types.Message):
+  def Notice(self, channel: hype_types.Channel, message: hype_types.Message):
     self.SendMessage(channel, message)
 
-  def Topic(self, channel: types.Channel, new_topic: Text):
+  def Topic(self, channel: hype_types.Channel, new_topic: Text):
     self._client.loop.create_task(self._Topic(channel, new_topic))
 
-  async def _Topic(self, channel: discord.Channel, new_topic: Text):
-    disco_channel = self._client.get_channel(channel.id)
+  async def _Topic(self, channel: discord.TextChannel, new_topic: Text):
+    disco_channel = self._client.get_channel(int(channel.id))
     if not disco_channel:
       logging.warning('Could not find corresponding Discord channel for %s',
                       channel)
       return
     self._client.edit_channel(disco_channel, topic=new_topic)
 
-  def SendMessage(self, channel: types.Channel, message: types.Message):
-    disco_channel = (self._client.get_channel(channel.id) or
-                     self._FindDiscordUser(channel.id))
+  def SendMessage(self,
+                  channel: hype_types.Channel, message: hype_types.Message):
+    disco_channel = None
+    try:
+      disco_channel = self._client.get_channel(int(channel.id))
+    except ValueError:
+      pass
+    if not disco_channel:
+      disco_channel = self._FindDiscordUser(channel.id)
     if not disco_channel:
       return
     # Aggregate all lines into a single response to avoid Discord ratelimits.
     text_messages = []
     for msg in message.messages:
       # TODO: Discord supports fancy messages.
-      if msg.WhichOneof('message') == 'card':
-        text_messages.extend(msg.card.alternate_text)
-      else:
-        text_messages.append(msg.text)
+      text_messages.extend(msg.text)
     self._client.loop.create_task(
         self._SendMessage(disco_channel, '\n'.join(text_messages)))
 
-  async def _SendMessage(self, channel: discord.Channel, message: Text):
+  async def _SendMessage(self, channel: discord.TextChannel, message: Text):
     message = _COLOR_PATTERN.sub(lambda obj: obj.groupdict()['txt'], message)
-    await self._client.send_message(channel, message)
+    await channel.send(message)
