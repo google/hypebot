@@ -13,6 +13,8 @@
 # limitations under the License.
 workspace(name = "hypebot")
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 # === Abseil Integration ===
 http_archive(
     name = "io_abseil_py",
@@ -20,26 +22,85 @@ http_archive(
     urls = ["https://github.com/abseil/abseil-py/archive/master.zip"],
 )
 
-# === Python Integration ===
-# Use our own fork since it forces python3.
 http_archive(
-    name = "io_bazel_rules_python",
-    strip_prefix = "rules_python-master",
-    urls = ["https://github.com/vilhelm/rules_python/archive/master.zip"],
+    name = "six_archive",
+    build_file = "@io_abseil_py//third_party:six.BUILD",
+    strip_prefix = "six-master",
+    urls = ["https://github.com/benjaminp/six/archive/master.zip"],
 )
+
+# === Python Integration ===
+http_archive(
+    name = "rules_python",
+    strip_prefix = "rules_python-master",
+    url = "https://github.com/bazelbuild/rules_python/archive/master.zip",
+)
+
+load("@rules_python//python:repositories.bzl", "py_repositories")
+
+py_repositories()
+
+load("@rules_python//python:pip.bzl", "pip3_import")
+
+pip3_import(
+    name = "hypebot_deps",
+    requirements = "//hypebot:requirements.txt",
+)
+
+load("@hypebot_deps//:requirements.bzl", "pip_install")
+
+pip_install()
 
 # === Go Integration ===
 http_archive(
     name = "io_bazel_rules_go",
-    url = "https://github.com/bazelbuild/rules_go/releases/download/0.12.1/rules_go-0.12.1.tar.gz",
-    sha256 = "8b68d0630d63d95dacc0016c3bb4b76154fe34fca93efd65d1c366de3fcb4294",
+    sha256 = "af04c969321e8f428f63ceb73463d6ea817992698974abeff0161e069cd08bd6",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.21.3/rules_go-v0.21.3.tar.gz",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.21.3/rules_go-v0.21.3.tar.gz",
+    ],
 )
 
-load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains")
+load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 
 go_rules_dependencies()
 
 go_register_toolchains()
+
+http_archive(
+    name = "bazel_gazelle",
+    sha256 = "d8c45ee70ec39a57e7a05e5027c32b1576cc7f16d9dd37135b0eddde45cf1b10",
+    urls = [
+        "https://storage.googleapis.com/bazel-mirror/github.com/bazelbuild/bazel-gazelle/releases/download/v0.20.0/bazel-gazelle-v0.20.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-gazelle/releases/download/v0.20.0/bazel-gazelle-v0.20.0.tar.gz",
+    ],
+)
+
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+
+gazelle_dependencies()
+
+go_repository(
+    name = "org_golang_google_grpc",
+    build_file_proto_mode = "disable",
+    importpath = "google.golang.org/grpc",
+    sum = "h1:J0UbZOIrCAl+fpTOf8YLs4dJo8L/owV4LYVtAXQoPkw=",
+    version = "v1.22.0",
+)
+
+go_repository(
+    name = "org_golang_x_net",
+    importpath = "golang.org/x/net",
+    sum = "h1:oWX7TPOiFAMXLq8o0ikBYfCJVlRHBcsciT5bXOrH628=",
+    version = "v0.0.0-20190311183353-d8887717615a",
+)
+
+go_repository(
+    name = "org_golang_x_text",
+    importpath = "golang.org/x/text",
+    sum = "h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=",
+    version = "v0.3.0",
+)
 
 # === Par Integration ===
 http_archive(
@@ -50,57 +111,45 @@ http_archive(
 
 # === Protobuf Integration
 http_archive(
-    name = "org_pubref_rules_protobuf",
-    strip_prefix = "rules_protobuf-master",
-    urls = ["https://github.com/pubref/rules_protobuf/archive/master.zip"],
+    name = "com_google_protobuf",
+    strip_prefix = "protobuf-master",
+    url = "https://github.com/protocolbuffers/protobuf/archive/master.zip",
 )
 
-load("@org_pubref_rules_protobuf//python:rules.bzl", "py_proto_repositories")
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
-py_proto_repositories()
+protobuf_deps()
 
-load("@org_pubref_rules_protobuf//go:rules.bzl", "go_proto_repositories")
-
-go_proto_repositories()
-
-# === Pip Requirements ===
-load("@io_bazel_rules_python//python:pip.bzl", "pip_import")
-
-pip_import(
-    name = "hypebot_deps",
-    requirements = "//hypebot:requirements.txt",
+http_archive(
+    name = "com_github_grpc_grpc",
+    strip_prefix = "grpc-master",
+    url = "https://github.com/grpc/grpc/archive/master.zip",
 )
 
-load("@hypebot_deps//:requirements.bzl", "pip_install")
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 
-pip_install()
+grpc_deps()
 
-# Recursive workspace declarations required until design is implemented.
-# https://bazel.build/designs/2016/09/19/recursive-ws-parsing.html
-# absl recursive workspace
-new_http_archive(
-    name = "six_archive",
-    build_file = "third_party/six.BUILD",
-    sha256 = "105f8d68616f8248e24bf0e9372ef04d3cc10104f1980f54d57b2ce73a5ad56a",
-    strip_prefix = "six-1.10.0",
-    urls = [
-        "http://mirror.bazel.build/pypi.python.org/packages/source/s/six/six-1.10.0.tar.gz",
-        "https://pypi.python.org/packages/source/s/six/six-1.10.0.tar.gz",
-    ],
+load("@upb//bazel:workspace_deps.bzl", "upb_deps")
+
+upb_deps()
+
+load("@build_bazel_rules_apple//apple:repositories.bzl", "apple_rules_dependencies")
+
+apple_rules_dependencies()
+
+load("@build_bazel_apple_support//lib:repositories.bzl", "apple_support_dependencies")
+
+apple_support_dependencies()
+
+http_archive(
+    name = "rules_proto",
+    strip_prefix = "rules_proto-master",
+    url = "https://github.com/bazelbuild/rules_proto/archive/master.zip",
 )
 
-bind(
-    name = "six",
-    actual = "@six_archive//:six",
-)
+load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
 
-new_http_archive(
-    name = "mock_archive",
-    build_file = "third_party/mock.BUILD",
-    sha256 = "b839dd2d9c117c701430c149956918a423a9863b48b09c90e30a6013e7d2f44f",
-    strip_prefix = "mock-1.0.1",
-    urls = [
-        "http://mirror.bazel.build/pypi.python.org/packages/a2/52/7edcd94f0afb721a2d559a5b9aae8af4f8f2c79bc63fdbe8a8a6c9b23bbe/mock-1.0.1.tar.gz",
-        "https://pypi.python.org/packages/a2/52/7edcd94f0afb721a2d559a5b9aae8af4f8f2c79bc63fdbe8a8a6c9b23bbe/mock-1.0.1.tar.gz",
-    ],
-)
+rules_proto_dependencies()
+
+rules_proto_toolchains()
