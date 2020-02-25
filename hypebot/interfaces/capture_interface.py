@@ -18,10 +18,9 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from typing import List, Text
-
-from hypebot import types
+from hypebot import hype_types
 from hypebot.interfaces import interface_lib
+from typing import List, Text
 
 
 class CaptureInterface(interface_lib.BaseChatInterface):
@@ -38,11 +37,11 @@ class CaptureInterface(interface_lib.BaseChatInterface):
   # BaseInterface overrides
   # =======================
 
-  def Join(self, channel: types.Channel):
+  def Join(self, channel: hype_types.Channel):
     """This interface does not interact with a chat application."""
     pass
 
-  def Leave(self, channel: types.Channel):
+  def Leave(self, channel: hype_types.Channel):
     """This interface does not interact with a chat application."""
     pass
 
@@ -50,7 +49,7 @@ class CaptureInterface(interface_lib.BaseChatInterface):
     """This interface does not interact with a chat application."""
     pass
 
-  def Who(self, unused_user: types.User):
+  def Who(self, unused_user: hype_types.User):
     """This interface doesn't care about plebs."""
     pass
 
@@ -58,15 +57,16 @@ class CaptureInterface(interface_lib.BaseChatInterface):
     """This interface doesn't care about plebs."""
     pass
 
-  def SendMessage(self, unused_channel: types.Channel, message: types.Message):
+  def SendMessage(self, unused_channel: hype_types.Channel,
+                  message: hype_types.Message):
     for msg in message.messages:
       # Messages with only cards and no text will have had default text already
       # added by the HypeCore.
       self._msgs.extend(msg.text)
 
-  def Notice(self, unused_channel: types.Channel,
-             unused_message: types.Message):
+  def Notice(self, unused_channel: hype_types.Channel,
+             unused_message: hype_types.Message):
     pass
 
-  def Topic(self, unused_channel: types.Channel, unused_new_topic: Text):
+  def Topic(self, unused_channel: hype_types.Channel, unused_new_topic: Text):
     pass

@@ -31,7 +31,7 @@ from six import with_metaclass
 import retrying
 
 from hypebot.core import params_lib
-from hypebot.types import JsonType
+from hypebot.hype_types import JsonType
 
 
 class HypeTransaction(with_metaclass(abc.ABCMeta)):

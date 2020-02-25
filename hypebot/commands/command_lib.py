@@ -28,7 +28,7 @@ import time
 
 from absl import logging
 
-from hypebot import types
+from hypebot import hype_types
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
@@ -90,7 +90,7 @@ class BaseCommand(object):
   def Handle(self,
              channel: Channel,
              user: Text,
-             message: Text) -> types.CommandResponse:
+             message: Text) -> hype_types.CommandResponse:
     """Attempt to handle the message.
 
     First we check if this command is available for this channel. Then, we
@@ -380,8 +380,8 @@ def PublicParser(cls):
 # === Handler Decorators ===
 # Put these decorators on _Handle to filter what is handled regardless of parser
 # triggering. Useful for ratelimiting or channel specific behavior.
-# TODO: Make class decorators or conditional within command params. Left
-# as similar to previous behavior for now.
+# TODO: Make class decorators or conditional within command params.
+# Left as similar to previous behavior for now.
 
 
 def PrivateOnly(fn):

@@ -26,8 +26,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from hypebot.core import cache_lib
+from hypebot.hype_types import JsonType
 from hypebot.storage import storage_lib
-from hypebot.types import JsonType
 
 from typing import AnyStr, List, Optional, Tuple, Union
 
