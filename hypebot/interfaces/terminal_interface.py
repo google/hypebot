@@ -96,7 +96,7 @@ class TerminalInterface(interface_lib.BaseChatInterface):
     if not match:
       return
     nick = self._params.default_user
-    channel_name = self._params.default_channel
+    channel_name = self._params.default_channel.name
     visibility = Channel.PUBLIC
     for i in range(1, 3):
       nick_or_channel = match.group(i)

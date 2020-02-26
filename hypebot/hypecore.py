@@ -144,6 +144,9 @@ class UserPreferences(object):
       'location': 'MTV',
       'temperature_unit': 'F',
       'stocks': 'GOOG,GOOGL',
+      # Comma separated list of your summoner names. First is considered main.
+      'lol_summoner': None,
+      'lol_region': 'NA',
       '_dynamite_dm': None,
       # Maps 'user/####' to '$ldap'.
       '_dynamite_ldap': None,

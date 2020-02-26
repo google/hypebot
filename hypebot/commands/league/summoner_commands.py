@@ -74,7 +74,9 @@ class _BaseSummonerCommand(command_lib.BaseCommand):
     summoners = self._core.summoner_tracker.ParseSummoner(
         user, smurfs, region, name)
     if not summoners:
-      return 'Unknown user. http://go/lolsummoners'
+      if name == 'me':
+        return 'Unknown user. Try `!set-pref lol_summoner $summoner_name`'
+      return 'Unknown user.'
     return self._HandleSummoners(summoners, *args, **kwargs)
 
 
