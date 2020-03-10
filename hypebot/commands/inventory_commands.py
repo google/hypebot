@@ -18,10 +18,12 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from functools import partial
-
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.plugins import inventory_lib
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
+from typing import Text
 
 
 # TODO: This should probably be moved to inflect_lib.
@@ -31,21 +33,19 @@ def FormatStacks(item_params):
   return ''
 
 
-@command_lib.CommandRegexParser(r'inventory ?(.+)?')
+@command_lib.CommandRegexParser(r'inventory ?(?P<target_user>.*)')
 class InventoryList(command_lib.BaseCommand):
+  """List users inventory."""
 
-  def _Handle(self, channel, user, inventory_user):
-    inventory_user = inventory_user or user
-    if inventory_user == 'me':
-      self._core.last_command = partial(self._Handle,
-                                        inventory_user=inventory_user)
-      inventory_user = user
-    inventory = self._core.inventory.GetUserInventory(inventory_user)
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              target_user: user_pb2.User) -> hype_types.CommandResponse:
+    inventory = self._core.inventory.GetUserInventory(target_user)
     if not inventory:
-      return '%s\'s backpack has a hole in the bottom' % inventory_user
-    msgs = ['%s\'s inventory:' % inventory_user]
+      return ('%s\'s backpack has a hole in the bottom' %
+              target_user.display_name)
+    msgs = ['%s\'s inventory:' % target_user.display_name]
     for key, params in inventory.items():
-      item = inventory_lib.Create(key, self._core, inventory_user, params)
+      item = inventory_lib.Create(key, self._core, target_user, params)
       msgs.append('%s%s' % (item.human_name, FormatStacks(params)))
     # TODO: Worry about putting multiple items on a single line if
     # inventories become large.
@@ -54,9 +54,11 @@ class InventoryList(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'use (.+)')
 class InventoryUse(command_lib.BaseCommand):
+  """Use an item from your inventory."""
 
   @command_lib.LimitPublicLines()
-  def _Handle(self, channel, user, item_name):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              item_name: Text) -> hype_types.CommandResponse:
     inventory = self._core.inventory.GetUserInventory(user)
     for key, params in inventory.items():
       item = inventory_lib.Create(key, self._core, user, params)

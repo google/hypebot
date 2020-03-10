@@ -1,3 +1,4 @@
+# Lint as: python3
 # Copyright 2019 The Hypebot Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +46,8 @@ import re
 
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 
 _COLOR_PATTERN = re.compile(
     r'\x03(?P<fg>\d\d)(?:|,(?P<bg>\d\d))(?P<txt>.*?)\x0f')
@@ -74,7 +76,7 @@ class TerminalInterface(interface_lib.BaseChatInterface):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       interface_lib.BaseChatInterface.DEFAULT_PARAMS, {
-          'default_user': 'terminal-user',
+          'default_username': 'terminal-user',
           'default_channel': '#hypebot',
           'return_text_only': True,
       })
@@ -82,37 +84,43 @@ class TerminalInterface(interface_lib.BaseChatInterface):
   def Loop(self):
     while True:
       channel = self._params.default_channel
-      nick = self._params.default_user
+      user = user_pb2.User(
+          user_id=self._params.default_username,
+          display_name=self._params.default_username)
       message = input('> ')
       overrides = self._ExtractOverrides(message)
       if overrides:
-        channel, nick, message = overrides
-      self._on_message_fn(channel, nick, message)
+        channel, user, message = overrides
+      self._on_message_fn(channel, user, message)
 
   def _ExtractOverrides(self, raw_message):
-    """Returns nothing, or the overrides parsed for a channel, nick, and msg."""
+    """Returns nothing, or the overrides parsed for a channel, user, and msg."""
     message_regex = re.compile(r'^\[(#?\w+)(?:\|(#?\w+))?\]\s*(.+)')
     match = message_regex.match(raw_message)
     if not match:
       return
-    nick = self._params.default_user
+    username = self._params.default_username
     channel_name = self._params.default_channel.name
-    visibility = Channel.PUBLIC
+    visibility = channel_pb2.Channel.PUBLIC
     for i in range(1, 3):
-      nick_or_channel = match.group(i)
-      if not nick_or_channel:
+      user_or_channel = match.group(i)
+      if not user_or_channel:
         break
-      if nick_or_channel.startswith('#'):
-        channel_name = nick_or_channel
+      if user_or_channel.startswith('#'):
+        channel_name = user_or_channel
         if channel_name.startswith('#sys'):
-          visibility = Channel.SYSTEM
+          visibility = channel_pb2.Channel.SYSTEM
       else:
-        nick = nick_or_channel
-    if nick.lower() == channel_name.strip('#').lower():
-      visibility = Channel.PRIVATE
+        username = user_or_channel
+    if username.lower() == channel_name.strip('#').lower():
+      visibility = channel_pb2.Channel.PRIVATE
     message = match.group(3)
-    return (Channel(id=channel_name, visibility=visibility, name=channel_name),
-            nick, message)
+    return (channel_pb2.Channel(
+        id=channel_name, visibility=visibility, name=channel_name),
+            user_pb2.User(
+                user_id=username,
+                display_name=username,
+                bot=username.endswith('bot')), message)
 
   def Who(self, user):
     self._user_tracker.AddHuman(user)
@@ -120,12 +128,19 @@ class TerminalInterface(interface_lib.BaseChatInterface):
   def WhoAll(self):
     self._user_tracker.AddHuman(self._params.default_user)
 
-  def SendMessage(self, channel, message_list):
+  def SendMessage(self, channel, message):
     if self._params.return_text_only:
-      lines = self._TranslateColors(message_list)
+      lines = self._TranslateColors(message)
       print('\n'.join(lines))
     else:
-      print('%s\n%s' % (channel, message_list))
+      print('%s\n%s' % (channel, message))
+
+  def SendDirectMessage(self, user, message):
+    if self._params.return_text_only:
+      lines = self._TranslateColors(message)
+      print('\n'.join([f'{user.display_name}: {line}' for line in lines]))
+    else:
+      print('%s\n%s' % (user, message))
 
   def Notice(self, channel, message):
     print('NOTICE\n%s\n%s' % (channel, message))
@@ -133,9 +148,9 @@ class TerminalInterface(interface_lib.BaseChatInterface):
   def Topic(self, channel, new_topic):
     print('TOPIC\n%s\n%s' % (channel, new_topic))
 
-  def _TranslateColors(self, message_list):
+  def _TranslateColors(self, message):
     lines = []
-    for msg in message_list.messages:
+    for msg in message.messages:
       for line in msg.text:
         pos = 0
         colored_line = ''

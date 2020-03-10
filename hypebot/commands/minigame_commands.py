@@ -24,8 +24,8 @@ from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.plugins import hypejack_lib
-from hypebot.protos.channel_pb2 import Channel
-
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 
@@ -55,7 +55,7 @@ class HypeJackCommand(command_lib.BasePublicCommand):
           channel, self._core,
           functools.partial(self._Reply, default_channel=channel))
 
-  def _Handle(self, channel: Channel, user: Text,
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               message: Text) -> hype_types.CommandResponse:
     if channel.id in self._games:
       self._games[channel.id].HandleMessage(user, message)

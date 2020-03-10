@@ -35,7 +35,8 @@ from hypebot.plugins import coin_lib
 from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
 from hypebot.plugins import inventory_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from hypebot.proxies import proxy_factory
 from hypebot.stocks import stock_factory
 from hypebot.storage import storage_factory
@@ -50,12 +51,12 @@ class RequestTracker(object):
 
   def __init__(self, reply_fn: Callable) -> None:
     self._reply_fn = reply_fn
-    self._pending_requests = {}  # type: Dict[hype_types.User, Dict]
+    self._pending_requests = {}  # type: Dict[Text, Dict]
     self._pending_requests_lock = Lock()
 
   def HasPendingRequest(self, user: hype_types.User) -> bool:
     with self._pending_requests_lock:
-      return user in self._pending_requests
+      return user.user_id in self._pending_requests
 
   def RequestConfirmation(self,
                           user: hype_types.User,
@@ -84,27 +85,27 @@ class RequestTracker(object):
     """
     now = time.time()
     with self._pending_requests_lock:
-      previous_request = self._pending_requests.get(user, None)
+      previous_request = self._pending_requests.get(user.user_id, None)
       if previous_request:
         if now - previous_request['timestamp'] < self._REQUEST_TIMEOUT_SEC:
           self._reply_fn(user,
                          'Confirm prior request before submitting another.')
           return
-        del self._pending_requests[user]
+        del self._pending_requests[user.user_id]
 
       request_details['timestamp'] = now
       request_details['action'] = action_fn
       if not parse_fn:
         parse_fn = lambda x: x.lower().startswith('y')
       request_details['parse'] = parse_fn
-      self._pending_requests[user] = request_details
+      self._pending_requests[user.user_id] = request_details
       self._reply_fn(user, 'Confirm %s?' % summary)
 
   def ResolveRequest(self, user: hype_types.User, user_msg: Text) -> None:
     """Resolves a pending request, taking the linked action if confirmed."""
     now = time.time()
     with self._pending_requests_lock:
-      request_details = self._pending_requests.get(user)
+      request_details = self._pending_requests.get(user.user_id)
       if not request_details:
         return
       if not request_details['parse'](user_msg):
@@ -124,13 +125,13 @@ class OutputUtil(object):
   def __init__(self, output_fn: Callable) -> None:
     self._output_fn = output_fn
 
-  def LogAndOutput(self, log_level: int, channel: Channel,
+  def LogAndOutput(self, log_level: int, channel: channel_pb2.Channel,
                    message: hype_types.CommandResponse) -> None:
     """Logs message at log_level, then sends it to channel via Output."""
     logging.log(log_level, message)
     self.Output(channel, message)
 
-  def Output(self, channel: Channel,
+  def Output(self, channel: channel_pb2.Channel,
              message: hype_types.CommandResponse) -> None:
     """Outputs a message to channel."""
     self._output_fn(channel, message)
@@ -167,7 +168,7 @@ class UserPreferences(object):
     """
     return pref in self._PREFS
 
-  def Get(self, user: Text, pref: Text) -> Text:
+  def Get(self, user: user_pb2.User, pref: Text) -> Text:
     """Get user's preference value.
 
     Args:
@@ -185,7 +186,7 @@ class UserPreferences(object):
     user_prefs = self.GetAll(user)
     return user_prefs.get(pref, self._PREFS[pref])
 
-  def Set(self, user: Text, pref: Text, value: Text) -> None:
+  def Set(self, user: user_pb2.User, pref: Text, value: Text) -> None:
     """Set user's preference to value.
 
     If preference is invalid, nothing happens.
@@ -199,18 +200,18 @@ class UserPreferences(object):
       return
     self._store.RunInTransaction(self._Set, user, pref, value)
 
-  def _Set(self, user: Text, pref: Text, value: Text,
+  def _Set(self, user: user_pb2.User, pref: Text, value: Text,
            tx: storage_lib.HypeTransaction) -> None:
     """See Set(...) for details."""
-    user_prefs = self._store.GetJsonValue(user, self._SUBKEY, tx) or {}
+    user_prefs = self._store.GetJsonValue(user.user_id, self._SUBKEY, tx) or {}
     if not value:
       del user_prefs[pref]
     else:
       user_prefs[pref] = value
-    self._store.SetJsonValue(user, self._SUBKEY, user_prefs, tx)
+    self._store.SetJsonValue(user.user_id, self._SUBKEY, user_prefs, tx)
 
-  def GetAll(self, user: Text) -> Dict[Text, Text]:
-    return self._store.GetJsonValue(user, self._SUBKEY) or {}
+  def GetAll(self, user: user_pb2.User) -> Dict[Text, Text]:
+    return self._store.GetJsonValue(user.user_id, self._SUBKEY) or {}
 
 
 class Core(object):
@@ -272,7 +273,7 @@ class Core(object):
   def Reply(self,
             channel: hype_types.Target,
             msg: hype_types.CommandResponse,
-            default_channel: Optional[Channel] = None,
+            default_channel: Optional[channel_pb2.Channel] = None,
             limit_lines: bool = False,
             max_public_lines: int = 6,
             user: Optional[hype_types.User] = None,
@@ -306,19 +307,16 @@ class Core(object):
       logging.info('Attempted to send message with no channel: %s', msg)
       return
     # Support legacy Reply to users as a string.
-    if not isinstance(channel, Channel):
-      # Send messages for sub-accounts to the real user.
-      channel = Channel(
-          id=channel.split(':')[0], visibility=Channel.PRIVATE, name=channel)
+    if not isinstance(channel, channel_pb2.Channel):
+      self.interface.SendDirectMessage(channel, util_lib.MakeMessage(msg))
+      return
 
-    if (limit_lines and channel.visibility == Channel.PUBLIC and
+    if (limit_lines and channel.visibility == channel_pb2.Channel.PUBLIC and
         isinstance(msg, list) and len(msg) > max_public_lines):
       if user:
         self.interface.SendMessage(
             channel, util_lib.MakeMessage('It\'s long so I sent it privately.'))
-        self.interface.SendMessage(
-            Channel(id=user, visibility=Channel.PRIVATE, name=user),
-            util_lib.MakeMessage(msg))
+        self.interface.SendDirectMessage(user, util_lib.MakeMessage(msg))
       else:
         # If there is no user, just truncate and send to channel.
         self.interface.SendMessage(
@@ -348,7 +346,8 @@ class Core(object):
       return
     message = util_lib.MakeMessage(msg)
     for channel in channels:
-      channel = Channel(visibility=Channel.PUBLIC, **channel)
+      channel = channel_pb2.Channel(
+          visibility=channel_pb2.Channel.PUBLIC, **channel)
       if notice:
         self.interface.Notice(channel, message)
       else:

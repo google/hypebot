@@ -19,20 +19,21 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from functools import partial
 import random
-from threading import Lock
+import threading
 
 from absl import flags
 import arrow
-
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import name_complete_lib
 from hypebot.core import params_lib
-from hypebot.core import util_lib
 from hypebot.data.league import messages
+from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
+from hypebot.protos import user_pb2
+from typing import Optional, Text
 
 LCS_TOPIC_STRING = u'#LcsHype | %s'
 
@@ -42,22 +43,22 @@ flags.DEFINE_multi_string('spoiler_free_channels', ['#lol'], 'Channels where '
                           'LCS spoilers should be avoided')
 
 
-@command_lib.CommandRegexParser(r'body ?(.*?)')
+@command_lib.CommandRegexParser(r'body(?: (?P<target_user>.+))?')
 class BodyCommand(command_lib.BaseCommand):
+  """Body by Jensen."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'main_channel_only': False,
+          'target_any': True,
       })
 
-  def _Handle(self, channel, user, bodyer):
-    if not bodyer:
-      bodyer = 'Jensen'
-    bodyer = util_lib.StripColor(bodyer)
-    if util_lib.CanonicalizeName(bodyer) == 'me':
-      self._core.last_command = partial(self._Handle, bodyer=bodyer)
-      bodyer = user
-    return u'Yo, %s, body these fools!' % bodyer
+  def _Handle(
+      self, channel: channel_pb2.Channel, user: user_pb2.User,
+      target_user: Optional[user_pb2.User]) -> hype_types.CommandResponse:
+    if not target_user:
+      target_user = user_pb2.User(display_name='Jensen')
+    return u'Yo, %s, body these fools!' % target_user.display_name
 
 
 @command_lib.CommandRegexParser(r'lcs-ch(a|u)mps (.+?)')
@@ -75,7 +76,8 @@ class LCSPlayerStatsCommand(command_lib.BaseCommand):
     return '%s (%s-%s)' % (champ[0], wins, losses)
 
   @command_lib.RequireReady('_core.esports')
-  def _Handle(self, channel, user, a_or_u, player):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              a_or_u: Text, player: Text) -> hype_types.CommandResponse:
     serious_output = a_or_u == 'a'
     # First, attempt to parse the query against the summoner tracker. If it
     # matches a username, then use it. The summoner tracker internally queries
@@ -115,7 +117,7 @@ class LCSPlayerStatsCommand(command_lib.BaseCommand):
       return ('My {} is bad, my {} is worse; you guessed right, I\'m G2 Perkz'
               .format(
                   self._FormatChamp(worst_champ),
-                  'Azir' if user == 'koelze' else 'Ryze'))
+                  'Azir' if user.user_id == 'koelze' else 'Ryze'))
     else:
       most_played_champ = sorted(
           player_data['champs'].items(),
@@ -137,7 +139,8 @@ class LCSLivestreamLinkCommand(command_lib.BaseCommand):
           'main_channel_only': False,
       })
 
-  def _Handle(self, channel, user):
+  def _Handle(self, channel: channel_pb2.Channel,
+              user: user_pb2.User) -> hype_types.CommandResponse:
     livestream_links = self._core.esports.GetLivestreamLinks()
     if livestream_links:
       self._core.interface.Topic(
@@ -164,7 +167,7 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
   def __init__(self, *args):
     super(LCSMatchNotificationCommand, self).__init__(*args)
     self._core.esports.RegisterCallback(self._ScheduleAnnouncements)
-    self._lock = Lock()
+    self._lock = threading.Lock()
     self._scheduled_announcements = []
 
   def _ScheduleAnnouncements(self):
@@ -181,12 +184,13 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
         if match.announced:
           continue
         time_until_match = match.time - now
-        seconds_until_match = (time_until_match.days * 86400
-                               + time_until_match.seconds)
+        seconds_until_match = (
+            time_until_match.days * 86400 + time_until_match.seconds)
         if seconds_until_match > 0:
-          self._scheduled_announcements.append(self._core.scheduler.InSeconds(
-              seconds_until_match - self._params.match_notification_sec,
-              self._AnnounceMatch, match))
+          self._scheduled_announcements.append(
+              self._core.scheduler.InSeconds(
+                  seconds_until_match - self._params.match_notification_sec,
+                  self._AnnounceMatch, match))
 
   def _AnnounceMatch(self, match):
     match.announced = True
@@ -205,15 +209,15 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
         match.match_id)
     if livestream_link:
       call_to_action_str = 'Watch at %s and get #Hyped!' % livestream_link
-      self._core.interface.Topic(
-          self._core.lcs_channel, LCS_TOPIC_STRING % livestream_link)
+      self._core.interface.Topic(self._core.lcs_channel,
+                                 LCS_TOPIC_STRING % livestream_link)
 
     self._core.PublishMessage(
         topic, u'%s is starting soon. %s' % (match_name, call_to_action_str))
 
 
-@command_lib.CommandRegexParser(
-    r'lcs-p(?:ick)?b(?:an)?-?(\w+)? (.+?) ?([v|^]?)')
+@command_lib.CommandRegexParser(r'lcs-p(?:ick)?b(?:an)?-?(\w+)? (.+?) ?([v|^]?)'
+                               )
 class LCSPickBanRatesCommand(command_lib.BaseCommand):
   """Better stats than LCS production."""
 
@@ -249,8 +253,8 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
         },
         'win': {
             'rate':
-                0 if not stats['picks'] else
-                stats['wins'] / stats['picks'] * 100,
+                0 if not stats['picks'] else stats['wins'] / stats['picks'] *
+                100,
             'stat':
                 stats['picks'],
             'stat_desc':
@@ -261,8 +265,8 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
     }
 
     pb_info.update(per_subcommand_data[pb_info['rate_str']])
-    pb_info['stat_str'] = inflect_lib.Plural(
-        pb_info['stat'], pb_info['stat_desc'])
+    pb_info['stat_str'] = inflect_lib.Plural(pb_info['stat'],
+                                             pb_info['stat_desc'])
     pb_info['win_loss_str'] = ''
     if pb_info['include_win_loss']:
       pb_info['win_loss_str'] = ', %s-%s' % (stats['wins'],
@@ -285,8 +289,9 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
         return 'I don\'t have any data =(.'
       avg_unique_per_game = num_games / num_unique
       return ('There have been {} unique champs [1 every {:.1f} '
-              'games] picked or banned {}.').format(
-                  num_unique, avg_unique_per_game, region_msg)
+              'games] picked or banned {}.').format(num_unique,
+                                                    avg_unique_per_game,
+                                                    region_msg)
 
     elif subcommand in ('all', 'bans', 'picks', 'wins'):
       specifier_to_sort_key_fn = {
@@ -306,15 +311,18 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
           region, sort_key_fn, descending)
 
       min_game_str = inflect_lib.Plural(max(1, num_games / 20), 'game')
-      responses = ['%s Champs by %s Rate %s [min %s].' %
-                   (order_str, rate_str, region_msg, min_game_str)]
+      responses = [
+          '%s Champs by %s Rate %s [min %s].' %
+          (order_str, rate_str, region_msg, min_game_str)
+      ]
 
       max_champ_len = max(len(x[0]) for x in top_champs)
       champ_str = ('{champ:%s} - {appear_str}{rate:4.3g}%% {rate_str} rate '
                    '({stat_str}{win_loss_str})' % max_champ_len)
       for champ, stats in top_champs:
-        responses.append(self._PopulatePickBanChampStr(
-            champ_str, champ, stats, subcommand, num_games))
+        responses.append(
+            self._PopulatePickBanChampStr(champ_str, champ, stats, subcommand,
+                                          num_games))
       return responses
 
     canonical_name, pb_data = self._core.esports.GetChampPickBanRate(
@@ -327,8 +335,7 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
                                      'bans' not in pb_data):
       return '%s is not very popular %s.' % (canonical_name, region_msg)
 
-    appear_rate = (
-        pb_data['bans'] + pb_data['picks']) / pb_data['num_games']
+    appear_rate = (pb_data['bans'] + pb_data['picks']) / pb_data['num_games']
     win_msg = ' with a {:.0%} win rate'
     if pb_data['picks'] == 0:
       win_msg = ''
@@ -337,8 +344,7 @@ class LCSPickBanRatesCommand(command_lib.BaseCommand):
     losses = pb_data['picks'] - pb_data['wins']
 
     return '{} has appeared in {:.1%} of games ({}, {}){} ({}-{}) {}.'.format(
-        canonical_name, appear_rate,
-        inflect_lib.Plural(pb_data['bans'], 'ban'),
+        canonical_name, appear_rate, inflect_lib.Plural(pb_data['bans'], 'ban'),
         inflect_lib.Plural(pb_data['picks'], 'pick'), win_msg, pb_data['wins'],
         losses, region_msg)
 
@@ -406,9 +412,11 @@ class LCSStandingsCommand(command_lib.BaseCommand):
         format_str += '-{0.ties}, {0.points}'
       card = message_pb2.Card(
           header={
-              'title': standing['league'].name,
-              'subtitle': '%s (%s)' % (standing['bracket'].name,
-                                       'W-L-D, Pts' if has_ties else 'W-L'),
+              'title':
+                  standing['league'].name,
+              'subtitle':
+                  '%s (%s)' % (standing['bracket'].name,
+                               'W-L-D, Pts' if has_ties else 'W-L'),
           },
           # We will place the top-n teams into the first field separated by
           # newlines so that we don't have extra whitespace.
@@ -488,15 +496,15 @@ class LCSRosterCommand(command_lib.BaseCommand):
     if not team:
       return 'Unknown team.'
     response = ['%s Roster:' % team.name]
-    players = [player for player in team.players
-               if not player.is_substitute or include_subs]
+    players = [
+        player for player in team.players
+        if not player.is_substitute or include_subs
+    ]
     role_order = {'Top': 0, 'Jungle': 1, 'Mid': 2, 'Bottom': 3, 'Support': 4}
     players.sort(key=lambda p: role_order.get(p.position, 5))
     for player in players:
-      response.append('%s - %s' % (
-          self.NAME_SUBSTITUTIONS.get(player.summoner_name,
-                                      player.summoner_name),
-          player.position))
+      response.append('%s - %s' % (self.NAME_SUBSTITUTIONS.get(
+          player.summoner_name, player.summoner_name), player.position))
     return response
 
 

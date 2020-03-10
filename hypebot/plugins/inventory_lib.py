@@ -45,6 +45,7 @@ from hypebot import hype_types
 from hypebot.core import factory_lib
 from hypebot.plugins import coin_lib
 from hypebot.storage import storage_lib
+from hypebot.protos import user_pb2
 
 
 class BaseItem(with_metaclass(abc.ABCMeta)):
@@ -93,24 +94,29 @@ class CoinPurse(BaseItem):
   HAT_TOKEN_CHANCE = 0.02
 
   def Use(self):
-    text = ['%s opens the coin purse...' % self._user]
+    text = ['%s opens the coin purse...' % self._user.display_name]
     total_coin_amt = 0
     for _ in range(self.ROLLS_PER_PURSE):
       purse = random.choice(list(self.COIN_PURSE_AMOUNTS.values()))
       coin_amt = purse.base
       while random.random() < purse.inc_chance:
         coin_amt += purse.inc_amount
-      text += ['%s found a roll of %d HypeCoins!' % (self._user, coin_amt)]
+      text += [
+          '%s found a roll of %d HypeCoins!' %
+          (self._user.display_name, coin_amt)
+      ]
       total_coin_amt += coin_amt
-    payment_succeeded = self._core.bank.ProcessPayment(
-        coin_lib.MINT_ACCOUNT, self._user, total_coin_amt, 'Coin purse reward',
-        self._core.Reply)
+    payment_succeeded = self._core.bank.ProcessPayment(coin_lib.MINT_ACCOUNT,
+                                                       self._user,
+                                                       total_coin_amt,
+                                                       'Coin purse reward',
+                                                       self._core.Reply)
     if random.random() < self.HAT_TOKEN_CHANCE:
       self._core.inventory.AddItem(
           self._user, Create('HatToken', self._core, self._user, self._params))
       text.append(
           'While looking in the bottom of the bag, %s found a Hat Token!' %
-          self._user)
+          self._user.display_name)
     return (text, payment_succeeded)
 
 
@@ -123,7 +129,9 @@ class HatToken(BaseItem):
   value = 50000
 
   def Use(self):
-    text = ['%s tries to turn their token into a hat.' % self._user]
+    text = [
+        '%s tries to turn their token into a hat.' % self._user.display_name
+    ]
     see_a_ghost = random.random() < self._GHOST_CHANCE
     if see_a_ghost:
       text += ('The ghost of tech debt past passes by, whispering',
@@ -154,12 +162,12 @@ class InventoryManager(object):
   def __init__(self, store: storage_lib.HypeStore):
     self._store = store
 
-  def GetUserInventory(self, user: Text) -> hype_types.JsonType:
-    return self._store.GetJsonValue(user, self.INVENTORY_SUBKEY) or {}
+  def GetUserInventory(self, user: user_pb2.User) -> hype_types.JsonType:
+    return self._store.GetJsonValue(user.user_id, self.INVENTORY_SUBKEY) or {}
 
-  def AddItem(self, user: Text, item: BaseItem) -> bool:
+  def AddItem(self, user: user_pb2.User, item: BaseItem) -> bool:
     """Returns if user already had one or more copies of item."""
-    return self._store.UpdateJson(user, self.INVENTORY_SUBKEY,
+    return self._store.UpdateJson(user.user_id, self.INVENTORY_SUBKEY,
                                   lambda a: self._AddStack(a, item.name),
                                   lambda a: item.name in a)
 
@@ -171,9 +179,9 @@ class InventoryManager(object):
       inventory[item_name]['number'] = 1
     inventory[item_name]['number'] += 1
 
-  def RemoveItem(self, user: Text, item: BaseItem) -> bool:
+  def RemoveItem(self, user: user_pb2.User, item: BaseItem) -> bool:
     """Returns if item was actually removed from users' inventory."""
-    return self._store.UpdateJson(user, self.INVENTORY_SUBKEY,
+    return self._store.UpdateJson(user.user_id, self.INVENTORY_SUBKEY,
                                   lambda a: self._RemoveStack(a, item.name),
                                   lambda a: item.name in a)
 

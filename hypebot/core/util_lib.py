@@ -19,7 +19,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import collections
 import copy
 import datetime
 import math
@@ -31,10 +30,11 @@ import unicodedata
 import arrow
 from dateutil.relativedelta import relativedelta
 from hypebot import hype_types
+from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
-from hypebot.protos.user_pb2 import User
+from hypebot.protos import user_pb2
 import six
-from typing import Callable, Iterable, List, Optional, Text, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Text, Tuple
 
 
 def Access(obj, path, default=None):
@@ -64,26 +64,6 @@ def ArrowTime(hour=0, minute=0, second=0, tz='UTC', weekday=None):
     return arrow.Arrow.fromdatetime(time.datetime +
                                     relativedelta(weekday=weekday))
   return time
-
-
-def BuildUser(user: Text, canonicalize: bool = True) -> User:
-  """Returns a User proto for user, correctly setting user.id.
-
-  Args:
-    user: String representation of a user's identity.
-    canonicalize: If the id for user should be canonicalized. This should only
-      be False if we're building a User for the default user ("me"), where we
-      don't want to allow users trying to impersonate a real user (e.g.
-      brcooley_) to be able to act as that user. When in doubt, do not override
-      the default value (True).
-
-  Returns:
-    User proto encapuslating the user.
-  """
-  if canonicalize:
-    return User(name=user, id=CanonicalizeName(user))
-  # This assumes that usernames are case-insensitive, e.g. foo == FoO.
-  return User(name=user, id=user.strip().lower())
 
 
 def CanonicalizeName(raw_name: Text):
@@ -287,7 +267,6 @@ class WeightedCollection(object):
       item: Item in collection to update.
       update_fn: Function that takes the current weight of item as an input and
         returns the new weight. An example to add 1 to the current weight:
-
           ModifyWeight('my-item', lambda cur_weight: cur_weight + 1.0)
 
     Returns:
@@ -393,75 +372,71 @@ def Sparkline(values):
   return ''.join(unicode_values[v] for v in bucketized_values)
 
 
+class _UserTrack(object):
+
+  def __init__(self, user: user_pb2.User):
+    # Last known message from the user.
+    self.last_seen = arrow.get(0)
+    # Full user proto.
+    self.user = user
+    # Set of channel ids where we have seen the user.
+    self.channels = set()
+
+
 class UserTracker(object):
   """A class for tracking users (humans / bots) and their channels."""
 
   def __init__(self):
-    self._bots = collections.defaultdict(set)  # name -> channels
-    self._humans = collections.defaultdict(set)  # name -> channels
-    self._lock = threading.Lock()
+    self._users = {}  # type: Dict[Text, _UserTrack]
+    self._lock = threading.RLock()
 
-  def Reset(self):
-    """Forget all tracked users."""
+  def RecordActivity(self, user: user_pb2.User, channel: channel_pb2.Channel):
     with self._lock:
-      self._bots.clear()
-      self._humans.clear()
+      self.AddUser(user, channel)
+      self._users[user.user_id].last_seen = arrow.utcnow()
 
-  def AddHuman(self, name, channel=None):
-    """Adds name as a known human."""
+  def LastActivity(self, user: user_pb2.User):
     with self._lock:
+      self.AddUser(user)
+      return self._users[user.user_id].last_seen
+
+  def AddUser(self,
+              user: user_pb2.User,
+              channel: Optional[channel_pb2.Channel] = None):
+    """Adds name as a known user."""
+    with self._lock:
+      if user.user_id not in self._users:
+        self._users[user.user_id] = _UserTrack(user)
       if channel:
-        self._humans[name].add(channel.id)
-      else:
-        self._humans[name]  # pylint: disable=pointless-statement
+        self._users[user.user_id].channels.add(channel.id)
 
-  def AddBot(self, name, channel=None):
-    """Adds name as a known bot."""
-    with self._lock:
-      if channel:
-        self._bots[name].add(channel.id)
-      else:
-        self._bots[name]  # pylint: disable=pointless-statement
-
-  def IsKnown(self, name):
-    """Returns if name is known to this class, as either a bot or a human."""
-    return self.IsHuman(name) or self.IsBot(name)
-
-  def IsBot(self, name):
-    """Returns if name is a bot."""
-    return name in self._bots
-
-  def IsHuman(self, name):
-    """Returns if name is a human."""
-    return name in self._humans
-
-  def AllHumans(self, channel: Optional[Text] = None):
+  def AllHumans(self, channel: Optional[channel_pb2.Channel] = None):
     """Returns a list of all users that are humans.
 
     Args:
       channel: If specified, only return humans in the channel.
     """
-    if channel:
-      return [
-          name for name, channels in self._humans.items()
-          if channel.id in channels
-      ]
-    return self._humans.keys()
+    with self._lock:
+      humans = []
+      for track in self._users.values():
+        if not track.user.bot and (not channel or channel.id in track.channels):
+          humans.append(track.user)
+    return humans
 
-  def AllBots(self, channel: Optional[Text] = None):
+  def AllBots(self, channel: Optional[channel_pb2.Channel] = None):
     """Returns a list of all users that are bots.
 
     Args:
       channel: If specified, only return bots in the channel.
     """
-    if channel:
-      return [
-          name for name, channels in self._bots.items()
-          if channel.id in channels
-      ]
-    return self._bots.keys()
+    with self._lock:
+      bots = []
+      for track in self._users.values():
+        if track.user.bot and (not channel or channel.id in track.channels):
+          bots.append(track.user)
+    return bots
 
-  def AllUsers(self, channel: Optional[Text] = None):
+  def AllUsers(self, channel: Optional[channel_pb2.Channel] = None):
     """Returns a list of all known users.
 
     Args:
@@ -505,8 +480,8 @@ def _CardAsTextList(card: message_pb2.Card) -> List[Text]:
   return text
 
 
-def _AppendToMessage(
-    msg: hype_types.Message, response: hype_types.CommandResponse):
+def _AppendToMessage(msg: hype_types.Message,
+                     response: hype_types.CommandResponse):
   """Append a single response to the message list."""
   if isinstance(response, (bytes, Text)):
     msg.messages.add(text=response.split('\n'))

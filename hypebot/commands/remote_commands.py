@@ -27,8 +27,10 @@ from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
+from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
 from hypebot.protos import stock_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 
@@ -36,7 +38,8 @@ from typing import Text
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  def _Handle(self, channel: hype_types.Channel, user: Text):
+  def _Handle(self, channel: channel_pb2.Channel,
+              user: user_pb2.User) -> hype_types.CommandResponse:
     data = self._core.proxy.FetchJson(
         'https://kittysales.herokuapp.com/data', {
             'offset': 0,
@@ -58,7 +61,8 @@ class KittiesSalesCommand(command_lib.BaseCommand):
 class NewsCommand(command_lib.BaseCommand):
   """If it's on the internet, it must be true."""
 
-  def _Handle(self, channel, user, query):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              query: Text) -> hype_types.CommandResponse:
     if not query:
       raw_results = self._core.news.GetTrending()
       return self._BuildHeadlineCard('Here are today\'s top stories',
@@ -82,15 +86,18 @@ class NewsCommand(command_lib.BaseCommand):
       if source and source != self._core.news.source:
         field.bottom_text = source
       card.fields.append(field)
-      card.fields.append(message_pb2.Card.Field(buttons=[
-          message_pb2.Card.Field.Button(
-              text='Read article', action_url=article['url'])]))
+      card.fields.append(
+          message_pb2.Card.Field(buttons=[
+              message_pb2.Card.Field.Button(
+                  text='Read article', action_url=article['url'])
+          ]))
 
     return card
 
 
 @command_lib.CommandRegexParser(r'stocks?(?: (.*))?')
 class StocksCommand(command_lib.BaseCommand):
+  """Stonks go up."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
@@ -113,7 +120,8 @@ class StocksCommand(command_lib.BaseCommand):
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
-  def _Handle(self, channel: hype_types.Channel, user: Text, symbols: Text):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              symbols: Text):
     symbols = symbols or self._core.user_prefs.Get(user, 'stocks')
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
@@ -168,6 +176,7 @@ class StocksCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')
 class WeatherCommand(command_lib.BaseCommand):
+  """Okay Google, what's the weather?"""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
@@ -184,8 +193,8 @@ class WeatherCommand(command_lib.BaseCommand):
                                            self._params.darksky_key,
                                            self._params.geocode_key)
 
-  def _Handle(self, channel: hype_types.Channel, user: Text, unit: Text,
-              location: Text):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              unit: Text, location: Text):
     unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()
     location = location or self._core.user_prefs.Get(user, 'location')

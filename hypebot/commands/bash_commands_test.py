@@ -28,11 +28,11 @@ from hypebot.commands import hypetest
 class AliasCommandsTest(hypetest.BaseCommandTestCase):
 
   def testAddAlias(self):
-    response = self.command.Handle(hypetest.TEST_CHANNEL, 'user',
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!alias add new original')
     self.assertEqual('Added alias new.', response)
 
-    response = self.command.Handle(hypetest.TEST_CHANNEL, 'user',
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!alias add new old')
     self.assertEqual('Updated alias new.', response)
 
@@ -42,7 +42,7 @@ class EchoCommandTest(hypetest.BaseCommandTestCase):
 
   def testRepeatsWhatItsTold(self):
     message = 'Pete and repeat were in a boat, Pete fell out who was left?'
-    response = self.command.Handle(hypetest.TEST_CHANNEL, 'testuser',
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!echo %s' % message)
 
     self.assertEqual([message], response)

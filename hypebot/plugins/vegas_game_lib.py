@@ -34,6 +34,7 @@ from hypebot.core import util_lib
 from hypebot.plugins import inventory_lib
 from hypebot.plugins.league import esports_lib
 from hypebot.protos import bet_pb2
+from hypebot.protos import user_pb2
 
 
 class GameBase(with_metaclass(abc.ABCMeta)):
@@ -70,7 +71,7 @@ class GameBase(with_metaclass(abc.ABCMeta)):
     """Settles bets for game.
 
     Args:
-      pool: bets keyed by user and then scope.
+      pool: bets keyed by user_id and then scope.
       msg_fn: {callable(channel, msg)} function to send messages.
       *args: defined by game.
       **kwargs: defined by game.
@@ -107,10 +108,9 @@ class StockGame(GameBase):
   def FormatBet(self, bet):
     stock_data = bet_pb2.StockData()
     bet.data.Unpack(stock_data)
-    return '%s %s %s at $%0.2f' % (
-        util_lib.FormatHypecoins(bet.amount),
-        bet_pb2.Bet.Direction.Name(bet.direction).lower(),
-        bet.target, stock_data.quote)
+    return '%s %s %s at $%0.2f' % (util_lib.FormatHypecoins(
+        bet.amount), bet_pb2.Bet.Direction.Name(
+            bet.direction).lower(), bet.target, stock_data.quote)
 
   def SettleBets(self, pool, msg_fn, *args, **kwargs):
     # Get quotes for each symbol that has a bet
@@ -119,12 +119,15 @@ class StockGame(GameBase):
 
     logging.info('Starting stock gamble, quotes: %s pool: %s', quotes, pool)
     pool_value = sum(x.amount for user_bets in pool.values() for x in user_bets)
-    notifications = ['The trading day is closed! %s bet %s on stock' %
-                     (inflect_lib.Plural(len(pool), 'pleb'),
-                      util_lib.FormatHypecoins(pool_value))]
+    notifications = [
+        'The trading day is closed! %s bet %s on stock' % (inflect_lib.Plural(
+            len(pool), 'pleb'), util_lib.FormatHypecoins(pool_value))
+    ]
 
     winners = defaultdict(int)
-    for user, users_bets in pool.items():
+    users_by_id = {}
+    for user_id, users_bets in pool.items():
+      users_by_id[user_id] = users_bets[0].user
       winning_symbols = []
       losing_symbols = []
       net_amount = 0
@@ -147,7 +150,7 @@ class StockGame(GameBase):
           winnings = bet.amount * 2
           winning_symbols.append(symbol)
           net_amount += bet.amount
-          winners[user] += winnings
+          winners[user_id] += winnings
         else:
           bet_result = 'Lost'
           losing_symbols.append(symbol)
@@ -157,21 +160,26 @@ class StockGame(GameBase):
         else:
           payout_str = ''
         msg_fn(
-            user,
+            bet.user,
             u'bet {bet[amount]} {bet[direction]} {bet[target]} at {price[prev]}'
             u', now at {price[cur]} => {0}{1}'.format(
-                bet_result, payout_str,
+                bet_result,
+                payout_str,
                 bet={
-                    'amount': util_lib.FormatHypecoins(bet.amount),
-                    'direction': bet_pb2.Bet.Direction.Name(
-                        bet.direction).lower(),
-                    'target': bet.target,
+                    'amount':
+                        util_lib.FormatHypecoins(bet.amount),
+                    'direction':
+                        bet_pb2.Bet.Direction.Name(bet.direction).lower(),
+                    'target':
+                        bet.target,
                 },
-                price={'cur': cur_price, 'prev': prev_price}))
-        logging.info(
-            u'GambleStock: %s %s %s at %s, now at %s => %s%s',
-            user, bet.direction, symbol, prev_price, cur_price, bet_result,
-            payout_str)
+                price={
+                    'cur': cur_price,
+                    'prev': prev_price
+                }))
+        logging.info(u'GambleStock: %s %s %s at %s, now at %s => %s%s',
+                     bet.user, bet.direction, symbol, prev_price, cur_price,
+                     bet_result, payout_str)
       right_snippet = _BuildSymbolSnippet(winning_symbols, 'right')
       wrong_snippet = _BuildSymbolSnippet(losing_symbols, 'wrong')
 
@@ -182,14 +190,18 @@ class StockGame(GameBase):
             'up' if net_amount > 0 else 'down',
             util_lib.FormatHypecoins(abs(net_amount)))
 
-      notifications.append('%s was %s%s%s' % (
-          user, right_snippet, wrong_snippet, summary_snippet))
-      if user in winners:
-        msg_fn(user, ('You\'ve won %s thanks to your ability to predict the '
-                      'whims of hedge fund managers!') %
-               util_lib.FormatHypecoins(winners[user]))
+      notifications.append('%s was %s%s%s' %
+                           (users_by_id[user_id].display_name, right_snippet,
+                            wrong_snippet, summary_snippet))
+      if user_id in winners:
+        msg_fn(users_by_id[user_id],
+               ('You\'ve won %s thanks to your ability to predict the '
+                'whims of hedge fund managers!') %
+               util_lib.FormatHypecoins(winners[user_id]))
 
-    return (winners.items(), {}, notifications)
+      return ([
+          (users_by_id[user_id], amount) for user_id, amount in winners.items()
+      ], {}, notifications)
 
 
 class LCSGame(GameBase):
@@ -246,8 +258,7 @@ class LCSGame(GameBase):
       if (all([t in match_teams for t in teams]) and self._OpenForBets(match)):
         # Determine predicted winner.
         if len(teams) == 1:
-          teams.append(
-              match.blue if teams[0] == match.red else match.red)
+          teams.append(match.blue if teams[0] == match.red else match.red)
         winner = teams[0] if bet.direction == bet_pb2.Bet.FOR else teams[1]
         loser = teams[1] if bet.direction == bet_pb2.Bet.FOR else teams[0]
         bet.target = match.match_id
@@ -259,9 +270,9 @@ class LCSGame(GameBase):
   def FormatBet(self, bet):
     lcs_data = bet_pb2.LCSData()
     bet.data.Unpack(lcs_data)
-    return '%s for %s over %s' % (
-        util_lib.FormatHypecoins(bet.amount),
-        self._TeamName(lcs_data.winner), self._TeamName(lcs_data.loser))
+    return '%s for %s over %s' % (util_lib.FormatHypecoins(
+        bet.amount), self._TeamName(
+            lcs_data.winner), self._TeamName(lcs_data.loser))
 
   def _TeamName(self, team_id):
     if team_id in self._esports.teams:
@@ -275,7 +286,9 @@ class LCSGame(GameBase):
     pool_value = 0
     msgs = []
 
-    for user, user_bets in pool.items():
+    users_by_id = {}
+    for user_id, user_bets in pool.items():
+      users_by_id[user_id] = user_bets[0].user
       winning_teams = []
       losing_teams = []
       net_amount = 0
@@ -285,7 +298,7 @@ class LCSGame(GameBase):
         match = self._esports.matches.get(bet.target, None)
         logging.info('Game time: %s', match)
         if match and match.winner:
-          logging.info('GambleLCS: %s bet %s for %s and %s won.', user,
+          logging.info('GambleLCS: %s bet %s for %s and %s won.', bet.user,
                        bet.amount, self._TeamName(lcs_data.winner),
                        self._TeamName(match.winner))
           pool_value += bet.amount
@@ -295,14 +308,14 @@ class LCSGame(GameBase):
             # HypeBookie takes a 5% cut (rounded down) of all bets over 100.
             if bet.amount > 100:
               winnings -= int(bet.amount * 0.05)
-            winners[user] += winnings
+            winners[user_id] += winnings
             net_amount += winnings - bet.amount
           else:
             losing_teams.append(self._TeamName(lcs_data.winner))
             net_amount -= bet.amount
         else:
           logging.info('Unused bet: %s', bet)
-          unused_bets[user].append(bet)
+          unused_bets[user_id].append(bet)
 
       if winning_teams or losing_teams:
         right_snippet = _BuildSymbolSnippet(winning_teams, 'right')
@@ -315,19 +328,21 @@ class LCSGame(GameBase):
               'up' if net_amount > 0 else 'down',
               util_lib.FormatHypecoins(abs(net_amount)))
 
-        user_message = '%s was %s%s%s' % (user, right_snippet, wrong_snippet,
+        user_message = '%s was %s%s%s' % (users_by_id[user_id].display_name,
+                                          right_snippet, wrong_snippet,
                                           summary_snippet)
         msgs.append(user_message)
 
     notifications = []
     if msgs:
       notifications = [
-          'LCS match results in! %s bet %s.' % (
-              inflect_lib.Plural(len(msgs), 'pleb'),
-              util_lib.FormatHypecoins(pool_value))
+          'LCS match results in! %s bet %s.' % (inflect_lib.Plural(
+              len(msgs), 'pleb'), util_lib.FormatHypecoins(pool_value))
       ] + msgs
 
-    return (winners.items(), unused_bets, notifications)
+      return ([
+          (users_by_id[user_id], amount) for user_id, amount in winners.items()
+      ], unused_bets, notifications)
 
 
 class LotteryGame(GameBase):
@@ -346,12 +361,12 @@ class LotteryGame(GameBase):
   def name(self):
     return 'lottery'
 
-  def CapBet(self, user, amount, resolver):
+  def CapBet(self, user: user_pb2.User, amount, resolver):
     """Cap bet to a percent of the lottery."""
     pool = self._bookie.LookupBets(self.name, resolver=resolver)
     # Remove the user from the pool so their past bets don't have impact.
-    if user in pool:
-      del pool[user]
+    if user.user_id in pool:
+      del pool[user.user_id]
     jackpot, item = self.ComputeCurrentJackpot(pool)
     pool_value = jackpot + item.value
     max_bet = int((self._MAX_BET_PERCENT * pool_value) /
@@ -369,31 +384,33 @@ class LotteryGame(GameBase):
     return inflect_lib.Plural(bet.amount, '%s ticket' % self.name)
 
   def SettleBets(self, pool, msg_fn, *args, **kwargs):
-    # The lotto is global, so there should only be a single bet for each user
+    # The lotto is global, so there should only be a single bet for each user.
     pool_value = sum(user_bets[0].amount for user_bets in pool.values())
     if not pool_value:
       return ([], {}, [])
-    notifications = ['All 7-11s are closed! %s bet %s on the lottery' %
-                     (inflect_lib.Plural(len(pool), 'pleb'),
-                      util_lib.FormatHypecoins(pool_value))]
+    notifications = [
+        'All 7-11s are closed! %s bet %s on the lottery' % (inflect_lib.Plural(
+            len(pool), 'pleb'), util_lib.FormatHypecoins(pool_value))
+    ]
 
     coins, item = self.ComputeCurrentJackpot(pool)
     winning_number = random.randint(1, pool_value)
     ticket_number = 0
-    for user, user_bets in pool.items():
-      num_tickets = user_bets[0].amount
+    for user_bets in pool.values():
+      bet = user_bets[0]
+      num_tickets = bet.amount
       ticket_number += num_tickets
       if ticket_number >= winning_number:
-        msg_fn(user, [
-            'You\'ve won %s in the lottery!' %
-            util_lib.FormatHypecoins(coins),
+        msg_fn(bet.user, [
+            'You\'ve won %s in the lottery!' % util_lib.FormatHypecoins(coins),
             ('We\'ve always been such close friends. Can I borrow some money '
              'for rent?')
         ])
         item_str = inflect_lib.AddIndefiniteArticle(item.human_name)
-        notifications.append('%s won %s and %s in the lottery!' % (
-            user, util_lib.FormatHypecoins(coins), item_str))
-        return ([(user, coins), (user, item)], {}, notifications)
+        notifications.append(
+            '%s won %s and %s in the lottery!' %
+            (bet.user.display_name, util_lib.FormatHypecoins(coins), item_str))
+        return ([(bet.user, coins), (bet.user, item)], {}, notifications)
 
     return ([], {}, [])
 
@@ -416,6 +433,5 @@ def _BuildSymbolSnippet(symbols, adj, display_max=4):
     response_symbols.append(inflect_lib.Plural(num_extras, 'other'))
   if len(response_symbols) == 1:
     return '%s about %s; ' % (adj, response_symbols[0])
-  return '%s about %s; ' % (
-      adj,
-      ' and '.join([', '.join(response_symbols[:-1]), response_symbols[-1]]))
+  return '%s about %s; ' % (adj, ' and '.join(
+      [', '.join(response_symbols[:-1]), response_symbols[-1]]))

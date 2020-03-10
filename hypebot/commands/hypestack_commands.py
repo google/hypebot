@@ -18,42 +18,32 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import functools
-
 from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import util_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 _STACK_PREFIX = r'(?:hype)?stacks?'
 
 
-@command_lib.CommandRegexParser(r'%s balance(?: (.+)?)?' % _STACK_PREFIX)
+@command_lib.CommandRegexParser(r'%s balance ?(?P<target_user>.*)' %
+                                _STACK_PREFIX)
 class HypeStackBalanceCommand(command_lib.BaseCommand):
   """Show the number of HypeStacks a given user possesses."""
 
-  def _Handle(self,
-              channel: Channel,
-              user: Text,
-              stack_user: Text) -> hype_types.CommandResponse:
-    stack_user = stack_user or 'me'
-    normalized_stack_user = util_lib.CanonicalizeName(stack_user)
-    if normalized_stack_user == 'me':
-      self._core.last_command = functools.partial(
-          self._Handle, stack_user=stack_user)
-      normalized_stack_user = user
-      stack_user = user
-    elif normalized_stack_user == self._core.name.lower():
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              target_user: user_pb2.User) -> hype_types.CommandResponse:
+    if target_user.display_name.lower() == self._core.name.lower():
       return '%s IS the stack' % self._core.name
-    stack_user = stack_user.strip()
-    stacks = self._core.hypestacks.GetHypeStacks(normalized_stack_user)
-    stack_msg = '%s isn\'t very hype' % stack_user
+    stacks = self._core.hypestacks.GetHypeStacks(target_user)
     if stacks:
-      stack_msg = '%s has %s' % (stack_user,
-                                 inflect_lib.Plural(stacks, 'HypeStack'))
-    return stack_msg
+      return '%s has %s' % (target_user.display_name,
+                            inflect_lib.Plural(stacks, 'HypeStack'))
+    else:
+      return '%s isn\'t very hype' % target_user.display_name
 
 
 @command_lib.CommandRegexParser(r'%s buy ([0-9]+)' % _STACK_PREFIX)
@@ -61,9 +51,7 @@ class BuyHypeStackCommand(command_lib.BaseCommand):
   """Rewards consumerism with sellout HypeStacks."""
 
   @command_lib.HumansOnly()
-  def _Handle(self,
-              channel: Channel,
-              user: Text,
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               stack_amount: Text) -> hype_types.CommandResponse:
     num_stacks = util_lib.SafeCast(stack_amount, int, 0)
     if not num_stacks:
@@ -73,9 +61,8 @@ class BuyHypeStackCommand(command_lib.BaseCommand):
     hypecoin_amount = self._core.hypestacks.PriceForHypeStacks(user, num_stacks)
     if not hypecoin_amount:
       return
-    summary = 'purchase of %s for %s' % (
-        inflect_lib.Plural(num_stacks, 'HypeStack'),
-        util_lib.FormatHypecoins(hypecoin_amount))
+    summary = 'purchase of %s for %s' % (inflect_lib.Plural(
+        num_stacks, 'HypeStack'), util_lib.FormatHypecoins(hypecoin_amount))
     purchase_details = {
         'num_stacks': num_stacks,
         'summary': summary,

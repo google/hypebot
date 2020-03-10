@@ -26,32 +26,36 @@ import math
 import numbers
 import random
 import re
-from threading import RLock
+import threading
 
 from absl import logging
-import arrow
-from google.protobuf import json_format
-import six
-
 from hypebot.core import schedule_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
-from hypebot.protos.bet_pb2 import Bet
+from hypebot.protos import bank_pb2
+from hypebot.protos import bet_pb2
+from hypebot.protos import user_pb2
+import six
+
+# pylint: disable=line-too-long
+# pylint: enable=line-too-long
+from google.protobuf import json_format
 
 # "Accounts" where various transactions end up
-BOOKIE_ACCOUNT = 'hypebank'
-FEE_ACCOUNT = 'hypebank'
-MINT_ACCOUNT = 'hypebank'
-SCHOLARSHIP_ACCOUNT = 'hypescholarship'
-SUBSCRIPTION_ACCOUNT = 'hypebank'
+BOOKIE_ACCOUNT = user_pb2.User(user_id='_hypebank', display_name='HypeBank')
+FEE_ACCOUNT = BOOKIE_ACCOUNT
+MINT_ACCOUNT = BOOKIE_ACCOUNT
+SCHOLARSHIP_ACCOUNT = user_pb2.User(
+    user_id='_hypescholarship', display_name='HypeScholarship')
+SUBSCRIPTION_ACCOUNT = BOOKIE_ACCOUNT
 
 # pyformat: disable
 HYPECENTS = frozenset([
-    BOOKIE_ACCOUNT,
-    FEE_ACCOUNT,
-    MINT_ACCOUNT,
-    SCHOLARSHIP_ACCOUNT,
-    SUBSCRIPTION_ACCOUNT,
+    BOOKIE_ACCOUNT.user_id,
+    FEE_ACCOUNT.user_id,
+    MINT_ACCOUNT.user_id,
+    SCHOLARSHIP_ACCOUNT.user_id,
+    SUBSCRIPTION_ACCOUNT.user_id,
 ])
 # pyformat: enable
 
@@ -97,12 +101,12 @@ class Thievery(object):
       msg_fn(None, 'Did you mean !hc gift?')
       return
 
-    if victim.lower() in self._protected_peeps:
+    if victim.user_id in self._protected_peeps:
       msg_fn(None, 'The Godfather protects his family.')
       self._bank.ProcessPayment(
-          thief, self._bot_name, 500,
-          'In Soviet Russia, %s steals from you.' % self._bot_name,
-          msg_fn)
+          thief,
+          user_pb2.User(user_id=self._bot_name, display_name=self._bot_name),
+          500, 'In Soviet Russia, %s steals from you.' % self._bot_name, msg_fn)
       return
 
     victim_balance = self._bank.GetBalance(victim)
@@ -118,10 +122,8 @@ class Thievery(object):
     rob_attempt_score = random.random()
 
     logging.info('(%s: %0.2f, %s: %0.2f) %s of %s attempt %0.2f >? %0.2f',
-                 thief, thief_alert,
-                 victim, victim_alert,
-                 amount, victim_balance,
-                 rob_attempt_score, failure_chance)
+                 thief, thief_alert, victim, victim_alert, amount,
+                 victim_balance, rob_attempt_score, failure_chance)
 
     if rob_attempt_score < failure_chance:
       self._bank.ProcessPayment(thief, SCHOLARSHIP_ACCOUNT,
@@ -138,14 +140,14 @@ class Thievery(object):
     # TODO: Fold ProcessPayment into the UpdateScores tx.
     # We don't worry about the victim having insufficient funds since there is a
     # 0% chance of stealing 100% of someone's money.
-    if self._bank.ProcessPayment(victim, thief, amount,
-                                 'Highway robbery', msg_fn):
+    if self._bank.ProcessPayment(victim, thief, amount, 'Highway robbery',
+                                 msg_fn):
       self._store.RunInTransaction(self._UpdateScores, thief, victim, amount)
       formatted_amount = util_lib.FormatHypecoins(amount)
       msg_fn(None, '%s stole %s from %s' % (thief, formatted_amount, victim))
       # We privmsg the victim to make sure they know who stole their hypecoins.
-      msg_fn(victim, 'You\'ve been robbed! %s stole %s' % (thief,
-                                                           formatted_amount))
+      msg_fn(victim,
+             'You\'ve been robbed! %s stole %s' % (thief, formatted_amount))
 
   def _Sigmoid(self, value, offset, scale=200.0):
     return 1 / (1 + math.exp(-scale * (value - offset)))
@@ -163,15 +165,14 @@ class Thievery(object):
     """
     scores = self._store.GetJsonValue(self._bot_name, 'scores:%s' % collection,
                                       tx)
-    return collections.defaultdict(int, scores or
-                                   {self._bot_name: self._HYPEBOT_SCORE})
+    return collections.defaultdict(
+        int, scores or {self._bot_name: self._HYPEBOT_SCORE})
 
   def _GetPDF(self, collection):
     """Gets probability density function of scores for collection."""
     scores = self._GetScores(collection)
     total_score = sum(scores.values())
-    pdf = {peep: score / total_score
-           for peep, score in scores.items()}
+    pdf = {peep: score / total_score for peep, score in scores.items()}
     return collections.defaultdict(float, pdf)
 
   def _AddToScore(self, collection, name, amount, tx=None):
@@ -196,7 +197,8 @@ class Thievery(object):
     """Decay scores for {collection}."""
     scores = {
         peep: int(score * self._DECAY_RATE)
-        for peep, score in self._GetScores(collection, tx).items() if score > 0
+        for peep, score in self._GetScores(collection, tx).items()
+        if score > 0
     }
     scores[self._bot_name] = self._HYPEBOT_SCORE
     logging.info('Updating %s scores: %s', collection, scores)
@@ -207,9 +209,13 @@ class Thievery(object):
     """Distribute funds in scholarship account to past victims."""
     victim_scores = self._GetPDF('victim')
     scholarship_balance = self._bank.GetBalance(SCHOLARSHIP_ACCOUNT)
-    self._bank.ProcessPayment(SCHOLARSHIP_ACCOUNT, victim_scores.keys(),
-                              scholarship_balance, 'Victim scholarship fund',
-                              msg_fn, merchant_weights=victim_scores.values())
+    self._bank.ProcessPayment(
+        SCHOLARSHIP_ACCOUNT,
+        victim_scores.keys(),
+        scholarship_balance,
+        'Victim scholarship fund',
+        msg_fn,
+        merchant_weights=victim_scores.values())
 
 
 class Bookie(object):
@@ -220,14 +226,14 @@ class Bookie(object):
 
   _BET_SUBKEY = 'bets'
 
-  _ledger_lock = RLock()
+  _ledger_lock = threading.RLock()
 
   def __init__(self, store, bank, inventory):
     self._store = store
     self._bank = bank
     self._inventory = inventory
 
-  def LookupBets(self, game, user=None, resolver=None):
+  def LookupBets(self, game, user: user_pb2.User = None, resolver=None):
     """Returns bets for game, optionally filtered by user or resolver."""
     with self._ledger_lock:
       bets = self._GetBets(game)
@@ -236,10 +242,13 @@ class Bookie(object):
     # structure is kept regardless of filtering and that if a filter was given
     # but the game has no matches for that filter, we return an empty dict
     if user:
-      bets = {user: bets[user]} if user in bets else {}
+      user_id = user.user_id
+      bets = {user_id: bets[user_id]} if user_id in bets else {}
     if resolver:
-      bets = {user: [bet for bet in user_bets if bet.resolver == resolver]
-              for user, user_bets in bets.items()}
+      bets = {
+          user_id: [bet for bet in user_bets if bet.resolver == resolver
+                   ] for user_id, user_bets in bets.items()
+      }
       bets = collections.defaultdict(list, bets)
 
     return bets
@@ -255,7 +264,7 @@ class Bookie(object):
       bet: Bet proto describing what bet to place.
       msg_fn: {callable(channel, msg)} function to send messages.
       more: A boolean that decides if the bet amount should be added to any
-            current bets.
+        current bets.
 
     Returns:
       {boolean} whether bet placing was successful or not.
@@ -272,7 +281,7 @@ class Bookie(object):
         return
       bets = self._GetBets(game.name, tx=tx)
       prior_bet = None
-      for b in bets[bet.user]:
+      for b in bets[bet.user.user_id]:
         if bet.target == b.target:
           prior_bet = b
           logging.info('%s has a prior_bet for %s:%s => %s', bet.user,
@@ -302,8 +311,8 @@ class Bookie(object):
       # We do this after the payment processing so that we don't delete bets if
       # we can't correctly update them
       if prior_bet:
-        bets[bet.user].remove(prior_bet)
-      bets[bet.user].append(bet)
+        bets[bet.user.user_id].remove(prior_bet)
+      bets[bet.user.user_id].append(bet)
       self._SetBets(game.name, bets, tx=tx)
     return True
 
@@ -313,7 +322,7 @@ class Bookie(object):
     Args:
       game: The game to settle bets for.
       resolver: The bot trying to settle bets. Used to filter out bets placed by
-          other bots which this bot shouldn't resolve.
+        other bots which this bot shouldn't resolve.
       msg_fn: {callable(channel, msg)} function to send user messages.
       *args: Additional positional arguments to pass to settlement_fn.
       **kwargs: Additional keyword arguments to pass to settlement_fn.
@@ -339,12 +348,12 @@ class Bookie(object):
       # Filter out bets with 'resolver' set and != the current bot
       unresolved_bets = collections.defaultdict(list)
       filtered_bets = collections.defaultdict(list)
-      for user, user_bets in bets.items():
+      for user_id, user_bets in bets.items():
         for bet in user_bets:
           if not bet.resolver or bet.resolver == resolver:
-            filtered_bets[user].append(bet)
+            filtered_bets[user_id].append(bet)
           else:
-            unresolved_bets[user].append(bet)
+            unresolved_bets[user_id].append(bet)
 
       if not filtered_bets:
         logging.info('No bets found for resolver %s', resolver)
@@ -355,11 +364,11 @@ class Bookie(object):
       # Merge bets that were filtered out of the pool with bets unused by the
       # game itself. We can't use a raw update here since we need to merge the
       # lists of bets for users with bets in both dicts.
-      for user, user_bets in unresolved_bets.items():
-        if user in unused_bets:
-          unused_bets[user] += user_bets
+      for user_id, user_bets in unresolved_bets.items():
+        if user_id in unused_bets:
+          unused_bets[user_id] += user_bets
         else:
-          unused_bets[user] = user_bets
+          unused_bets[user_id] = user_bets
       self._SetBets(game.name, unused_bets, tx=tx)
 
     for winner, winnings in winner_info:
@@ -374,32 +383,18 @@ class Bookie(object):
 
   def _GetBets(self, row, tx=None):
     json_bets = self._store.GetJsonValue(row, self._BET_SUBKEY, tx) or {}
-    bets = {u: [json_format.ParseDict(b, Bet()) for b in user_bets]
-            for u, user_bets in json_bets.items()}
+    bets = {
+        u: [json_format.ParseDict(b, bet_pb2.Bet()) for b in user_bets
+           ] for u, user_bets in json_bets.items()
+    }
     return collections.defaultdict(list, bets)
 
   def _SetBets(self, row, bets, tx=None):
-    json_bets = {u: [json_format.MessageToDict(b) for b in user_bets]
-                 for u, user_bets in bets.items()}
+    json_bets = {
+        u: [json_format.MessageToDict(b) for b in user_bets
+           ] for u, user_bets in bets.items()
+    }
     return self._store.SetJsonValue(row, self._BET_SUBKEY, json_bets, tx=tx)
-
-
-def IsSubAccount(user, account=None):
-  """Tests if a user includes a sub-account.
-
-  Sub-accounts are 'nick:account', and the main account is 'nick'.
-
-  Args:
-    user: {string} name of "user" to test.
-    account: {string} Optional, if set, test the existence of this sub-account
-      only.
-
-  Returns:
-    Whether user includes the/an account.
-  """
-  if account:
-    return user.endswith(':' + account)
-  return ':' in user
 
 
 # TODO: Allow holds on accounts to ensure coins will exist for a
@@ -418,32 +413,37 @@ class Bank(object):
   def __init__(self, store, bot_name):
     self._store = store
     self._bot_name = bot_name
-    self._withdraw_lock = RLock()
+    self._withdraw_lock = threading.RLock()
 
   def GetBalance(self, user):
-    balance = self._store.GetValue(user, self._BALANCE_SUBKEY)
+    balance = self._store.GetValue(user.user_id, self._BALANCE_SUBKEY)
     if not balance:
       return 0
     return util_lib.SafeCast(balance, int, 0)
 
-  def GetUserBalances(self, plebs_only=False, account=None):
-    """Returns dict of users mapping to their balance for all users."""
+  def GetUserBalances(self, plebs_only=False):
+    """Returns dict of user_ids mapping to their balance for all users."""
     user_balances = self._store.GetSubkey(self._BALANCE_SUBKEY)
+    # pylint: disable=g-complex-comprehension
     return {
-        user: util_lib.SafeCast(balance, int, 0)
-        for user, balance in user_balances
-        if (not plebs_only or user not in HYPECENTS) and
-        (not account or IsSubAccount(user, account)) and
-        not user.startswith('http')
+        user_id: util_lib.SafeCast(balance, int, 0)
+        for user_id, balance in user_balances
+        if (not plebs_only or user_id not in HYPECENTS) and
+        not user_id.startswith('http')
     }
+    # pylint: enable=g-complex-comprehension
 
   def GetTransactions(self, user):
-    return self._store.GetHistoricalValues(user, self._TRANSACTION_SUBKEY, 5)
+    json_entries = self._store.GetHistoricalValues(user.user_id,
+                                                   self._TRANSACTION_SUBKEY, 5)
+    return [
+        json_format.ParseDict(entry, bank_pb2.LedgerEntry())
+        for entry in json_entries
+    ]
 
-  def GetBankStats(self, plebs_only=False, account=None):
+  def GetBankStats(self, plebs_only=False):
     """Returns the total number of accounts and the sum of all balances."""
-    user_balances = self.GetUserBalances(plebs_only=plebs_only,
-                                         account=account)
+    user_balances = self.GetUserBalances(plebs_only=plebs_only)
     balance_sum = sum(user_balances.values())
     return len(user_balances), balance_sum
 
@@ -466,14 +466,15 @@ class Bank(object):
     num_coins_to_mint = max(
         5000, int(math.log(coins_in_circulation, 2) * num_users * 1000))
     logging.info('Minting %s', util_lib.FormatHypecoins(num_coins_to_mint))
-    tx_details = {
-        'source': 'Ether',
-        'destination': MINT_ACCOUNT,
-        'amount': num_coins_to_mint,
-        'details': 'Minting',
-        'ts': arrow.utcnow().timestamp,
-    }
-    if not self._Deposit(MINT_ACCOUNT, num_coins_to_mint, tx_details, None):
+    entry = bank_pb2.LedgerEntry(
+        counterparty={
+            'user_id': '_ether',
+            'display_name': 'Ether'
+        },
+        amount=num_coins_to_mint,
+        details='Minting')
+    entry.create_time.GetCurrentTime()
+    if not self._Deposit(MINT_ACCOUNT, num_coins_to_mint, entry, None):
       logging.error('Minting %s failed',
                     util_lib.FormatHypecoins(num_coins_to_mint))
 
@@ -486,9 +487,11 @@ class Bank(object):
       user: {string} user name.
       amount_str: {string} amount as string.
       msg_fn: {callable(channel, msg)} function to send messages.
+
     Returns:
       {Optional[int]} Amount as int or None if it can't be parsed.
     """
+
     # Parser handlers.
     # Can return either an int value or a string. Strings will be replied to the
     # user and replaced with a None value.
@@ -554,16 +557,21 @@ class Bank(object):
         msg_fn,
         can_overdraft=True)
 
-  def ProcessPayment(self, customer, merchants, num_coins, details, msg_fn,
-                     can_overdraft=False, merchant_weights=None):
+  def ProcessPayment(self,
+                     customer,
+                     merchants,
+                     num_coins,
+                     details,
+                     msg_fn,
+                     can_overdraft=False,
+                     merchant_weights=None):
     """Process payment from customer to merchant.
 
     The merchant will only be paid if the customer has the funds.
 
     Args:
-      customer: {string} name of account to withdraw money.
-      merchants: {string or list<string>} name(s) of account(s) to deposit
-        money.
+      customer: {User} name of account to withdraw money.
+      merchants: {User or list<User>} name(s) of account(s) to deposit money.
       num_coins: {int} number of hypecoins to transfer.
       details: {string} details of transaction.
       msg_fn: {callable(channel, msg)} function to send messages.
@@ -581,7 +589,7 @@ class Bank(object):
       logging.error('ProcessPayment called with negative value: %s, %s -> %s',
                     num_coins, customer, merchants)
       return False
-    if isinstance(merchants, six.string_types):
+    if isinstance(merchants, user_pb2.User):
       merchants = [merchants]
     if merchant_weights is None:
       merchant_weights = [1] * len(merchants)
@@ -590,72 +598,79 @@ class Bank(object):
 
     amount_paid = 0
     success = True
-    tx_details = {
-        'source': customer,
-        'details': details,
-        'ts': arrow.utcnow().timestamp,
-    }
     for i, (merchant, weight) in enumerate(zip(merchants, merchant_weights)):
       # Ensure we don't overpay due to rounding.
-      merchant_amount = min(int(round(num_coins * weight)),
-                            num_coins - amount_paid)
+      merchant_amount = min(
+          int(round(num_coins * weight)), num_coins - amount_paid)
       # Give the last person the extra coin to compensate for them losing a coin
       # sometimes.
       if i == len(merchants) - 1:
         merchant_amount = num_coins - amount_paid
       if merchant_amount > 0:
-        tx_details.update({'amount': merchant_amount, 'destination': merchant})
-        if (self._Withdraw(customer, merchant_amount, tx_details, msg_fn,
+        withdrawl_entry = bank_pb2.LedgerEntry(
+            details=details, counterparty=merchant)
+        withdrawl_entry.create_time.GetCurrentTime()
+        deposit_entry = bank_pb2.LedgerEntry(
+            details=details,
+            counterparty=customer,
+            create_time=withdrawl_entry.create_time)
+        if (self._Withdraw(customer, merchant_amount, withdrawl_entry, msg_fn,
                            can_overdraft) and
-            self._Deposit(merchant, merchant_amount, tx_details, msg_fn)):
+            self._Deposit(merchant, merchant_amount, deposit_entry, msg_fn)):
           amount_paid += merchant_amount
         else:
           success = False
     return success
 
-  def _Deposit(self, user, num_coins, tx_details, msg_fn):
+  def _Deposit(self, user: user_pb2.User, num_coins: int,
+               entry: bank_pb2.LedgerEntry, msg_fn) -> bool:
     """Adds num_coins to user's balance.
 
     Args:
-      user: {string} name of account into which to deposit.
-      num_coins: {int} number of hype coins to deposit.
-      tx_details: {dict} details of transaction.
+      user: User of account into which to deposit.
+      num_coins: Number of hype coins to deposit.
+      entry: Details of transaction.
       msg_fn: {callable(channel, msg)} function to send messages.
 
     Returns:
-      {boolean} whether deposit was successful.
+      Whether deposit was successful.
     """
     if num_coins < 0:
       logging.error('Deposit called with negative value: %s, %s', user,
                     num_coins)
       return False
 
-    tx_details['type'] = 'deposit'
-    tx_name = 'CREDIT %s %s' % (num_coins, user)
+    entry.amount = num_coins
+    tx_name = 'CREDIT %s %s' % (num_coins, user.user_id)
     self._store.RunInTransaction(
-        self._BankTransaction, user, num_coins, tx_details, tx_name=tx_name)
+        self._BankTransaction, user, num_coins, entry, tx_name=tx_name)
     if msg_fn:
-      msg_fn(user, '%s deposited into your account. (%s)' %
-             (util_lib.FormatHypecoins(num_coins),
-              tx_details.get('details', '')))
+      msg_fn(
+          user, '%s deposited into your account. (%s)' %
+          (util_lib.FormatHypecoins(num_coins), entry.details))
     # TODO: Maybe fix returns now that RunInTransaction can throw.
     return True
 
-  def _Withdraw(self, user, num_coins, tx_details, msg_fn, can_overdraft=False):
+  def _Withdraw(self,
+                user: user_pb2.User,
+                num_coins: int,
+                entry: bank_pb2.LedgerEntry,
+                msg_fn,
+                can_overdraft: bool = False) -> bool:
     """Subtracts num_coins from user's balance.
 
     Args:
-      user: {string} name of account from which to withdraw.
-      num_coins: {int} number of hype coins to withdraw.
-      tx_details: {dict} details of transaction.
+      user: User of account from which to withdraw.
+      num_coins: Number of hype coins to withdraw.
+      entry: Details of transaction.
       msg_fn: {callable(channel, msg)} function to send messages.
-      can_overdraft: {boolean} whether it is possible to overdraft the account.
-        If True, the account balance can go negative and no fees will be
-        charged. If False, the transaction will fail and an overdraft fee will
-        be assessed if there are insufficient funds for the transaction.
+      can_overdraft: Whether it is possible to overdraft the account. If True,
+        the account balance can go negative and no fees will be charged. If
+        False, the transaction will fail and an overdraft fee will be assessed
+        if there are insufficient funds for the transaction.
 
     Returns:
-      {boolean} whether withdrawal was successful.
+      Whether withdrawal was successful.
     """
     if num_coins < 0:
       logging.error('Withdraw called with negative value: %s, %s', user,
@@ -669,30 +684,39 @@ class Bank(object):
         overdraft_fee = max(self._MIN_OVERDRAFT_FEE,
                             int(balance * self._MAX_OVERDRAFT_FEE_PERCENT))
         self.ProcessPayment(
-            user, FEE_ACCOUNT, overdraft_fee, 'Overdraft fee', msg_fn,
+            user,
+            FEE_ACCOUNT,
+            overdraft_fee,
+            'Overdraft fee',
+            msg_fn,
             can_overdraft=True)
         return False
 
-      tx_details['type'] = 'withdrawal'
-      tx_name = 'DEBIT %s %s' % (num_coins, user)
+      entry.amount = -num_coins
+      tx_name = 'DEBIT %s %s' % (num_coins, user.user_id)
       self._store.RunInTransaction(
-          self._BankTransaction,
-          user, (-1 * num_coins),
-          tx_details,
-          tx_name=tx_name)
+          self._BankTransaction, user, -num_coins, entry, tx_name=tx_name)
       if msg_fn:
-        msg_fn(user, '%s withdrawn from your account. (%s)' %
-               (util_lib.FormatHypecoins(num_coins),
-                tx_details.get('details', '')))
+        msg_fn(
+            user, '%s withdrawn from your account. (%s)' %
+            (util_lib.FormatHypecoins(num_coins), entry.details))
     # TODO: Maybe fix returns now that RunInTransaction can throw.
     return True
 
-  def _BankTransaction(self, user, delta, tx_details, tx=None):
+  def _BankTransaction(self,
+                       user: user_pb2.User,
+                       delta: int,
+                       entry: bank_pb2.LedgerEntry,
+                       tx=None):
     """Executes a hypecoin balance update, storing details in a log."""
     try:
-      self._store.UpdateValue(user, self._BALANCE_SUBKEY, delta, tx)
-      self._store.PrependValue(user, self._TRANSACTION_SUBKEY, tx_details,
-                               max_length=20, tx=tx)
+      self._store.UpdateValue(user.user_id, self._BALANCE_SUBKEY, delta, tx)
+      self._store.PrependValue(
+          user.user_id,
+          self._TRANSACTION_SUBKEY,
+          json_format.MessageToDict(entry),
+          max_length=20,
+          tx=tx)
     except Exception as e:
-      logging.error('BankTransaction failed: %s', tx_details)
+      logging.error('BankTransaction failed: %s', entry)
       raise e
