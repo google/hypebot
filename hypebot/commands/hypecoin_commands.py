@@ -228,7 +228,7 @@ class HCForbesCommand(command_lib.BaseCommand):
         prev_balance = balance
       responses.append('#{}: {:>6} - {}'.format(
           position, util_lib.FormatHypecoins(balance, abbreviate=True),
-          user.display_name))
+          user.display_name if user else user_id))
     return responses
 
 
