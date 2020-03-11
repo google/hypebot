@@ -386,7 +386,7 @@ class HCTransactionsCommand(command_lib.BaseCommand):
     for tx in recent_transactions[:5]:
       amount = util_lib.FormatHypecoins(tx.amount)
       if tx.amount < 0:
-        amount = util_lib.Colorize(f'-{amount}', 'red')
+        amount = util_lib.Colorize(f'{amount}', 'red')
         direction = 'to'
       elif tx.amount > 0:
         amount = util_lib.Colorize(f'+{amount}', 'green')

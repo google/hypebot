@@ -114,8 +114,8 @@ class Thievery(object):
       msg_fn(None, 'You cannot milk a dead cow.')
       return
 
-    thief_alert = self._GetPDF('thief')[thief]
-    victim_alert = self._GetPDF('victim')[victim]
+    thief_alert = self._GetPDF('thief')[thief.user_id]
+    victim_alert = self._GetPDF('victim')[victim.user_id]
     offset = self._BASE_BALANCE_PERCENT * (1 - thief_alert - victim_alert)
     failure_chance = self._Sigmoid(amount / victim_balance, offset)
 
@@ -184,8 +184,8 @@ class Thievery(object):
                              tx)
 
   def _UpdateScores(self, thief, victim, amount, tx=None):
-    self._AddToScore('thief', thief, amount, tx)
-    self._AddToScore('victim', victim, amount, tx)
+    self._AddToScore('thief', thief.user_id, amount, tx)
+    self._AddToScore('victim', victim.user_id, amount, tx)
     return True
 
   def _DecayAllScores(self, tx=None):
