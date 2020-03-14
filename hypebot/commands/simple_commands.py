@@ -504,7 +504,7 @@ class VersionCommand(command_lib.BaseCommand):
         self._core.name, self._core.params.version, self._core.name)
 
 
-@command_lib.CommandRegexParser(r'webdev(:? (P<statement>.*))?')
+@command_lib.CommandRegexParser(r'webdev(?: (?P<statement>.*))?')
 class WebsiteDevelopmentCommand(command_lib.BaseCommand):
   """Meme on what was said about Google building a website for COVID-19."""
 
