@@ -502,3 +502,15 @@ class VersionCommand(command_lib.BaseCommand):
               user: user_pb2.User) -> hype_types.CommandResponse:
     return '%s(c) Version %s. #%sVersionHype' % (
         self._core.name, self._core.params.version, self._core.name)
+
+
+@command_lib.CommandRegexParser(r'webdev(:? (P<statement>.*))?')
+class WebsiteDevelopmentCommand(command_lib.BaseCommand):
+  """Meme on what was said about Google building a website for COVID-19."""
+
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              statement: Optional[Text]) -> hype_types.CommandResponse:
+    if not statement:
+      statement = 'very quickly done'
+    return ('Google is helping to develop a website that\'s going to be %s, '
+            'unlike websites of the past.') % statement
