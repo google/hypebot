@@ -132,9 +132,11 @@ class Thievery(object):
       self._DistributeToPastVictims(msg_fn)
       if (rob_attempt_score < failure_chance * thief_alert /
           (thief_alert + victim_alert + 1e-6)):
-        msg_fn(None, '%s is a known thief and was caught.' % thief)
+        msg_fn(None, '%s is a known thief and was caught.' % thief.display_name)
       else:
-        msg_fn(None, '%s is on high alert and caught %s.' % (victim, thief))
+        msg_fn(
+            None, '%s is on high alert and caught %s.' %
+            (victim.display_name, thief.display_name))
       return
 
     # TODO: Fold ProcessPayment into the UpdateScores tx.
@@ -144,10 +146,13 @@ class Thievery(object):
                                  msg_fn):
       self._store.RunInTransaction(self._UpdateScores, thief, victim, amount)
       formatted_amount = util_lib.FormatHypecoins(amount)
-      msg_fn(None, '%s stole %s from %s' % (thief, formatted_amount, victim))
+      msg_fn(
+          None, '%s stole %s from %s' %
+          (thief.display_name, formatted_amount, victim.display_name))
       # We privmsg the victim to make sure they know who stole their hypecoins.
-      msg_fn(victim,
-             'You\'ve been robbed! %s stole %s' % (thief, formatted_amount))
+      msg_fn(
+          victim, 'You\'ve been robbed! %s stole %s' %
+          (thief.display_name, formatted_amount))
 
   def _Sigmoid(self, value, offset, scale=200.0):
     return 1 / (1 + math.exp(-scale * (value - offset)))
@@ -211,7 +216,7 @@ class Thievery(object):
     scholarship_balance = self._bank.GetBalance(SCHOLARSHIP_ACCOUNT)
     self._bank.ProcessPayment(
         SCHOLARSHIP_ACCOUNT,
-        victim_scores.keys(),
+        [user_pb2.User(user_id=v) for v in victim_scores.keys()],
         scholarship_balance,
         'Victim scholarship fund',
         msg_fn,
