@@ -39,10 +39,11 @@ from hypebot.protos import user_pb2
 import six
 
 _HC_PREFIX = r'(?:h(?:ype)?c(?:oins?)?|₡)'
+_NICK_RE = r'(?P<target_user>[a-zA-Z_]\w*)'
 
 
 @command_lib.CommandRegexParser(r'%s balance ?(?P<target_user>.*)' % _HC_PREFIX)
-@command_lib.RegexParser(r'()(\S+)\?\?(?:[\s,.!?]|$)')
+@command_lib.RegexParser(r'%s\?\?(?:[\s,.!?]|$)' % _NICK_RE)
 class HCBalanceCommand(command_lib.BaseCommand):
   """How much cash does a user have?"""
 
@@ -232,15 +233,12 @@ class HCForbesCommand(command_lib.BaseCommand):
     return responses
 
 
-NICK_RE = r'(?P<target_user>[a-zA-Z_]\w*)'
-
-
 # TODO: Make .*++ not handle on dev.
 @command_lib.CommandRegexParser(
     r'(?:%s )?(?:gift|give) (?P<target_user>.+) (?P<amount_str>.+?)' %
     _HC_PREFIX)
-@command_lib.RegexParser(r'%s(?:\+\+|\s+rocks)(?:[\s,.!?]|$)' % NICK_RE)
-@command_lib.RegexParser(r'(?i)gg <3 %s' % NICK_RE)
+@command_lib.RegexParser(r'%s(?:\+\+|\s+rocks)(?:[\s,.!?]|$)' % _NICK_RE)
+@command_lib.RegexParser(r'(?i)gg <3 %s' % _NICK_RE)
 class HCGiftCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
@@ -329,7 +327,7 @@ class HCResetCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(
     r'(?:%s )?(?:rob) (?P<target_user>.+) (?P<amount_str>.+?)' % _HC_PREFIX)
-@command_lib.RegexParser(r'%s(?:--|\s+sucks)(?:[\s,.!?]|$)' % NICK_RE)
+@command_lib.RegexParser(r'%s(?:--|\s+sucks)(?:[\s,.!?]|$)' % _NICK_RE)
 class HCRobCommand(command_lib.BaseCommand):
   """Like taking candy from a baby."""
 
