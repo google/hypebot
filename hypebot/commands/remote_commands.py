@@ -23,6 +23,7 @@ import arrow
 
 from hypebot import hype_types
 from hypebot.commands import command_lib
+from hypebot.core import inflect_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
@@ -172,6 +173,40 @@ class StocksCommand(command_lib.BaseCommand):
     elif change < 0:
       change_str = util_lib.Colorize('⬇%s' % change_str, 'red')
     return change_str
+
+
+@command_lib.CommandRegexParser(r'(?:virus|covid|corona(?:virus)?)[- ]?(.+)?')
+class VirusCommand(command_lib.BaseCommand):
+  """How bad is it now?"""
+
+  _API_URL = 'https://covidtracking.com/api/'
+
+  def _Handle(self, unused_channel, unused_user, region):
+    params = {}
+    endpoint = 'us'
+    if region:
+      region = region.upper()
+      endpoint = 'states'
+      params['state'] = region
+    raw_results = self._core.proxy.FetchJson(self._API_URL + endpoint, params)
+    if not raw_results:
+      return 'Unknown region, maybe everyone should move there.'
+
+    if isinstance(raw_results, list):
+      raw_results = raw_results[0]
+    deaths, descriptor = inflect_lib.Plural(raw_results['death'],
+                                            'death').split()
+    death_str = '{:,} {}'.format(int(deaths), descriptor)
+
+    cases, descriptor = inflect_lib.Plural(raw_results['positive'],
+                                           'confirmed cases').split(maxsplit=1)
+    case_str = '{:,} {}'.format(int(cases), descriptor)
+
+    tests, descriptor = inflect_lib.Plural(raw_results['total'], 'test').split()
+    test_str = '{:,} {}'.format(int(tests), descriptor)
+
+    return '%s has %s (%s) with %s administered.' % (
+        region or 'The US', case_str, death_str, test_str)
 
 
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')

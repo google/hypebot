@@ -205,6 +205,7 @@ def SafeUrl(url, params=None):
   if m:
     url = ''.join((url.split(m.group(1))[0], '<redacted>'))
   if params:
+    url += '?'
     params = copy.copy(params)
     for key in ('api-key', 'api_key'):
       if key in params:

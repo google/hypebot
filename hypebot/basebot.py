@@ -129,6 +129,7 @@ class BaseBot(object):
           'StoryCommand': {},
           'SubCommand': {},
           'VersionCommand': {},
+          'VirusCommand': {},
           'WebsiteDevelopmentCommand': {},
           'WordCountCommand': {},
           # Hypecoins
