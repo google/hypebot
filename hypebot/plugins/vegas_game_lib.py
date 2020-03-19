@@ -199,9 +199,9 @@ class StockGame(GameBase):
                 'whims of hedge fund managers!') %
                util_lib.FormatHypecoins(winners[user_id]))
 
-      return ([
-          (users_by_id[user_id], amount) for user_id, amount in winners.items()
-      ], {}, notifications)
+    return ([
+        (users_by_id[user_id], amount) for user_id, amount in winners.items()
+    ], {}, notifications)
 
 
 class LCSGame(GameBase):
@@ -340,9 +340,9 @@ class LCSGame(GameBase):
               len(msgs), 'pleb'), util_lib.FormatHypecoins(pool_value))
       ] + msgs
 
-      return ([
-          (users_by_id[user_id], amount) for user_id, amount in winners.items()
-      ], unused_bets, notifications)
+    return ([
+        (users_by_id[user_id], amount) for user_id, amount in winners.items()
+    ], unused_bets, notifications)
 
 
 class LotteryGame(GameBase):
