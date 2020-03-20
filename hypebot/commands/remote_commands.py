@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from absl import logging
 import arrow
 
 from hypebot import hype_types
@@ -182,27 +183,34 @@ class VirusCommand(command_lib.BaseCommand):
   _API_URL = 'https://covidtracking.com/api/'
 
   def _Handle(self, unused_channel, unused_user, region):
-    params = {}
     endpoint = 'us'
     if region:
       region = region.upper()
       endpoint = 'states'
-      params['state'] = region
-    raw_results = self._core.proxy.FetchJson(self._API_URL + endpoint, params)
+    raw_results = self._core.proxy.FetchJson(self._API_URL + endpoint)
+    logging.info('CovidAPI raw_result: %s', raw_results)
     if not raw_results:
       return 'Unknown region, maybe everyone should move there.'
 
-    if isinstance(raw_results, list):
-      raw_results = raw_results[0]
-    deaths, descriptor = inflect_lib.Plural(raw_results['death'],
+    state_data = {}
+    if len(raw_results) == 1:
+      state_data = raw_results[0]
+    else:
+      state_data = [state for state in raw_results
+                    if state.get('state') == region][0]
+
+    if not state_data:
+      return 'Unknown region, maybe everyone should move there.'
+    deaths, descriptor = inflect_lib.Plural(state_data['death'] or 0,
                                             'death').split()
     death_str = '{:,} {}'.format(int(deaths), descriptor)
 
-    cases, descriptor = inflect_lib.Plural(raw_results['positive'],
+    cases, descriptor = inflect_lib.Plural(state_data['positive'] or 0,
                                            'confirmed cases').split(maxsplit=1)
     case_str = '{:,} {}'.format(int(cases), descriptor)
 
-    tests, descriptor = inflect_lib.Plural(raw_results['total'], 'test').split()
+    tests, descriptor = inflect_lib.Plural(state_data['total'] or 0,
+                                           'test').split()
     test_str = '{:,} {}'.format(int(tests), descriptor)
 
     return '%s has %s (%s) with %s administered.' % (
