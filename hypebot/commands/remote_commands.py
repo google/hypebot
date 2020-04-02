@@ -19,6 +19,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import random
+
 from absl import logging
 import arrow
 
@@ -27,6 +29,7 @@ from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
+from hypebot.plugins import population_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
 from hypebot.protos import channel_pb2
@@ -95,6 +98,36 @@ class NewsCommand(command_lib.BaseCommand):
           ]))
 
     return card
+
+
+@command_lib.CommandRegexParser(r'pop(?:ulation)?\s*(.*)')
+class PopulationCommand(command_lib.BaseCommand):
+  """Returns populations for queried regions."""
+
+  def __init__(self, *args, **kwargs):
+    super(PopulationCommand, self).__init__(*args, **kwargs)
+    self._pop_lib = population_lib.PopluationLib(self._core.proxy)
+
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              query: Text) -> hype_types.CommandResponse:
+    if not query:
+      return ['usage: %spopulation [region_id]' % self.command_prefix,
+              ('Population data is provided by The World Bank, US Census '
+               'Bureau, and viewers like you.')]
+
+    region_name = self._pop_lib.GetNameForRegion(query)
+    if not region_name:
+      return 'I don\'t know where that is, so I\'ll say {:,} or so.'.format(
+          random.randint(1, self._pop_lib.GetPopulation('world')))
+
+    provider_str = 'Source: %s' % 'US Census Bureau' if self._pop_lib.IsUSState(
+        query) else 'The World Bank'
+    return message_pb2.Card(fields=[
+        message_pb2.Card.Field(
+            text='{} has a population of {:,}'.format(
+                region_name, self._pop_lib.GetPopulation(query)),
+            title=provider_str)
+    ])
 
 
 @command_lib.CommandRegexParser(r'stocks?(?: (.*))?')

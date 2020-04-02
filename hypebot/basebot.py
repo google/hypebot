@@ -112,6 +112,7 @@ class BaseBot(object):
           'MissingPingCommand': {},
           'NewsCommand': {},
           'OrRiotCommand': {},
+          'PopulationCommand': {},
           'PreferencesCommand': {},
           'PrideAndAccomplishmentCommand': {},
           'RageCommand': {},
