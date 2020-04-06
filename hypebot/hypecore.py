@@ -35,6 +35,7 @@ from hypebot.plugins import coin_lib
 from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
 from hypebot.plugins import inventory_lib
+from hypebot.plugins import population_lib
 from hypebot.protos import channel_pb2
 from hypebot.protos import user_pb2
 from hypebot.proxies import proxy_factory
@@ -266,6 +267,7 @@ class Core(object):
     self.hypestacks = hypestack_lib.HypeStacks(self.store, self.bank,
                                                self.Reply)
     self.news = news_factory.CreateFromParams(self.params.news, self.proxy)
+    self.population = population_lib.PopulationLib(self.proxy)
     self.betting_games = []
     self.last_command = None
     self.default_channel = self.params.default_channel

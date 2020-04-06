@@ -27,7 +27,7 @@ from hypebot.proxies import proxy_lib
 _DATA_URL = 'https://api.worldbank.org/v2/country/all/indicator/SP.POP.TOTL'
 
 
-class PopluationLib():
+class PopulationLib():
   """Class that serves up populations for various geographical regions."""
 
   # There are APIs for this, but for now hard-coded values are ok.

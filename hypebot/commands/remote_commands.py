@@ -29,7 +29,6 @@ from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
-from hypebot.plugins import population_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.plugins import weather_lib
 from hypebot.protos import channel_pb2
@@ -104,29 +103,30 @@ class NewsCommand(command_lib.BaseCommand):
 class PopulationCommand(command_lib.BaseCommand):
   """Returns populations for queried regions."""
 
-  def __init__(self, *args, **kwargs):
-    super(PopulationCommand, self).__init__(*args, **kwargs)
-    self._pop_lib = population_lib.PopluationLib(self._core.proxy)
-
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               query: Text) -> hype_types.CommandResponse:
     if not query:
-      return ['usage: %spopulation [region_id]' % self.command_prefix,
-              ('Population data is provided by The World Bank, US Census '
-               'Bureau, and viewers like you.')]
+      return message_pb2.Card(
+          header=message_pb2.Card.Header(
+              title='usage: %spopulation [region_id]' % self.command_prefix),
+          fields=[
+              message_pb2.Card.Field(
+                  text=('Population data is provided by The World Bank, the US '
+                        'Census Bureau, and viewers like you.'))
+          ])
 
-    region_name = self._pop_lib.GetNameForRegion(query)
+    region_name = self._core.population.GetNameForRegion(query)
     if not region_name:
       return 'I don\'t know where that is, so I\'ll say {:,} or so.'.format(
-          random.randint(1, self._pop_lib.GetPopulation('world')))
+          random.randint(1, self._core.population.GetPopulation('world')))
 
-    provider_str = 'Source: %s' % 'US Census Bureau' if self._pop_lib.IsUSState(
+    provider = 'US Census Bureau' if self._core.population.IsUSState(
         query) else 'The World Bank'
     return message_pb2.Card(fields=[
         message_pb2.Card.Field(
             text='{} has a population of {:,}'.format(
-                region_name, self._pop_lib.GetPopulation(query)),
-            title=provider_str)
+                region_name, self._core.population.GetPopulation(query)),
+            title='Source: %s' % provider)
     ])
 
 
@@ -220,6 +220,7 @@ class VirusCommand(command_lib.BaseCommand):
     if region:
       region = region.upper()
       endpoint = 'states'
+    region = region or 'USA'
     raw_results = self._core.proxy.FetchJson(self._API_URL + endpoint)
     logging.info('CovidAPI raw_result: %s', raw_results)
     if not raw_results:
@@ -244,7 +245,10 @@ class VirusCommand(command_lib.BaseCommand):
 
     tests, descriptor = inflect_lib.Plural(state_data['total'] or 0,
                                            'test').split()
-    test_str = '{:,} {}'.format(int(tests), descriptor)
+    population = self._core.population.GetPopulation(region)
+    percent_tested = float(tests) / population
+    test_str = '{:,} [{:.1%} of the population] {}'.format(
+        int(tests), percent_tested, descriptor)
 
     return '%s has %s (%s) with %s administered.' % (
         region or 'The US', case_str, death_str, test_str)
