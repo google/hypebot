@@ -209,13 +209,14 @@ class StocksCommand(command_lib.BaseCommand):
     return change_str
 
 
-@command_lib.CommandRegexParser(r'(?:virus|covid|corona(?:virus)?)[- ]?(.+)?')
+@command_lib.CommandRegexParser(
+    r'(?:virus|covid|corona(?:virus)?)(full)?[- ]?(.+)?')
 class VirusCommand(command_lib.BaseCommand):
   """How bad is it now?"""
 
   _API_URL = 'https://covidtracking.com/api/'
 
-  def _Handle(self, unused_channel, unused_user, region):
+  def _Handle(self, unused_channel, unused_user, detailed, region):
     endpoint = 'us'
     if region:
       region = region.upper()
@@ -235,23 +236,73 @@ class VirusCommand(command_lib.BaseCommand):
 
     if not state_data:
       return 'Unknown region, maybe everyone should move there.'
-    deaths, descriptor = inflect_lib.Plural(state_data['death'] or 0,
-                                            'death').split()
+
+    # Raw data
+    cases = state_data.get('positive', 0)
+    tests = state_data.get('totalTestResults', 0)
+    hospitalized = state_data.get('hospitalizedCurrently', 0)
+    ventilators = state_data.get('onVentilatorCurrently', 0)
+    icu_patients = state_data.get('inIcuCurrently', 0)
+    deaths = state_data.get('death', 0)
+    population = self._core.population.GetPopulation(region)
+    if detailed:
+      fields = []
+      if cases:
+        fields.append(self._InfoField('Confirmed cases', cases, population))
+      if tests:
+        fields.append(self._InfoField('Tests administered', tests, population))
+      if hospitalized:
+        fields.append(self._InfoField('Hospitalized', hospitalized, population))
+      if icu_patients:
+        fields.append(self._InfoField('ICU patients', icu_patients, population))
+      if ventilators:
+        fields.append(
+            self._InfoField('Ventilators in use', ventilators, population))
+      if deaths:
+        fields.append(self._InfoField('Deaths', deaths, population))
+
+      update_time = state_data.get('dateChecked') or state_data.get(
+          'lastModified')
+      update_time_str = 'some time'
+      if update_time:
+        update_timedelta = arrow.utcnow() - arrow.get(update_time)
+        update_time_str = util_lib.TimeDeltaToHumanDuration(update_timedelta)
+
+      fields.append(
+          message_pb2.Card.Field(buttons=[
+              message_pb2.Card.Field.Button(
+                  text='Source', action_url='https://covidtracking.com/')
+          ]))
+      return message_pb2.Card(
+          header=message_pb2.Card.Header(
+              title='%s COVID-19 Statistics' %
+              self._core.population.GetNameForRegion(region),
+              subtitle='Updated %s ago' % update_time_str),
+          fields=fields,
+          visible_fields_count=4)
+
+    deaths, descriptor = inflect_lib.Plural(deaths, 'death').split()
     death_str = '{:,} {}'.format(int(deaths), descriptor)
 
-    cases, descriptor = inflect_lib.Plural(state_data['positive'] or 0,
+    cases, descriptor = inflect_lib.Plural(cases,
                                            'confirmed cases').split(maxsplit=1)
     case_str = '{:,} {}'.format(int(cases), descriptor)
 
-    tests, descriptor = inflect_lib.Plural(state_data['total'] or 0,
-                                           'test').split()
-    population = self._core.population.GetPopulation(region)
+    tests, descriptor = inflect_lib.Plural(tests, 'test').split()
     percent_tested = float(tests) / population
     test_str = '{:,} [{:.1%} of the population] {}'.format(
         int(tests), percent_tested, descriptor)
 
     return '%s has %s (%s) with %s administered.' % (
         region or 'The US', case_str, death_str, test_str)
+
+  def _InfoField(self, title, value, population=None):
+    value_str = '{:,}'.format(value)
+    if population:
+      percent = float(value) / population
+      if percent >= 0.0005:
+        value_str += ' [{:.1%} of the population]'.format(percent)
+    return message_pb2.Card.Field(title=title, text=value_str)
 
 
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')
