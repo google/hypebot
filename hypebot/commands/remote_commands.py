@@ -81,7 +81,11 @@ class NewsCommand(command_lib.BaseCommand):
             title=header_text, image=self._core.news.icon),
         visible_fields_count=6)
 
-    for article in raw_results:
+    sorted_results = sorted(
+        raw_results,
+        key=lambda x: x.get('pub_date', arrow.get(0)),
+        reverse=True)
+    for article in sorted_results:
       field = message_pb2.Card.Field(text=article['title'])
       if article.get('pub_date'):
         field.title = 'Published %s ago' % util_lib.TimeDeltaToHumanDuration(
