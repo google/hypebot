@@ -140,5 +140,25 @@ class WeightedCollectionTest(unittest.TestCase):
 
     self.assertTrue(all(v == 0.2 for v in c._prob_table.values()))
 
+  def testInitalWeights_areUsed(self):
+    choices = ['a', 'b', 'c', 'd']
+    weights = [4, 3, 2, 1]
+    total_weight = sum(weights)
+    expected_weights = [x / total_weight for x in weights]
+
+    c = util_lib.WeightedCollection(choices, weights)
+
+    self.assertCountEqual(c._prob_table.values(), expected_weights)
+
+  def testInitialWeights_omittedWeightsAreSetToOne(self):
+    choices = ['a', 'b', 'c']
+    weights = (50, 49)
+    expected_weights = (0.5, 0.49, 0.01)
+
+    c = util_lib.WeightedCollection(choices, weights)
+
+    self.assertCountEqual(c._prob_table.values(), expected_weights)
+
+
 if __name__ == '__main__':
   unittest.main()

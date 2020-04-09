@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 
 import copy
 import datetime
+import itertools
 import math
 import random
 import re
@@ -217,8 +218,11 @@ def SafeUrl(url, params=None):
 class WeightedCollection(object):
   """A thread-safe collection of choices and associated weights."""
 
-  def __init__(self, items: Iterable[Text]):
-    self._prob_table = {i: 1.0 for i in items}
+  def __init__(self, items: Iterable[Text],
+               initial_weights: Optional[Iterable[float]] = None):
+    initial_weights = initial_weights or []
+    self._prob_table = {i: w for i, w in itertools.zip_longest(
+        items, initial_weights, fillvalue=1.0)}
     self._prob_table_lock = threading.RLock()
     self._NormalizeProbs()
 
