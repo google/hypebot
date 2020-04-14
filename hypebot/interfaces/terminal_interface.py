@@ -148,6 +148,10 @@ class TerminalInterface(interface_lib.BaseChatInterface):
   def Topic(self, channel, new_topic):
     print('TOPIC\n%s\n%s' % (channel, new_topic))
 
+  def FindUser(self, query):
+    """Override of parent FindUser since users are faked in the terminal."""
+    return user_pb2.User(display_name=query, user_id=query)
+
   def _TranslateColors(self, message):
     lines = []
     for msg in message.messages:
