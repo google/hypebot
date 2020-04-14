@@ -101,7 +101,7 @@ class WeightedCollectionTest(unittest.TestCase):
     i = c.GetItem()
 
     self.assertEqual(i, 'a')
-    self.assertEqual(c._prob_table[i], 1.0)
+    self.assertEqual(c.GetWeight(i), 1.0)
 
   def testInitialProbabilities(self):
     c = util_lib.WeightedCollection(['a', 'b', 'c', 'd'])
@@ -117,10 +117,10 @@ class WeightedCollectionTest(unittest.TestCase):
     r = c.GetAndDownweightItem()
 
     self.assertEqual(r, 'b')
-    self.assertGreater(c._prob_table['a'], initial_weight)
-    self.assertLess(c._prob_table['b'], initial_weight)
-    self.assertGreater(c._prob_table['c'], initial_weight)
-    self.assertGreater(c._prob_table['d'], initial_weight)
+    self.assertGreater(c.GetWeight('a'), initial_weight)
+    self.assertLess(c.GetWeight('b'), initial_weight)
+    self.assertGreater(c.GetWeight('c'), initial_weight)
+    self.assertGreater(c.GetWeight('d'), initial_weight)
     self.assertAlmostEqual(sum(c._prob_table.values()), 1.0)
 
   def testModifyWeight_usesUpdateFn(self):
@@ -159,6 +159,30 @@ class WeightedCollectionTest(unittest.TestCase):
 
     self.assertCountEqual(c._prob_table.values(), expected_weights)
 
+  def testFreeze_locksProbabilityTable_fromGetAndDownweightItem(self):
+    c = util_lib.WeightedCollection([])
+    c.Freeze()
+
+    with self.assertRaises(RuntimeError):
+      c.GetAndDownweightItem()
+
+  def testFreeze_locksProbabilityTable_fromModifyWeight(self):
+    c = util_lib.WeightedCollection(['x'])
+    c.Freeze()
+
+    with self.assertRaises(RuntimeError):
+      c.ModifyWeight('a', lambda x: x)
+
+  def testFreeze_doesNotRestrictGets(self):
+    item = 'x'
+    c = util_lib.WeightedCollection([item])
+    c.Freeze()
+
+    i = c.GetItem()
+    w = c.GetWeight(i)
+
+    self.assertEqual(i, item)
+    self.assertEqual(w, 1.0)
 
 if __name__ == '__main__':
   unittest.main()

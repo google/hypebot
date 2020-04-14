@@ -224,7 +224,18 @@ class WeightedCollection(object):
     self._prob_table = {i: w for i, w in itertools.zip_longest(
         items, initial_weights, fillvalue=1.0)}
     self._prob_table_lock = threading.RLock()
+    self._frozen = False
     self._NormalizeProbs()
+
+  def Freeze(self):
+    """If called, locks the probability table.
+
+    Useful when the collection is meant to be only used via GetItem. Future
+    calls to either GetAndDownweightItem or ModifyWeight will raise a
+    RuntimeError.
+    """
+    with self._prob_table_lock:
+      self._frozen = True
 
   def GetItem(self) -> Text:
     """Returns an item at random (biased by associated weights)."""
@@ -238,6 +249,10 @@ class WeightedCollection(object):
       if r < total:
         return item
 
+  def GetWeight(self, item: Text) -> Optional[float]:
+    """Returns item's weight or None if item is not found."""
+    return self._prob_table.get(item)
+
   def GetAndDownweightItem(self) -> Text:
     """Returns a random item while increasing the weight of every other item.
 
@@ -246,11 +261,18 @@ class WeightedCollection(object):
 
     Returns:
       A random item from the collection.
+
+    Raises:
+      RuntimeError: If the collection is frozen.
     """
     r = random.random()
     total = 0
     selection = None
     with self._prob_table_lock:
+      if self._frozen:
+        raise RuntimeError(
+            'Collection is frozen, probabilities can\'t be modified')
+
       weight_addition = 1 / len(self._prob_table)
       for item, weight in self._prob_table.items():
         total += weight
@@ -278,9 +300,13 @@ class WeightedCollection(object):
       The updated weight for item.
 
     Raises:
-      KeyError if item is not already in the collection.
+      KeyError: If item is not already in the collection.
+      RuntimeError: If the collection is frozen.
     """
     with self._prob_table_lock:
+      if self._frozen:
+        raise RuntimeError(
+            'Collection is frozen, probabilities can\'t be modified')
       cur_weight = self._prob_table[item]
       new_weight = update_fn(cur_weight)
       self._prob_table[item] = new_weight
@@ -289,6 +315,9 @@ class WeightedCollection(object):
 
   def _NormalizeProbs(self):
     with self._prob_table_lock:
+      if self._frozen:
+        raise RuntimeError(
+            'Collection is frozen, probabilities can\'t be modified')
       normalize_denom = sum(self._prob_table.values())
       self._prob_table = {
           k: v / normalize_denom for k, v in self._prob_table.items()
