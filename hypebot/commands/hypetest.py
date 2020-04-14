@@ -53,6 +53,11 @@ class BaseCommandTestCase(unittest.TestCase):
       'interface': {
           'type': 'CaptureInterface',
       },
+      'proxy': {
+          # Tests are often run in an environment with no external access, so we
+          # provide a fake Proxy.
+          'type': 'EmptyProxy',
+      },
       'storage': {
           'type': 'MemStore',
           'cached_type': 'MemStore',
@@ -85,6 +90,10 @@ class BaseCommandTestCase(unittest.TestCase):
         self.BOT_PARAMS.interface)
     self.core = hypecore.Core(self.BOT_PARAMS, self.interface)
     # We disable ratelimiting for tests.
-    self.command = self._command_cls({'ratelimit': {
-        'enabled': False
-    }}, self.core)
+    self.command = self._command_cls(
+        {
+            'ratelimit': {
+                'enabled': False
+            },
+            'target_any': True
+        }, self.core)
