@@ -143,6 +143,10 @@ class BaseBot(object):
           'HCResetCommand': {},
           'HCRobCommand': {},
           'HCTransactionsCommand': {},
+          # HypeCoffee
+          'DrinkCoffeeCommand': {},
+          'FindCoffeeCommand': {},
+          'CoffeeStashCommand': {},
           # Deployment
           'BuildCommand': {},
           'DeployCommand': {},

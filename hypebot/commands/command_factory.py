@@ -25,6 +25,7 @@ from hypebot.core import factory_lib
 # Importing commands before constructing the factory.
 import hypebot.commands.bash_commands
 import hypebot.commands.bling_commands
+import hypebot.commands.coffee_commands
 import hypebot.commands.deploy_commands
 import hypebot.commands.hypecoin_commands
 import hypebot.commands.hypestack_commands
