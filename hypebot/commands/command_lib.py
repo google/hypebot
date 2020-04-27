@@ -517,7 +517,7 @@ class TextCommand(BaseCommand):
     if self._choices:
       item = self._choices.GetAndDownweightItem()
       if '{person}' in item:
-        item = item.format(item, person=user)
+        item = item.format(item, person=user.display_name)
       if item.startswith('/me '):
         item = '%s %s' % (self._core.params.name, item[4:])
       return item
