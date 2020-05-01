@@ -133,7 +133,7 @@ class CoffeeLib:
     if not tx:
       return self._store.RunInTransaction(self.DrinkCoffee, user)
     user_data = self.GetCoffeeData(user, tx)
-    if user_data == StatusCode.NOT_FOUND or not user_data.beans:
+    if not user_data.beans:
       return StatusCode.NOT_FOUND
 
     bean = user_data.beans.pop(random.randint(0, len(user_data.beans) - 1))
@@ -152,9 +152,6 @@ class CoffeeLib:
     if not tx:
       return self._store.RunInTransaction(self.FindBeans, user)
     user_data = self.GetCoffeeData(user, tx)
-    if user_data == StatusCode.NOT_FOUND:
-      user_data = coffee_pb2.CoffeeData()
-      user_data.CopyFrom(self._DEFAULT_COFFEE_DATA)
     if user_data.energy <= 0:
       return StatusCode.RESOURCE_EXHAUSTED
     if len(user_data.beans) > self._params.bean_storage_limit:
@@ -190,12 +187,14 @@ class CoffeeLib:
       self,
       user: user_pb2.User,
       tx: Optional[storage_lib.HypeTransaction] = None
-  ) -> Union[StatusCode, coffee_pb2.CoffeeData]:
-    """Returns user_data for user."""
+  ) -> coffee_pb2.CoffeeData:
+    """Returns user_data for user, or the default data if user is not found."""
     serialized_data = self._store.GetJsonValue(user.user_id, self._SUBKEY, tx)
-    if not serialized_data:
-      return StatusCode.NOT_FOUND
-    return json_format.Parse(serialized_data, coffee_pb2.CoffeeData())
+    if serialized_data:
+      return json_format.Parse(serialized_data, coffee_pb2.CoffeeData())
+    coffee_data = coffee_pb2.CoffeeData()
+    coffee_data.CopyFrom(self._DEFAULT_COFFEE_DATA)
+    return coffee_data
 
   def _SetCoffeeData(self,
                      user: user_pb2.User,
@@ -203,3 +202,30 @@ class CoffeeLib:
                      tx: Optional[storage_lib.HypeTransaction] = None):
     serialized_data = json_format.MessageToJson(coffee_data)
     self._store.SetJsonValue(user.user_id, self._SUBKEY, serialized_data, tx)
+
+  def TransferBeans(
+      self,
+      owner: user_pb2.User,
+      target: user_pb2.User,
+      bean_id: Text,
+      tx: Optional[storage_lib.HypeTransaction] = None) -> StatusCode:
+    """Transfers bean_id from owner_id to target_id."""
+    if not tx:
+      return self._store.RunInTransaction(self.TransferBeans, owner, target,
+                                          bean_id)
+    owner_beans = self.GetCoffeeData(owner)
+    bean = [b for b in owner_beans.beans if b.id == bean_id]
+    if not bean:
+      return StatusCode.NOT_FOUND
+
+    # Duplicates are ok, we just pick the first one
+    bean = bean[0]
+    target_beans = self.GetCoffeeData(target, tx)
+    if len(target_beans.beans) >= self._params.bean_storage_limit:
+      return StatusCode.OUT_OF_RANGE
+
+    owner_beans.beans.remove(bean)
+    target_beans.beans.append(bean)
+    self._SetCoffeeData(owner, owner_beans, tx)
+    self._SetCoffeeData(target, target_beans, tx)
+    return StatusCode.OK
