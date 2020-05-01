@@ -102,21 +102,9 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
 class StashCommandsTest(BaseCoffeeCommandTestCase):
 
   def test_empty_stash(self):
+    expected_energy = 10
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee')
-
-    self.assertEqual(
-        response,
-        coffee_commands.EMPTY_STASH_MESSAGE % hypetest.TEST_USER.display_name)
-
-  def test_stash_no_beans(self):
-    expected_energy = 10
-    no_beans_user = user_pb2.User(user_id='no-beans', display_name='NoBeans')
-    self.core.coffee._SetCoffeeData(
-        no_beans_user, coffee_pb2.CoffeeData(energy=expected_energy))
-
-    response = self.command.Handle(hypetest.TEST_CHANNEL, no_beans_user,
-                                   '!coffee stash')
 
     self.assertEqual(type(response), list)
     self.assertRegex('\n'.join(response), r'%s energy' % expected_energy)
