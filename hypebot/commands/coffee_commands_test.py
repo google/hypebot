@@ -21,6 +21,7 @@ from unittest import mock
 from hypebot.commands import coffee_commands
 from hypebot.commands import hypetest
 from hypebot.protos import coffee_pb2
+from hypebot.protos import message_pb2
 from hypebot.protos import user_pb2
 
 
@@ -50,6 +51,13 @@ class DrinkCommandTest(BaseCoffeeCommandTestCase):
 
     self.assertEqual(response, coffee_commands.OUT_OF_COFFEE_MESSAGE)
 
+  def test_drinking_bad_id_returns_error_msg(self):
+    bad_id = 'Potato'
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
+                                   '!coffee d %s' % bad_id)
+
+    self.assertEqual(response, coffee_commands.UNOWNED_BEAN_MESSAGE % bad_id)
+
   def test_drinking_gives_energy(self):
     initial_energy = self.test_data.energy
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
@@ -58,6 +66,14 @@ class DrinkCommandTest(BaseCoffeeCommandTestCase):
     cur_energy = self.core.coffee.GetCoffeeData(self.test_user).energy
     self.assertGreater(cur_energy, initial_energy)
     self.assertRegex(response, r'%d' % (cur_energy - initial_energy))
+
+  def test_drinking_prefix_id_matches_and_consumes(self):
+    response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
+                                   '!coffee drink cah')
+
+    self.assertRegex(response, 'energy')
+    user_beans = self.core.coffee.GetCoffeeData(self.test_user).beans
+    self.assertNotIn('cahonduras', [b.id for b in user_beans])
 
 
 @hypetest.ForCommand(coffee_commands.FindCoffeeCommand)
@@ -75,7 +91,7 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
   def test_stash_full_on_find(self):
     self.core.coffee._SetCoffeeData(
         self.test_user,
-        coffee_pb2.CoffeeData(energy=10, beans=[coffee_pb2.Bean()] * 50))
+        coffee_pb2.CoffeeData(energy=10, beans=[coffee_pb2.Bean(id='f')] * 50))
 
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
                                    '!coffee find')
@@ -95,7 +111,7 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee find')
 
     bean = self.core.coffee.GetCoffeeData(hypetest.TEST_USER).beans[-1]
-    self.assertRegex(response, coffee_commands._FormatBean(bean))
+    self.assertRegex(response, coffee_commands.FormatBean(bean))
 
 
 @hypetest.ForCommand(coffee_commands.CoffeeStashCommand)
@@ -106,17 +122,17 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee')
 
-    self.assertEqual(type(response), list)
-    self.assertRegex('\n'.join(response), r'%s energy' % expected_energy)
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertRegex(response.header.subtitle, r'%s energy' % expected_energy)
 
   def test_full_stash_list(self):
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
                                    '!coffee stash me')
 
-    self.assertEqual(type(response), list)
-    self.assertGreater(len(response), len(self.test_data.beans))
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertGreaterEqual(len(response.fields), len(self.test_data.beans))
 
-    response_str = '\n'.join(response)
+    response_str = '\n'.join(f.text for f in response.fields)
     for bean in self.test_data.beans:
       self.assertRegex(response_str, r'(?i)%s' % bean.region)
       self.assertRegex(response_str, r'(?i)%s' % bean.variety)
@@ -127,10 +143,10 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
         hypetest.TEST_CHANNEL, hypetest.TEST_USER,
         '!coffee stash %s' % self.test_user.user_id)
 
-    self.assertEqual(type(response), list)
-    self.assertGreater(len(response), len(self.test_data.beans))
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertGreaterEqual(len(response.fields), len(self.test_data.beans))
 
-    response_str = '\n'.join(response)
+    response_str = '\n'.join(f.text for f in response.fields)
     for bean in self.test_data.beans:
       self.assertRegex(response_str, r'(?i)%s' % bean.region)
       self.assertRegex(response_str, r'(?i)%s' % bean.variety)

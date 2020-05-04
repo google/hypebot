@@ -16,7 +16,7 @@
 """Manage your caffeine game with this simple plugin."""
 
 import random
-from typing import Any, Dict, Optional, Text, Union
+from typing import Any, Dict, List, Optional, Text, Union
 
 from grpc import StatusCode
 
@@ -29,6 +29,60 @@ from hypebot.storage import storage_lib
 # pylint: disable=line-too-long
 # pylint: enable=line-too-long
 from google.protobuf import json_format
+
+
+# TODO: Consider returning StatusCodes to differentiate between not
+#   found and multiple prefix matches.
+def GetBean(bean_id: Text,
+            beans: List[coffee_pb2.Bean],
+            remove_bean: bool = False) -> Optional[coffee_pb2.Bean]:
+  """Given a bean_id, returns the first matching bean from beans, or None.
+
+  Also supports passing a prefix of a bean_id. If the prefix can uniquely match
+  a single bean_id in beans, the first such match will be returned, otherwise
+  None will be returned.
+
+  Args:
+    bean_id: The ID of the bean to find.
+    beans: A list of beans to search through.
+    remove_bean: If True, will also remove the bean from the passed list. Note
+      since this is a free function the caller is responsible for persisting any
+      changes to the beans list.
+
+  Returns:
+    The first bean with bean_id, or None if a match could not be found.
+  """
+  prefix_match_id = None
+  idx = None
+  bean_id = bean_id.lower()
+  for i, b in enumerate(beans):
+    # We lower-case the IDs here as a sneaky migration step.
+    b.id = b.id.lower()
+    # If we find an exact match, just return that
+    if b.id == bean_id:
+      idx = i
+      break
+    if b.id.startswith(bean_id):
+      # Otherwise, set the prefix match and continue.
+      if not prefix_match_id:
+        prefix_match_id = b.id
+        idx = i
+      if b.id != prefix_match_id:
+        # Multiple distinct bean_ids match this prefix, so return None.
+        return None
+
+  if idx is None:
+    return None
+  if remove_bean:
+    return beans.pop(idx)
+  return beans[idx]
+
+
+def _GetBeanId(bean: coffee_pb2.Bean) -> Text:
+  if not all([bean.rarity, bean.variety, bean.region]):
+    raise ValueError('Bean is missing required field, can\'t generate ID:\n%s' %
+                     bean)
+  return (bean.rarity[0] + bean.variety[0] + bean.region).lower()
 
 
 class CoffeeLib:
@@ -127,16 +181,23 @@ class CoffeeLib:
   def DrinkCoffee(
       self,
       user: user_pb2.User,
+      bean_id: Optional[Text] = None,
       tx: Optional[storage_lib.HypeTransaction] = None
   ) -> Union[Dict[Text, Any], StatusCode]:
     """Lets user drink some of their nice coffee."""
     if not tx:
-      return self._store.RunInTransaction(self.DrinkCoffee, user)
+      return self._store.RunInTransaction(self.DrinkCoffee, user, bean_id)
     user_data = self.GetCoffeeData(user, tx)
     if not user_data.beans:
       return StatusCode.NOT_FOUND
 
-    bean = user_data.beans.pop(random.randint(0, len(user_data.beans) - 1))
+    bean = None
+    if bean_id:
+      bean = GetBean(bean_id, user_data.beans, remove_bean=True)
+      if not bean:
+        return StatusCode.NOT_FOUND
+    else:
+      bean = user_data.beans.pop(random.randint(0, len(user_data.beans) - 1))
     energy = random.randint(1, 6)
     user_data.energy += energy
     user_data.statistics.drink_count += 1
@@ -167,14 +228,10 @@ class CoffeeLib:
           variety=self._weighted_varieties.GetItem(),
           rarity=self._weighted_rarities.GetItem(),
       )
-      bean.id = self._GetBeanId(bean)
       user_data.beans.append(bean)
       user_data.statistics.find_count += 1
     self._SetCoffeeData(user, user_data, tx)
     return bean or StatusCode.NOT_FOUND
-
-  def _GetBeanId(self, bean: coffee_pb2.Bean) -> Text:
-    return bean.rarity[0] + bean.variety[0] + bean.region.lower()
 
   def GetOccurrenceChance(self, bean: coffee_pb2.Bean) -> float:
     """Returns the probability of finding bean in the wild."""
@@ -200,6 +257,9 @@ class CoffeeLib:
                      user: user_pb2.User,
                      coffee_data: coffee_pb2.CoffeeData,
                      tx: Optional[storage_lib.HypeTransaction] = None):
+    # We first generate bean_ids for any beans missing one.
+    for b in [b for b in coffee_data.beans if not b.id]:
+      b.id = _GetBeanId(b)
     serialized_data = json_format.MessageToJson(coffee_data)
     self._store.SetJsonValue(user.user_id, self._SUBKEY, serialized_data, tx)
 
@@ -214,12 +274,10 @@ class CoffeeLib:
       return self._store.RunInTransaction(self.TransferBeans, owner, target,
                                           bean_id)
     owner_beans = self.GetCoffeeData(owner)
-    bean = [b for b in owner_beans.beans if b.id == bean_id]
+    bean = GetBean(bean_id, owner_beans.beans)
     if not bean:
       return StatusCode.NOT_FOUND
 
-    # Duplicates are ok, we just pick the first one
-    bean = bean[0]
     target_beans = self.GetCoffeeData(target, tx)
     if len(target_beans.beans) >= self._params.bean_storage_limit:
       return StatusCode.OUT_OF_RANGE
