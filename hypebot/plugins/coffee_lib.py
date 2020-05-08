@@ -283,7 +283,9 @@ class CoffeeLib:
       return StatusCode.OUT_OF_RANGE
 
     owner_beans.beans.remove(bean)
+    owner_beans.statistics.sell_count += 1
     target_beans.beans.append(bean)
+    target_beans.statistics.buy_count += 1
     self._SetCoffeeData(owner, owner_beans, tx)
     self._SetCoffeeData(target, target_beans, tx)
     return StatusCode.OK

@@ -37,8 +37,12 @@ message Bean {
 message CoffeeStats {
   // Number of times a user has found a bean.
   int64 find_count = 1;
-  // Number of tiems a user has drank a cup of coffee.
+  // Number of times a user has drank a cup of coffee.
   int64 drink_count = 2;
+  // Number of times a user has sold beans.
+  int64 sell_count = 3;
+  // Number of times a user has bought beans.
+  int64 buy_count = 4;
 }
 
 // Per-user coffee related data.

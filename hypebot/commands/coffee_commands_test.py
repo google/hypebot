@@ -41,30 +41,44 @@ class BaseCoffeeCommandTestCase(hypetest.BaseCommandTestCase):
         ])
     self.core.coffee._SetCoffeeData(self.test_user, self.test_data)
 
+  def _GetStats(self, user):
+    return self.core.coffee.GetCoffeeData(user).statistics
+
 
 @hypetest.ForCommand(coffee_commands.DrinkCoffeeCommand)
 class DrinkCommandTest(BaseCoffeeCommandTestCase):
 
   def test_no_coffee_to_drink(self):
+    initial_drink_count = self._GetStats(hypetest.TEST_USER).drink_count
+
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee d')
 
+    cur_drink_count = self._GetStats(hypetest.TEST_USER).drink_count
+    self.assertEqual(cur_drink_count, initial_drink_count)
     self.assertEqual(response, coffee_commands.OUT_OF_COFFEE_MESSAGE)
 
   def test_drinking_bad_id_returns_error_msg(self):
     bad_id = 'Potato'
+    initial_drink_count = self._GetStats(hypetest.TEST_USER).drink_count
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee d %s' % bad_id)
 
     self.assertEqual(response, coffee_commands.UNOWNED_BEAN_MESSAGE % bad_id)
+    cur_drink_count = self._GetStats(hypetest.TEST_USER).drink_count
+    self.assertEqual(cur_drink_count, initial_drink_count)
 
   def test_drinking_gives_energy(self):
     initial_energy = self.test_data.energy
+    initial_drink_count = self._GetStats(self.test_user).drink_count
+
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
                                    '!coffee drink')
 
-    cur_energy = self.core.coffee.GetCoffeeData(self.test_user).energy
+    user_data = self.core.coffee.GetCoffeeData(self.test_user)
+    cur_energy = user_data.energy
     self.assertGreater(cur_energy, initial_energy)
+    self.assertEqual(user_data.statistics.drink_count, initial_drink_count + 1)
     self.assertRegex(response, r'%d' % (cur_energy - initial_energy))
 
   def test_drinking_prefix_id_matches_and_consumes(self):
@@ -80,6 +94,7 @@ class DrinkCommandTest(BaseCoffeeCommandTestCase):
 class FindCommandTest(BaseCoffeeCommandTestCase):
 
   def test_out_of_energy(self):
+    initial_find_count = self.test_data.statistics.find_count
     self.core.coffee._SetCoffeeData(self.test_user,
                                     coffee_pb2.CoffeeData(energy=0))
 
@@ -87,8 +102,11 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee f')
 
     self.assertEqual(response, coffee_commands.OUT_OF_ENERGY_MESSAGE)
+    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
+                     initial_find_count)
 
   def test_stash_full_on_find(self):
+    initial_find_count = self.test_data.statistics.find_count
     self.core.coffee._SetCoffeeData(
         self.test_user,
         coffee_pb2.CoffeeData(energy=10, beans=[coffee_pb2.Bean(id='f')] * 50))
@@ -97,20 +115,28 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee find')
 
     self.assertEqual(response, coffee_commands.BEAN_STASH_FULL_MESSAGE)
+    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
+                     initial_find_count)
 
   @mock.patch.object(random, 'random', lambda: 0.9999)
   def test_could_not_find(self):
+    initial_find_count = self._GetStats(hypetest.TEST_USER).find_count
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee f')
 
     self.assertEqual(response, coffee_commands.FOUND_NO_BEANS_MESSAGE)
+    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
+                     initial_find_count)
 
   @mock.patch.object(random, 'random', lambda: 0.0001)
   def test_find_any_bean(self):
+    initial_find_count = self._GetStats(hypetest.TEST_USER).find_count
     response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
                                    '!coffee find')
 
-    bean = self.core.coffee.GetCoffeeData(hypetest.TEST_USER).beans[-1]
+    user_data = self.core.coffee.GetCoffeeData(hypetest.TEST_USER)
+    bean = user_data.beans[-1]
+    self.assertEqual(user_data.statistics.find_count, initial_find_count + 1)
     self.assertRegex(response, coffee_commands.FormatBean(bean))
 
 
@@ -139,9 +165,8 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
       self.assertRegex(response_str, r'(?i)%s' % bean.rarity)
 
   def test_listing_other_stash(self):
-    response = self.command.Handle(
-        hypetest.TEST_CHANNEL, hypetest.TEST_USER,
-        '!coffee stash %s' % self.test_user.user_id)
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
+                                   '!coffee stash %s' % self.test_user.user_id)
 
     self.assertIsInstance(response, message_pb2.Card)
     self.assertGreaterEqual(len(response.fields), len(self.test_data.beans))
