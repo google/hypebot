@@ -89,8 +89,10 @@ class FindCoffeeCommand(command_lib.BaseCommand):
     if result == StatusCode.OUT_OF_RANGE:
       return BEAN_STASH_FULL_MESSAGE
 
-    return ('You found some {} ({:.2%} chance)!').format(
-        FormatBean(result), self._core.coffee.GetOccurrenceChance(result))
+    return message_pb2.Card(fields=[
+        message_pb2.Card.Field(text='You found some {} ({:.2%} chance)!'.format(
+            FormatBean(result), self._core.coffee.GetOccurrenceChance(result)))
+    ])
 
 
 @command_lib.CommandRegexParser(r'coffee')

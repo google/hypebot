@@ -15,12 +15,15 @@
 # limitations under the License.
 """Manage your caffeine game with this simple plugin."""
 
+import math
 import random
 from typing import Any, Dict, List, Optional, Text, Union
 
+from absl import logging
 from grpc import StatusCode
 
 from hypebot.core import params_lib
+from hypebot.core import schedule_lib
 from hypebot.core import util_lib
 from hypebot.protos import coffee_pb2
 from hypebot.protos import user_pb2
@@ -139,13 +142,16 @@ class CoffeeLib:
       }
   })
 
-  def __init__(self, store: storage_lib.HypeStore, bot_name: Text):
+  def __init__(self, scheduler: schedule_lib.HypeScheduler,
+               store: storage_lib.HypeStore, bot_name: Text):
+    self._scheduler = scheduler
     self._store = store
     self._bot_name = bot_name
     self._params = params_lib.HypeParams(self.DEFAULT_PARAMS)
     self._params.Lock()
 
     self._InitWeights()
+    self._scheduler.DailyCallback(util_lib.ArrowTime(6), self._RestoreEnergy)
 
   def _InitWeights(self):
     """Initializes WeightedCollections for use in generating new beans."""
@@ -177,6 +183,38 @@ class CoffeeLib:
     self._weighted_regions.Freeze()
     self._weighted_rarities.Freeze()
     self._weighted_varieties.Freeze()
+
+  def _RestoreEnergy(self) -> None:
+    # No transaction for the whole function because we don't want to hold a tx
+    # while we update every single user. This way gets us a snapshot of all
+    # users, then updates each one atomically.
+    user_list = self._store.GetSubkey(self._SUBKEY)
+    c = 0
+    for username, data in user_list:
+      if data:
+        c += 1
+        self._store.RunInTransaction(self._RestoreUserEnergy, username)
+    logging.info('Restored energy to %d pleb(s)', c)
+
+  def _RestoreUserEnergy(
+      self,
+      username: Text,
+      tx: Optional[storage_lib.HypeTransaction] = None) -> None:
+    if not tx:
+      return self._store.RunInTransaction(self._RestoreUserEnergy, username)
+    user = user_pb2.User(user_id=username)
+    user_data = self.GetCoffeeData(user, tx)
+    # Min is set such that there is a ~1% chance that a user with no beans ends
+    # up at 0 energy without finding at least one bean.
+    min_energy = int(math.ceil(math.log(0.01, self._params.bean_chance)))
+    max_energy = min_energy * 4
+    # We allow users to go over the "max" energy, but they will stop
+    # regenerating energy until they fall back below the max.
+    if user_data.energy < max_energy:
+      user_data.energy = max(min_energy, user_data.energy + 3)
+      # Ensure we don't regen over the max.
+      user_data.energy = min(max_energy, user_data.energy)
+    self._SetCoffeeData(user, user_data, tx)
 
   def DrinkCoffee(
       self,

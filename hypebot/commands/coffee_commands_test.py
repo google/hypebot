@@ -137,7 +137,8 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
     user_data = self.core.coffee.GetCoffeeData(hypetest.TEST_USER)
     bean = user_data.beans[-1]
     self.assertEqual(user_data.statistics.find_count, initial_find_count + 1)
-    self.assertRegex(response, coffee_commands.FormatBean(bean))
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertRegex(response.fields[0].text, coffee_commands.FormatBean(bean))
 
 
 @hypetest.ForCommand(coffee_commands.CoffeeStashCommand)
