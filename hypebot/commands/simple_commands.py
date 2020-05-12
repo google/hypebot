@@ -112,7 +112,7 @@ class EnergyCommand(command_lib.BaseCommand):
 
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               energy_target: Text) -> hype_types.CommandResponse:
-    return '༼ つ ◕_◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕_◕ ༽つ' % energy_target
+    return '༼ つ ◕‿◕ ༽つ %s TAKE MY ENERGY ༼ つ ◕‿◕ ༽つ' % energy_target
 
 
 @command_lib.CommandRegexParser(r'jackpot')
