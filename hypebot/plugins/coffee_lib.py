@@ -15,6 +15,7 @@
 # limitations under the License.
 """Manage your caffeine game with this simple plugin."""
 
+import functools
 import math
 import random
 from typing import Any, Dict, List, Optional, Text, Union
@@ -30,8 +31,44 @@ from hypebot.protos import user_pb2
 from hypebot.storage import storage_lib
 
 # pylint: disable=line-too-long
-# pylint: enable=line-too-long
 from google.protobuf import json_format
+from google.protobuf import text_format
+# pylint: enable=line-too-long
+
+
+def _ShouldGrantLegendaryBadge(user_data: coffee_pb2.CoffeeData) -> bool:
+  return (user_data.statistics.find_count >= 100 and
+          user_data.statistics.drink_count >= 100)
+
+
+def _ShouldGrantCapitalistBadge(user_data: coffee_pb2.CoffeeData) -> bool:
+  return (user_data.statistics.buy_count +
+          user_data.statistics.sell_count) >= 25
+
+
+def _ShouldGrantBuyerSellerBadge(user_data: coffee_pb2.CoffeeData,
+                                 positive: bool) -> bool:
+  stats = user_data.statistics
+  delta = (
+      util_lib.UnformatHypecoins(stats.sell_amount or '0') -
+      util_lib.UnformatHypecoins(stats.buy_amount or '0'))
+  return delta > 0 if positive else delta < 0
+
+
+# Map from badge_id => function that evaluates if a user should have said badge.
+_BADGE_CODE_REGISTRY = {
+    0: lambda user_data: user_data.statistics.find_count >= 1,
+    1: lambda user_data: user_data.statistics.drink_count >= 1,
+    2: lambda user_data: user_data.energy == 0,
+    3: _ShouldGrantLegendaryBadge,
+    4: lambda user_data:
+       any(True for b in user_data.beans if b.rarity == 'legendary'),
+    5: lambda user_data: user_data.statistics.sell_count >= 1,
+    6: lambda user_data: user_data.statistics.buy_count >= 1,
+    7: _ShouldGrantCapitalistBadge,
+    8: functools.partial(_ShouldGrantBuyerSellerBadge, positive=True),
+    9: functools.partial(_ShouldGrantBuyerSellerBadge, positive=False),
+}
 
 
 # TODO: Consider returning StatusCodes to differentiate between not
@@ -101,6 +138,9 @@ class CoffeeLib:
       'bean_chance': 0.5,
       # Number of beans that can be stored before a user runs out of room.
       'bean_storage_limit': 10,
+      # Filepath to load badge data from. Should be a textproto file containing
+      # a coffee_pb2.CoffeeData proto with only `badges` set.
+      'badge_data_path': 'hypebot/data/coffee_badges.textproto',
       # Weights used to calculate drop rates for bean regions. Data is actual
       # coffee production by country/region in 1000's of 60kg bags.
       #
@@ -143,15 +183,27 @@ class CoffeeLib:
   })
 
   def __init__(self, scheduler: schedule_lib.HypeScheduler,
-               store: storage_lib.HypeStore, bot_name: Text):
+               store: storage_lib.HypeStore, bot_name: Text,
+               params: params_lib.HypeParams):
     self._scheduler = scheduler
     self._store = store
     self._bot_name = bot_name
     self._params = params_lib.HypeParams(self.DEFAULT_PARAMS)
+    self._params.Override(params)
     self._params.Lock()
 
+    self.badges = None
+    self._LoadBadges()
     self._InitWeights()
     self._scheduler.DailyCallback(util_lib.ArrowTime(6), self._RestoreEnergy)
+
+  def _LoadBadges(self):
+    logging.info('Trying to load badges from %s', self._params.badge_data_path)
+    try:
+      with open(self._params.badge_data_path, 'r') as f:
+        self.badges = text_format.Parse(f.read(), coffee_pb2.BadgeList()).badges
+    except FileNotFoundError:
+      logging.exception('Couldn\'t load badges, granting badges disabled.')
 
   def _InitWeights(self):
     """Initializes WeightedCollections for use in generating new beans."""
@@ -239,6 +291,7 @@ class CoffeeLib:
     energy = random.randint(1, 6)
     user_data.energy += energy
     user_data.statistics.drink_count += 1
+    self._GrantBadges(user, user_data, bean)
     self._SetCoffeeData(user, user_data, tx)
     return {'energy': energy, 'bean': bean}
 
@@ -268,8 +321,33 @@ class CoffeeLib:
       )
       user_data.beans.append(bean)
       user_data.statistics.find_count += 1
+    self._GrantBadges(user, user_data, bean)
     self._SetCoffeeData(user, user_data, tx)
     return bean or StatusCode.NOT_FOUND
+
+  def _GrantBadges(self,
+                   user: user_pb2.User,
+                   user_data: coffee_pb2.CoffeeData,
+                   unused_bean: Optional[coffee_pb2.Bean] = None):
+    """Checks all possible badges and grants/revokes them as needed."""
+    if not self.badges:
+      return
+    for badge in self.badges.values():
+      if badge.id not in _BADGE_CODE_REGISTRY:
+        logging.warning(
+            'Badge "%s" [id=%s] is not registered so can\'t be assiged to '
+            'users.', badge.name, badge.id)
+        continue
+      should_user_have_badge = _BADGE_CODE_REGISTRY[badge.id](user_data)
+      if should_user_have_badge:
+        if badge.id in user_data.badges:
+          continue
+        logging.info('Granting badge %s to %s', badge.name, user.user_id)
+        user_data.badges.append(badge.id)
+      elif not badge.is_permanent:
+        if badge.id in user_data.badges:
+          logging.info('Revoking badge %s from %s', badge.name, user.user_id)
+          user_data.badges.remove(badge.id)
 
   def GetOccurrenceChance(self, bean: coffee_pb2.Bean) -> float:
     """Returns the probability of finding bean in the wild."""
@@ -304,26 +382,35 @@ class CoffeeLib:
   def TransferBeans(
       self,
       owner: user_pb2.User,
-      target: user_pb2.User,
+      buyer: user_pb2.User,
       bean_id: Text,
+      price: int,
       tx: Optional[storage_lib.HypeTransaction] = None) -> StatusCode:
     """Transfers bean_id from owner_id to target_id."""
     if not tx:
-      return self._store.RunInTransaction(self.TransferBeans, owner, target,
-                                          bean_id)
+      return self._store.RunInTransaction(self.TransferBeans, owner, buyer,
+                                          bean_id, price)
     owner_beans = self.GetCoffeeData(owner)
     bean = GetBean(bean_id, owner_beans.beans)
     if not bean:
       return StatusCode.NOT_FOUND
 
-    target_beans = self.GetCoffeeData(target, tx)
-    if len(target_beans.beans) >= self._params.bean_storage_limit:
+    buyer_beans = self.GetCoffeeData(buyer, tx)
+    if len(buyer_beans.beans) >= self._params.bean_storage_limit:
       return StatusCode.OUT_OF_RANGE
 
     owner_beans.beans.remove(bean)
-    owner_beans.statistics.sell_count += 1
-    target_beans.beans.append(bean)
-    target_beans.statistics.buy_count += 1
+    owner_stats = owner_beans.statistics
+    owner_stats.sell_count += 1
+    owner_stats.sell_amount = str(
+        util_lib.UnformatHypecoins(owner_stats.sell_amount or '0') + price)
+    buyer_beans.beans.append(bean)
+    buyer_stats = buyer_beans.statistics
+    buyer_stats.buy_count += 1
+    buyer_stats.buy_amount = str(
+        util_lib.UnformatHypecoins(buyer_stats.buy_amount or '0') + price)
+    self._GrantBadges(owner, owner_beans, bean)
+    self._GrantBadges(buyer, buyer_beans, bean)
     self._SetCoffeeData(owner, owner_beans, tx)
-    self._SetCoffeeData(target, target_beans, tx)
+    self._SetCoffeeData(buyer, buyer_beans, tx)
     return StatusCode.OK

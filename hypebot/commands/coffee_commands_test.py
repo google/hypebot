@@ -30,6 +30,8 @@ class BaseCoffeeCommandTestCase(hypetest.BaseCommandTestCase):
   def setUp(self):
     super(BaseCoffeeCommandTestCase, self).setUp()
     self.test_user = user_pb2.User(user_id='test-user', display_name='Tester')
+    self.test_badge = coffee_pb2.Badge(
+        id=0, name='Test Badge', description='This is for being a good tester.')
     self.test_data = coffee_pb2.CoffeeData(
         energy=10,
         beans=[
@@ -38,11 +40,35 @@ class BaseCoffeeCommandTestCase(hypetest.BaseCommandTestCase):
                 variety='Arabica', region='Honduras', rarity='common'),
             coffee_pb2.Bean(
                 variety='Liberica', region='Nicaragua', rarity='legendary')
-        ])
+        ],
+        badges=[self.test_badge.id])
     self.core.coffee._SetCoffeeData(self.test_user, self.test_data)
+    # TODO: Figure out how to load badge textproto in third_party.
+    self.core.coffee.badges = {self.test_badge.id: self.test_badge}
 
   def _GetStats(self, user):
     return self.core.coffee.GetCoffeeData(user).statistics
+
+
+@hypetest.ForCommand(coffee_commands.CoffeeBadgeCommand)
+class BadgeCommandTest(BaseCoffeeCommandTestCase):
+
+  def test_no_badges(self):
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
+                                   '!coffee b')
+
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertEqual(
+        response.fields[0].text,
+        coffee_commands.NO_BADGES_MESSAGE % hypetest.TEST_USER.display_name)
+
+  def test_badges_visible(self):
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
+                                   '!coffee badges %s' % self.test_user.user_id)
+
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertEqual(response.visible_fields_count, 5)
+    self.assertRegex(response.fields[0].text, self.test_badge.name)
 
 
 @hypetest.ForCommand(coffee_commands.DrinkCoffeeCommand)
@@ -102,8 +128,8 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee f')
 
     self.assertEqual(response, coffee_commands.OUT_OF_ENERGY_MESSAGE)
-    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
-                     initial_find_count)
+    self.assertEqual(
+        self._GetStats(hypetest.TEST_USER).find_count, initial_find_count)
 
   def test_stash_full_on_find(self):
     initial_find_count = self.test_data.statistics.find_count
@@ -115,8 +141,8 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee find')
 
     self.assertEqual(response, coffee_commands.BEAN_STASH_FULL_MESSAGE)
-    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
-                     initial_find_count)
+    self.assertEqual(
+        self._GetStats(hypetest.TEST_USER).find_count, initial_find_count)
 
   @mock.patch.object(random, 'random', lambda: 0.9999)
   def test_could_not_find(self):
@@ -125,8 +151,8 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
                                    '!coffee f')
 
     self.assertEqual(response, coffee_commands.FOUND_NO_BEANS_MESSAGE)
-    self.assertEqual(self._GetStats(hypetest.TEST_USER).find_count,
-                     initial_find_count)
+    self.assertEqual(
+        self._GetStats(hypetest.TEST_USER).find_count, initial_find_count)
 
   @mock.patch.object(random, 'random', lambda: 0.0001)
   def test_find_any_bean(self):
@@ -157,6 +183,11 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
                                    '!coffee stash me')
 
     self.assertIsInstance(response, message_pb2.Card)
+    self.assertRegex(response.header.title, self.test_user.display_name)
+    status_regex = r'.*'.join(
+        (str(self.test_data.energy), str(len(self.test_data.beans)),
+         str(len(self.test_data.badges))))
+    self.assertRegex(response.header.subtitle, status_regex)
     self.assertGreaterEqual(len(response.fields), len(self.test_data.beans))
 
     response_str = '\n'.join(f.text for f in response.fields)

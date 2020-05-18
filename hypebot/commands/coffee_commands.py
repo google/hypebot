@@ -42,6 +42,7 @@ OUT_OF_ENERGY_MESSAGE = ('You are too tired to look in your pantry, try '
                          'drinking some coffee.')
 OUT_OF_COFFEE_MESSAGE = 'You don\'t have any coffee, try finding some.'
 UNOWNED_BEAN_MESSAGE = 'You don\'t own any beans with ID "%s".'
+NO_BADGES_MESSAGE = '%s doesn\'t have any badges.'
 
 
 def FormatBean(bean_data: coffee_pb2.Bean, uppercase: bool = False) -> Text:
@@ -111,10 +112,38 @@ class CoffeeStashCommand(command_lib.BaseCommand):
     card = message_pb2.Card(
         header=message_pb2.Card.Header(
             title='%s\'s Coffee Stash:' % target_user.display_name,
-            subtitle='%d energy | %s' %
+            subtitle='%d energy | %s | %s' %
             (coffee_data.energy,
-             inflect_lib.Plural(len(coffee_data.beans or []), 'bean'))))
+             inflect_lib.Plural(len(coffee_data.beans or []), 'bean'),
+             inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))))
     beans = sorted(coffee_data.beans, key=self._core.coffee.GetOccurrenceChance)
     for bean in beans:
       card.fields.add(text=FormatBean(bean, uppercase=True))
+    return card
+
+
+@command_lib.CommandRegexParser(
+    r'coffee (?:b(?:adges)?)(?: (?P<target_user>.*))?')
+class CoffeeBadgeCommand(command_lib.BaseCommand):
+  """View worthless achievements for plebs."""
+
+  def _Handle(self,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
+              target_user: Optional[user_pb2.User] = None):
+    if not target_user:
+      target_user = user
+    coffee_data = self._core.coffee.GetCoffeeData(target_user)
+    if not coffee_data.badges:
+      return message_pb2.Card(fields=[
+          message_pb2.Card.Field(text=NO_BADGES_MESSAGE %
+                                 target_user.display_name)
+      ])
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(title='%s\'s Coffee Badges' %
+                                       target_user.display_name),
+        visible_fields_count=5)
+    for b_id in coffee_data.badges:
+      badge = self._core.coffee.badges[b_id]
+      card.fields.add(text='%s: %s' % (badge.name, badge.description))
     return card

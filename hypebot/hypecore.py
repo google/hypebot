@@ -257,8 +257,8 @@ class Core(object):
     self.executor = futures.ThreadPoolExecutor(max_workers=8)
     self.runner = async_lib.AsyncRunner(self.executor)
     self.inventory = inventory_lib.InventoryManager(self.store)
-    self.coffee = coffee_lib.CoffeeLib(self.scheduler, self.store,
-                                       self.name.lower())
+    self.coffee = coffee_lib.CoffeeLib(
+        self.scheduler, self.store, self.name.lower(), self.params.coffee)
     self.proxy = proxy_factory.Create(self.params.proxy.type, self.store)
     self.zombie_manager = zombie_lib.ZombieManager()
     self.request_tracker = RequestTracker(self.Reply)

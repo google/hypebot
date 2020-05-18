@@ -65,6 +65,9 @@ class BaseBot(object):
       'news': {
           'type': 'NYTimesNews',
       },
+      'coffee': {
+          'badge_data_path': 'hypebot/data/coffee_badges.textproto',
+      },
       'proxy': {
           'type': 'RequestsProxy'
       },
@@ -146,6 +149,7 @@ class BaseBot(object):
           # HypeCoffee
           'DrinkCoffeeCommand': {},
           'FindCoffeeCommand': {},
+          'CoffeeBadgeCommand': {},
           'CoffeeStashCommand': {},
           # Deployment
           'BuildCommand': {},

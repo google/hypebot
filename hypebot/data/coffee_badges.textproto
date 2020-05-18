@@ -1,0 +1,102 @@
+# proto-file: third_party/py/hypebot/protos/coffee.proto
+# proto-message: BadgeList
+
+# Canonical list of all available Badges. Note IDs must not change or the badges
+# assiged to users will be incorrect.
+badges: {
+  key: 0
+  value: {
+    id: 0
+    name: "Finder"
+    description:
+      "You found your first bean! Your preferred parental figure would be so "
+      "proud."
+    is_permanent: true
+  }
+}
+badges: {
+  key: 1
+  value: {
+    id: 1
+    name: "Drinker"
+    description: "You drank your first cup of HypeCoffee!"
+    is_permanent: true
+  }
+}
+badges: {
+  key: 2
+  value: {
+    id: 2
+    name: "Sleepy Jane"
+    description: "You've ran out of energy before."
+    is_permanent: false
+  }
+}
+badges: {
+  key: 3
+  value: {
+    id: 3
+    name: "Fanatic"
+    description:
+      "You've found and drank over 100 beans! You're more coffee than human "
+      "now."
+    is_permanent: true
+  }
+}
+badges: {
+  key: 4
+  value: {
+    id: 4
+    name: "Legendary Bean Owner"
+    description: "You owned a bean so special it was deemed LEGENDARY!"
+    is_permanent: true
+
+  }
+}
+badges: {
+  key: 5
+  value: {
+    id: 5
+    name: "Seller"
+    description: "You've sold your first bean!"
+    is_permanent: true
+  }
+}
+badges: {
+  key: 6
+  value: {
+    id: 6
+    name: "Buyer"
+    description: "You've bought your first bean!"
+    is_permanent: true
+  }
+}
+badges: {
+  key: 7
+  value: {
+    id: 7
+    name: "Capitalist"
+    description: "You've bought or sold over 25 beans!"
+    is_permanent: true
+  }
+}
+badges: {
+  key: 8
+  value: {
+    id: 8
+    name: "Dealer"
+    description:
+      "You've made more money selling beans than you've spent buying them."
+    is_permanent: false
+  }
+}
+badges: {
+  key: 9
+  value: {
+    id: 9
+    name: "Collector"
+    description:
+      "You've spent more money buying beans than you've spent selling them."
+    is_permanent: false
+  }
+}
