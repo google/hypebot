@@ -39,9 +39,9 @@ _RARITY_COLORS = {
 FOUND_NO_BEANS_MESSAGE = 'You couldn\'t find any coffee beans.'
 BEAN_STASH_FULL_MESSAGE = ('You already have too many beans, try drinking some '
                            'coffee.')
-OUT_OF_ENERGY_MESSAGE = ('You are too tired to look in your pantry, try '
-                         'drinking some coffee.')
-OUT_OF_COFFEE_MESSAGE = 'You don\'t have any coffee, try finding some.'
+OUT_OF_ENERGY_MESSAGE = ('You are too tired to spend %d energy finding beans, '
+                         'try drinking some coffee.')
+OUT_OF_COFFEE_MESSAGE = 'You don\'t have any coffee, try finding some beans.'
 UNOWNED_BEAN_MESSAGE = 'You don\'t own any beans with ID "%s".'
 NO_BADGES_MESSAGE = '%s doesn\'t have any badges.'
 
@@ -83,14 +83,19 @@ class DrinkCoffeeCommand(command_lib.BaseCommand):
         'Mmm, y' if energy > 3 else 'Y', energy)
 
 
-@command_lib.CommandRegexParser(r'coffee f(?:ind)?')
+@command_lib.CommandRegexParser(r'coffee f(?:ind)?(?: ([0-9]+))?')
 class FindCoffeeCommand(command_lib.BaseCommand):
   """Let plebs try to find some coffee beans."""
 
-  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User):
-    result = self._core.coffee.FindBeans(user)
+  def _Handle(self,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
+              energy: Optional[Text]):
+    # Ensure users can't !coffee find 0 for infinite coffee
+    energy = max(1, int(energy or 1))
+    result = self._core.coffee.FindBeans(user, energy)
     if result == StatusCode.RESOURCE_EXHAUSTED:
-      return OUT_OF_ENERGY_MESSAGE
+      return OUT_OF_ENERGY_MESSAGE % energy
     if result == StatusCode.NOT_FOUND:
       return FOUND_NO_BEANS_MESSAGE
     if result == StatusCode.OUT_OF_RANGE:

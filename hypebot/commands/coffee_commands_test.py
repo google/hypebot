@@ -127,9 +127,25 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
                                    '!coffee f')
 
-    self.assertEqual(response, coffee_commands.OUT_OF_ENERGY_MESSAGE)
+    self.assertEqual(response, coffee_commands.OUT_OF_ENERGY_MESSAGE % 1)
     self.assertEqual(
         self._GetStats(hypetest.TEST_USER).find_count, initial_find_count)
+
+  def test_energy_used_too_high(self):
+    expected_energy = 500
+
+    response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
+                                   '!coffee find %d' % expected_energy)
+
+    self.assertEqual(response,
+                     coffee_commands.OUT_OF_ENERGY_MESSAGE % expected_energy)
+
+  def test_zero_energy_used_coerced_to_one(self):
+    initial_energy = self.core.coffee.GetCoffeeData(self.test_user).energy
+    self.command.Handle(hypetest.TEST_CHANNEL, self.test_user, '!coffee find 0')
+
+    cur_energy = self.core.coffee.GetCoffeeData(self.test_user).energy
+    self.assertEqual(cur_energy, initial_energy - 1)
 
   def test_stash_full_on_find(self):
     initial_find_count = self.test_data.statistics.find_count
@@ -165,6 +181,19 @@ class FindCommandTest(BaseCoffeeCommandTestCase):
     self.assertEqual(user_data.statistics.find_count, initial_find_count + 1)
     self.assertIsInstance(response, message_pb2.Card)
     self.assertRegex(response.fields[0].text, coffee_commands.FormatBean(bean))
+
+  @mock.patch.object(random, 'random', lambda: 0.0001)
+  def test_spending_multiple_energy_finds_bean(self):
+    expected_energy = 7
+    initial_energy = self.core.coffee.GetCoffeeData(hypetest.TEST_USER).energy
+
+    response = self.command.Handle(hypetest.TEST_CHANNEL, hypetest.TEST_USER,
+                                   '!coffee find %d' % expected_energy)
+
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertRegex(response.fields[0].text, 'You found')
+    cur_energy = self.core.coffee.GetCoffeeData(hypetest.TEST_USER).energy
+    self.assertEqual(cur_energy, initial_energy - expected_energy)
 
 
 @hypetest.ForCommand(coffee_commands.CoffeeStashCommand)

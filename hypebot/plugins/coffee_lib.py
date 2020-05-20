@@ -299,27 +299,36 @@ class CoffeeLib:
   def FindBeans(
       self,
       user: user_pb2.User,
+      energy: int,
       tx: Optional[storage_lib.HypeTransaction] = None
   ) -> Union[StatusCode, coffee_pb2.CoffeeData]:
     """Tries to scrounge up some beans for user."""
     if not tx:
-      return self._store.RunInTransaction(self.FindBeans, user)
+      return self._store.RunInTransaction(self.FindBeans, user, energy)
     user_data = self.GetCoffeeData(user, tx)
-    if user_data.energy <= 0:
+    if user_data.energy < energy:
       return StatusCode.RESOURCE_EXHAUSTED
     if len(user_data.beans) >= self._params.bean_storage_limit:
       return StatusCode.OUT_OF_RANGE
 
-    user_data.energy -= 1
+    user_data.energy -= energy
+    iterations = 1
+    if energy > 1:
+      iterations = int(min(math.ceil(energy * 1.5), energy + 7))
     bean = None
-    r = random.random()
-    if r < self._params.bean_chance:
-      region = self._weighted_regions.GetItem()
-      bean = coffee_pb2.Bean(
-          region=region,
-          variety=self._weighted_varieties.GetItem(),
-          rarity=self._weighted_rarities.GetItem(),
-      )
+    for _ in range(iterations):
+      r = random.random()
+      if r < self._params.bean_chance:
+        candidate_bean = coffee_pb2.Bean(
+            region=self._weighted_regions.GetItem(),
+            variety=self._weighted_varieties.GetItem(),
+            rarity=self._weighted_rarities.GetItem(),
+        )
+        if not bean or self.GetOccurrenceChance(
+            candidate_bean) < self.GetOccurrenceChance(bean):
+          bean = candidate_bean
+
+    if bean:
       user_data.beans.append(bean)
       user_data.statistics.find_count += 1
     self._GrantBadges(user, user_data, bean)
