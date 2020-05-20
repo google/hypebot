@@ -29,14 +29,14 @@ badges: {
     id: 2
     name: "Sleepy Jane"
     description: "You've ran out of energy before."
-    is_permanent: false
+    is_permanent: true
   }
 }
 badges: {
   key: 3
   value: {
     id: 3
-    name: "Fanatic"
+    name: "Coffee Fanatic"
     description:
       "You've found and drank over 100 beans! You're more coffee than human "
       "now."
@@ -98,5 +98,14 @@ badges: {
     description:
       "You've spent more money buying beans than you've spent selling them."
     is_permanent: false
+  }
+}
+badges: {
+  key: 10
+  value: {
+    id: 10
+    name: "Amped Up"
+    description: "You've had 50 or more energy at one time."
+    is_permanent: true
   }
 }

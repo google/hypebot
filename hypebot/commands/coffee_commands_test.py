@@ -177,6 +177,7 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
 
     self.assertIsInstance(response, message_pb2.Card)
     self.assertRegex(response.header.subtitle, r'%s energy' % expected_energy)
+    self.assertGreaterEqual(len(response.fields), 1)
 
   def test_full_stash_list(self):
     response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
@@ -208,6 +209,24 @@ class StashCommandsTest(BaseCoffeeCommandTestCase):
       self.assertRegex(response_str, r'(?i)%s' % bean.region)
       self.assertRegex(response_str, r'(?i)%s' % bean.variety)
       self.assertRegex(response_str, r'(?i)%s' % bean.rarity)
+
+  def test_identical_beans_are_collapsed(self):
+    num_beans = random.randint(2, 50)
+    self.core.coffee._SetCoffeeData(
+        self.test_user,
+        coffee_pb2.CoffeeData(
+            energy=10,
+            beans=[
+                coffee_pb2.Bean(
+                    region='Brazil', rarity='common', variety='Arabica')
+            ] * num_beans))
+
+    response = self.command.Handle(hypetest.TEST_CHANNEL, self.test_user,
+                                   '!coffee stash me')
+
+    self.assertIsInstance(response, message_pb2.Card)
+    self.assertEqual(len(response.fields), 1)
+    self.assertRegex(response.fields[0].text, '%d' % num_beans)
 
 
 if __name__ == '__main__':

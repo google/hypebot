@@ -15,6 +15,7 @@
 # limitations under the License.
 """Commands for interacting with HypeCoffee."""
 
+import random
 from typing import Optional, Text
 
 from grpc import StatusCode
@@ -45,7 +46,9 @@ UNOWNED_BEAN_MESSAGE = 'You don\'t own any beans with ID "%s".'
 NO_BADGES_MESSAGE = '%s doesn\'t have any badges.'
 
 
-def FormatBean(bean_data: coffee_pb2.Bean, uppercase: bool = False) -> Text:
+def FormatBean(bean_data: coffee_pb2.Bean,
+               uppercase: bool = False,
+               count: int = 1) -> Text:
   """Given a bean, returns a pretty string for output."""
   rarity = bean_data.rarity
   rarity_str = rarity
@@ -54,8 +57,11 @@ def FormatBean(bean_data: coffee_pb2.Bean, uppercase: bool = False) -> Text:
   if rarity in _RARITY_COLORS:
     rarity_str = util_lib.Colorize(
         rarity_str, _RARITY_COLORS[rarity], irc=False)
-  return '%s %s beans from %s' % (rarity_str, bean_data.variety,
-                                  bean_data.region)
+  count_str = ''
+  if count > 1:
+    count_str = '%d ' % count
+  return '%s%s %s beans from %s' % (count_str, rarity_str, bean_data.variety,
+                                    bean_data.region)
 
 
 @command_lib.CommandRegexParser(
@@ -116,9 +122,18 @@ class CoffeeStashCommand(command_lib.BaseCommand):
             (coffee_data.energy,
              inflect_lib.Plural(len(coffee_data.beans or []), 'bean'),
              inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))))
+    if not coffee_data.beans:
+      card.fields.add(text='A %s flies out of your empty stash.' %
+                      random.choice(('moth', 'fly', 'hypebug', 'bee')))
+      return card
     beans = sorted(coffee_data.beans, key=self._core.coffee.GetOccurrenceChance)
-    for bean in beans:
-      card.fields.add(text=FormatBean(bean, uppercase=True))
+    c = 1
+    for i, bean in enumerate(beans):
+      if i < (len(beans) - 1) and bean == beans[i+1]:
+        c += 1
+      else:
+        card.fields.add(text=FormatBean(bean, uppercase=True, count=c))
+        c = 1
     return card
 
 

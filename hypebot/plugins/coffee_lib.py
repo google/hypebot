@@ -68,6 +68,7 @@ _BADGE_CODE_REGISTRY = {
     7: _ShouldGrantCapitalistBadge,
     8: functools.partial(_ShouldGrantBuyerSellerBadge, positive=True),
     9: functools.partial(_ShouldGrantBuyerSellerBadge, positive=False),
+    10: lambda user_data: user_data.energy >= 50,
 }
 
 
@@ -306,7 +307,7 @@ class CoffeeLib:
     user_data = self.GetCoffeeData(user, tx)
     if user_data.energy <= 0:
       return StatusCode.RESOURCE_EXHAUSTED
-    if len(user_data.beans) > self._params.bean_storage_limit:
+    if len(user_data.beans) >= self._params.bean_storage_limit:
       return StatusCode.OUT_OF_RANGE
 
     user_data.energy -= 1
