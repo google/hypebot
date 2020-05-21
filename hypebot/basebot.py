@@ -107,7 +107,6 @@ class BaseBot(object):
           'InventoryUse': {},
           'JackpotCommand': {},
           'KittiesSalesCommand': {},
-          'MainCommand': {},
           'MemeCommand': {},
           'MissingPingCommand': {},
           'NewsCommand': {},
