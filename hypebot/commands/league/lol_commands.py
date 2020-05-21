@@ -27,17 +27,11 @@ class FreeloCommand(command_lib.TextCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.TextCommand.DEFAULT_PARAMS, {
           'choices': messages.FREELO,
-          'main_channel_only': False
       })
 
 
 @command_lib.CommandRegexParser(r'item (.+)')
 class ItemCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, item_name):
     return list(map(util_lib.Dankify,
@@ -47,22 +41,12 @@ class ItemCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'lore (.+)', reply_to_public=False)
 class LoreCommand(command_lib.BaseCommand):
 
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
   def _Handle(self, channel, user, champ_name):
     return self._core.game.GetChampionLore(champ_name)
 
 
 @command_lib.CommandRegexParser(r'patch(?:notes)? ?([0-9.]*?)')
 class PatchNotesCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, patch):
     base_link = ('http://na.leagueoflegends.com/en/news/game-updates/patch/'
@@ -76,11 +60,6 @@ class PatchNotesCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'rune (.+)')
 class ReforgedRuneCommand(command_lib.BaseCommand):
 
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
   def _Handle(self, channel, user, rune_name):
     return self._core.game.GetReforgedRuneMessage(rune_name)
 
@@ -88,11 +67,6 @@ class ReforgedRuneCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'set-api-key ([\w]+)', reply_to_public=False)
 class SetApiKeyCommand(command_lib.BaseCommand):
   """Set rito api key."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, api_key):
     logging.info('Setting API key to %s', api_key)
@@ -103,11 +77,6 @@ class SetApiKeyCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'(?:skill )?([qwerpk]|ult|passive) (.+)')
 class SkillCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, skill_name, champ_name):
     skill_name = skill_name.lower()
@@ -124,22 +93,12 @@ class SkillCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'stats (.+)')
 class StatsCommand(command_lib.BaseCommand):
 
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
   def _Handle(self, channel, user, champ_name):
     return self._core.game.GetChampStatsText(champ_name)
 
 
 @command_lib.CommandRegexParser(r'statsat (-?[0-9]+) +(.+)')
 class StatsAtCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, level, champ_name):
     level = util_lib.SafeCast(level, int, 0)

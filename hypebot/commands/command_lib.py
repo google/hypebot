@@ -68,9 +68,6 @@ class BaseCommand(object):
       #
       # Default allows all channels to handle the message.
       'avoid_channels': [],
-      # If the command should be invoked in all channels that match channels
-      # above, or only the ones listed in core.params.main_channels.
-      'main_channel_only': True,
       # By default, parsers may provide a `target_user` in their kwargs which
       # gets auto-converted into a User proto if the correponsing user exists.
       # If the user does not exist, the command will respond "Unknown user
@@ -135,10 +132,6 @@ class BaseCommand(object):
     # Channel scope
     if (not util_lib.MatchesAny(self._params.channels, channel) or
         util_lib.MatchesAny(self._params.avoid_channels, channel)):
-      return False
-    # MainChannelOnly
-    if (self._params.main_channel_only and
-        not util_lib.MatchesAny(self._core.params.main_channels, channel)):
       return False
 
     return True

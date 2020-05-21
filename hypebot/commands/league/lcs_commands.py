@@ -49,7 +49,6 @@ class BodyCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
           'target_any': True,
       })
 
@@ -63,11 +62,6 @@ class BodyCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'lcs-ch(a|u)mps (.+?)')
 class LCSPlayerStatsCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _FormatChamp(self, champ):
     """Formats champ tuple to display name (wins-losses)."""
@@ -134,11 +128,6 @@ class LCSPlayerStatsCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'lcs-link')
 class LCSLivestreamLinkCommand(command_lib.BaseCommand):
 
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
   def _Handle(self, channel: channel_pb2.Channel,
               user: user_pb2.User) -> hype_types.CommandResponse:
     livestream_links = self._core.esports.GetLivestreamLinks()
@@ -161,7 +150,6 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
           # How soon before an LCS match to send a notification to subscribed
           # channels.
           'match_notification_sec': 15 * 60,
-          'main_channel_only': False,
       })
 
   def __init__(self, *args):
@@ -220,11 +208,6 @@ class LCSMatchNotificationCommand(command_lib.BaseCommand):
                                )
 class LCSPickBanRatesCommand(command_lib.BaseCommand):
   """Better stats than LCS production."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _PopulatePickBanChampStr(self, champ_str, champ, stats, subcommand,
                                num_games):
@@ -354,11 +337,6 @@ class LCSScheduleCommand(command_lib.BaseCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
           'num_games': 5,
           'full_num_games': 10,
       })
@@ -390,7 +368,6 @@ class LCSStandingsCommand(command_lib.BaseCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'default_region': 'NA',
-          'main_channel_only': False
       })
 
   @command_lib.RequireReady('_core.esports')
@@ -446,7 +423,6 @@ class LCSResultsCommand(command_lib.BaseCommand):
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'num_games': 5,
           'full_num_games': 10,
-          'main_channel_only': False,
       })
 
   @command_lib.RequireReady('_core.esports')
@@ -466,11 +442,6 @@ class LCSResultsCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'roster(full)?(?:-(\w+))? (.+?)')
 class LCSRosterCommand(command_lib.BaseCommand):
   """Display players and their roles."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   # A map of actual player names to what their name should be displayed as.
   # You know, for memes.
@@ -510,11 +481,6 @@ class LCSRosterCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'rooster(full)? (.+?)')
 class LCSRoosterCommand(command_lib.BaseCommand):
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel, user, include_sub, team):
     team = team.upper()

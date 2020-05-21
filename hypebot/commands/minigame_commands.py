@@ -39,7 +39,6 @@ class HypeJackCommand(command_lib.BasePublicCommand):
           'ratelimit': {
               'enabled': False,
           },
-          'main_channel_only': False,
           # Channels where hypejack may be played.
           'channels': [],
       })

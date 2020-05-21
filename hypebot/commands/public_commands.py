@@ -205,7 +205,6 @@ class EggHuntCommand(command_lib.BasePublicCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'find_chance': 0.05,
-          'main_channel_only': False,
       })
 
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
@@ -227,7 +226,6 @@ class GreetingsCommand(command_lib.BasePublicCommand):
               'enabled': True,
               'return_only': True
           },
-          'main_channel_only': False,
           # Channels where we greet users who don't explictly greet hypebot.
           # Still grants paychecks in all other channels.
           'greet_channels': []
@@ -242,8 +240,7 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     #  * The request comes from a main channel
     #  * The user is not a bot
     if all((not self._core.params.execution_mode.dev, self._core.cached_store,
-            util_lib.MatchesAny(self._core.params.main_channels,
-                                channel), not user.bot)):
+            not user.bot)):
       got_paid = self._DeliverPaycheck(user)
 
     # TODO: This and below don't really belong here.
@@ -345,7 +342,6 @@ class HypeCommand(command_lib.BaseCommand):
               'interval': 0.5,
               'return_only': True,
           },
-          'main_channel_only': False,
       })
 
   def __init__(self, *args):

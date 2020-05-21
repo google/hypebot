@@ -185,25 +185,6 @@ class JackpotCommand(command_lib.BaseCommand):
     self._core.PublishMessage('lottery', warning_str)
 
 
-@command_lib.CommandRegexParser(r'mains?')
-class MainCommand(command_lib.BaseCommand):
-  """Which bots should respond to things around here."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
-
-  def _Handle(self, channel: channel_pb2.Channel,
-              user: user_pb2.User) -> hype_types.CommandResponse:
-    if (channel.visibility == channel_pb2.Channel.PRIVATE or
-        util_lib.MatchesAny(self._core.params.main_channels, channel)):
-      if channel.id.strip('#') == self._core.name.lower():
-        return 'Of course I\'m a main, this whole place is named after me'
-      else:
-        return '%s is a main bot for %s' % (self._core.name, channel.name)
-
-
 @command_lib.CommandRegexParser(r'(?:dank)?(?:meme)?(?:\s+v)?')
 class MemeCommand(command_lib.TextCommand):
 
@@ -213,7 +194,6 @@ class MemeCommand(command_lib.TextCommand):
               'Cake, and grief counseling, will be available at the '
               'conclusion of the test.'
           ],
-          'main_channel_only': False,
       })
 
 
@@ -492,11 +472,6 @@ class StoryCommand(command_lib.BasePublicCommand):
 @command_lib.CommandRegexParser(r'version')
 class VersionCommand(command_lib.BaseCommand):
   """What version of bot is this."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   def _Handle(self, channel: channel_pb2.Channel,
               user: user_pb2.User) -> hype_types.CommandResponse:
