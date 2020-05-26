@@ -87,11 +87,15 @@ class StockGame(GameBase):
   """Betting on stock prices. Why don't you just invest in the market?"""
 
   def __init__(self, stocks):
+    super(StockGame).__init__(self)
     self._stocks = stocks
 
   @property
   def name(self):
     return 'stock'
+
+  def _TargetSymbol(self, target):
+    return target.split(':')[0]
 
   def TakeBet(self, bet):
     symbols = self._stocks.ParseSymbols(bet.target)
@@ -100,7 +104,7 @@ class StockGame(GameBase):
       quote = self._stocks.Quotes(symbols).get(symbol)
       if not quote:
         return
-      bet.target = symbol
+      bet.target = '%s:%s' % (symbol, quote.price)
       stock_data = bet_pb2.StockData(quote=quote.price)
       bet.data.Pack(stock_data)
       return True
@@ -108,13 +112,17 @@ class StockGame(GameBase):
   def FormatBet(self, bet):
     stock_data = bet_pb2.StockData()
     bet.data.Unpack(stock_data)
+    symbol = self._TargetSymbol(bet.target)
     return '%s %s %s at $%0.2f' % (util_lib.FormatHypecoins(
         bet.amount), bet_pb2.Bet.Direction.Name(
-            bet.direction).lower(), bet.target, stock_data.quote)
+            bet.direction).lower(), symbol, stock_data.quote)
 
   def SettleBets(self, pool, msg_fn, *args, **kwargs):
     # Get quotes for each symbol that has a bet
-    quote_set = {b.target for user_bets in pool.values() for b in user_bets}
+    quote_set = set()
+    for user_bets in pool.values():
+      for bet in user_bets:
+        quote_set.add(self._TargetSymbol(bet.target))
     quotes = self._stocks.Quotes(list(quote_set))
 
     logging.info('Starting stock gamble, quotes: %s pool: %s', quotes, pool)
@@ -134,7 +142,7 @@ class StockGame(GameBase):
       for bet in users_bets:
         stock_data = bet_pb2.StockData()
         bet.data.Unpack(stock_data)
-        symbol = bet.target
+        symbol = self._TargetSymbol(bet.target)
         if not quotes.get(symbol):
           # No quote, take the money and whistle innocently.
           logging.info('Didn\'t get a quote for %s, ledger: %s', symbol, bet)
@@ -161,7 +169,7 @@ class StockGame(GameBase):
           payout_str = ''
         msg_fn(
             bet.user,
-            u'bet {bet[amount]} {bet[direction]} {bet[target]} at {price[prev]}'
+            u'bet {bet[amount]} {bet[direction]} {bet[symbol]} at {price[prev]}'
             u', now at {price[cur]} => {0}{1}'.format(
                 bet_result,
                 payout_str,
@@ -170,8 +178,8 @@ class StockGame(GameBase):
                         util_lib.FormatHypecoins(bet.amount),
                     'direction':
                         bet_pb2.Bet.Direction.Name(bet.direction).lower(),
-                    'target':
-                        bet.target,
+                    'symbol':
+                        self._TargetSymbol(bet.target),
                 },
                 price={
                     'cur': cur_price,
@@ -208,6 +216,7 @@ class LCSGame(GameBase):
   """Betting on LCS matches."""
 
   def __init__(self, esports):
+    super(LCSGame).__init__(self)
     self._esports = esports
 
   @property
@@ -354,6 +363,7 @@ class LotteryGame(GameBase):
   _MAX_BET_PERCENT = 0.25
 
   def __init__(self, bookie):
+    super(LotteryGame).__init__(self)
     self._bookie = bookie
     self._winning_item = inventory_lib.Create('CoinPurse', None, None, {})
 
