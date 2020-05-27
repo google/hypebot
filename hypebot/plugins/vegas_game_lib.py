@@ -87,7 +87,7 @@ class StockGame(GameBase):
   """Betting on stock prices. Why don't you just invest in the market?"""
 
   def __init__(self, stocks):
-    super(StockGame).__init__(self)
+    super(StockGame, self).__init__()
     self._stocks = stocks
 
   @property
@@ -216,7 +216,7 @@ class LCSGame(GameBase):
   """Betting on LCS matches."""
 
   def __init__(self, esports):
-    super(LCSGame).__init__(self)
+    super(LCSGame, self).__init__()
     self._esports = esports
 
   @property
@@ -363,7 +363,7 @@ class LotteryGame(GameBase):
   _MAX_BET_PERCENT = 0.25
 
   def __init__(self, bookie):
-    super(LotteryGame).__init__(self)
+    super(LotteryGame, self).__init__()
     self._bookie = bookie
     self._winning_item = inventory_lib.Create('CoinPurse', None, None, {})
 
