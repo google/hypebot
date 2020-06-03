@@ -160,10 +160,14 @@ class CoffeeBadgeCommand(command_lib.BaseCommand):
                                  target_user.display_name)
       ])
     card = message_pb2.Card(
-        header=message_pb2.Card.Header(title='%s\'s Coffee Badges' %
-                                       target_user.display_name),
+        header=message_pb2.Card.Header(
+            title='%s\'s Coffee Badges' % target_user.display_name,
+            subtitle=inflect_lib.Plural(len(coffee_data.badges), 'badge')),
         visible_fields_count=5)
-    for b_id in coffee_data.badges:
+    # Reverse list so newest badges are shown first
+    for b_id in coffee_data.badges[::-1]:
       badge = self._core.coffee.badges[b_id]
-      card.fields.add(text='%s: %s' % (badge.name, badge.description))
+      card.fields.add(
+          icon_url=badge.image_url,
+          text='%s: %s' % (badge.name, badge.description))
     return card

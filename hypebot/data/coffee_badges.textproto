@@ -94,7 +94,7 @@ badges: {
   key: 9
   value: {
     id: 9
-    name: "Collector"
+    name: "Investor"
     description:
       "You've spent more money buying beans than you've spent selling them."
     is_permanent: false
@@ -104,8 +104,17 @@ badges: {
   key: 10
   value: {
     id: 10
-    name: "Amped Up"
+    name: "Amped"
     description: "You've had 50 or more energy at one time."
+    is_permanent: true
+  }
+}
+badges: {
+  key: 11
+  value: {
+    id: 11
+    name: "Varietal Collector"
+    description: "You've owned at least one bean of every variety at one time."
     is_permanent: true
   }
 }

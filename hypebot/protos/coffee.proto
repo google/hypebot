@@ -52,6 +52,11 @@ message Badge {
   // If the badge should continue to be assigned to a user even if they no
   // longer meet the criteria for earning the badge.
   bool is_permanent = 4;
+  // The ID for this badge in any external system. May be used to grant badges
+  // to users in already existing systems of tracking badges/achievements.
+  string external_id = 5;
+  // The URL for an associated badge image, if any.
+  string image_url = 6;
 }
 
 message CoffeeStats {

@@ -55,6 +55,10 @@ def _ShouldGrantBuyerSellerBadge(user_data: coffee_pb2.CoffeeData,
   return delta > 0 if positive else delta < 0
 
 
+def _ShouldGrantVarietalBadge(user_data: coffee_pb2.CoffeeData) -> bool:
+  varietals = {bean.variety for bean in user_data.beans}
+  return len(varietals) == len(('Arabica', 'Robusta', 'Liberica'))
+
 # Map from badge_id => function that evaluates if a user should have said badge.
 _BADGE_CODE_REGISTRY = {
     0: lambda user_data: user_data.statistics.find_count >= 1,
@@ -69,6 +73,7 @@ _BADGE_CODE_REGISTRY = {
     8: functools.partial(_ShouldGrantBuyerSellerBadge, positive=True),
     9: functools.partial(_ShouldGrantBuyerSellerBadge, positive=False),
     10: lambda user_data: user_data.energy >= 50,
+    11: _ShouldGrantVarietalBadge,
 }
 
 
@@ -340,8 +345,9 @@ class CoffeeLib:
                    user_data: coffee_pb2.CoffeeData,
                    unused_bean: Optional[coffee_pb2.Bean] = None):
     """Checks all possible badges and grants/revokes them as needed."""
+    modifications = {'grant': [], 'revoke': []}
     if not self.badges:
-      return
+      return modifications
     for badge in self.badges.values():
       if badge.id not in _BADGE_CODE_REGISTRY:
         logging.warning(
@@ -354,10 +360,13 @@ class CoffeeLib:
           continue
         logging.info('Granting badge %s to %s', badge.name, user.user_id)
         user_data.badges.append(badge.id)
+        modifications['grant'].append(badge.id)
       elif not badge.is_permanent:
         if badge.id in user_data.badges:
           logging.info('Revoking badge %s from %s', badge.name, user.user_id)
           user_data.badges.remove(badge.id)
+          modifications['revoke'].append(badge.id)
+    return modifications
 
   def GetOccurrenceChance(self, bean: coffee_pb2.Bean) -> float:
     """Returns the probability of finding bean in the wild."""
