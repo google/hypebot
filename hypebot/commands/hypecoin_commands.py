@@ -43,7 +43,6 @@ _NICK_RE = r'(?P<target_user>[a-zA-Z_]\w*)'
 
 
 @command_lib.CommandRegexParser(r'%s balance ?(?P<target_user>.*)' % _HC_PREFIX)
-@command_lib.RegexParser(r'%s\?\?(?:[\s,.!?]|$)' % _NICK_RE)
 class HCBalanceCommand(command_lib.BaseCommand):
   """How much cash does a user have?"""
 
