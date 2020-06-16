@@ -17,11 +17,6 @@
 
 # pylint: disable=broad-except
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import abc
 import json
 from typing import Any, AnyStr, Callable, List, Optional, Tuple, Union
@@ -253,7 +248,7 @@ class HypeStore(with_metaclass(abc.ABCMeta)):
                  key: AnyStr,
                  subkey: AnyStr,
                  transform_fn: Callable[[JsonType], Any],
-                 success_fn: Callable[[JsonType], bool],
+                 success_fn: Callable[[JsonType], bool] = lambda _: True,
                  is_set: bool = False,
                  tx: Optional[HypeTransaction] = None) -> bool:
     """Fetches a JSON object and stores it after applying transform_fn.
