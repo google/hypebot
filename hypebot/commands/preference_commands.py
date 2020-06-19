@@ -19,11 +19,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import functools
-
 from hypebot import hype_types
 from hypebot.commands import command_lib
-
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 
@@ -31,23 +30,18 @@ def _IsProtected(pref):
   return pref.startswith('_')
 
 
-@command_lib.CommandRegexParser(r'pref(?:erence)?s *(.*?)')
+@command_lib.CommandRegexParser(r'pref(?:erence)?s *(?P<target_user>.*?)')
 class PreferencesCommand(command_lib.BaseCommand):
   """See preferences for a user."""
 
   def _Handle(self,
-              unused_channel: hype_types.Channel,
-              user: Text,
-              target_user: Text) -> hype_types.CommandResponse:
-    target_user = target_user or user
-    if target_user == 'me':
-      self._core.last_command = functools.partial(
-          self._Handle, target_user=target_user)
-      target_user = user
+              unused_channel: channel_pb2.Channel,
+              user: user_pb2.User,
+              target_user: user_pb2.User) -> hype_types.CommandResponse:
     prefs = self._core.user_prefs.GetAll(target_user)
     if all([_IsProtected(pref) for pref in prefs]):
-      return '%s is apathetic.' % target_user
-    return ['%s preferences:' % target_user] + [
+      return '%s is apathetic.' % target_user.display_name
+    return ['%s preferences:' % target_user.display_name] + [
         '* %s: %s' % (pref, value) for pref, value in prefs.items()
         if not _IsProtected(pref)]
 
@@ -57,8 +51,8 @@ class SetPreferenceCommand(command_lib.BaseCommand):
   """Set preference."""
 
   def _Handle(self,
-              unused_channel: hype_types.Channel,
-              user: Text,
+              unused_channel: channel_pb2.Channel,
+              user: user_pb2.User,
               pref: Text,
               value: Text) -> hype_types.CommandResponse:
     if _IsProtected(pref) or not self._core.user_prefs.IsValid(pref):

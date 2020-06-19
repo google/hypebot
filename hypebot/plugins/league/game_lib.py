@@ -39,6 +39,8 @@ import re
 from threading import Lock
 from typing import List, Text
 
+from absl import logging
+
 from hypebot.core import name_complete_lib
 from hypebot.core import util_lib
 from hypebot.data.league import client_vars
@@ -95,8 +97,13 @@ class GameLib(object):
 
   def ReloadData(self):
     """Reload LoL game-related data into memory from the Rito API."""
-    self._LoadChampions()
-    self._LoadReforgedRunes()
+    try:
+      self._LoadChampions()
+      self._LoadReforgedRunes()
+    except Exception:
+      logging.exception(
+          'Rito game data failed to load, looks like we picked the wrong week '
+          'to rely on undocumented APIs.')
 
   def _LoadChampions(self):
     """Logic for loading champions. Stored in-memory."""

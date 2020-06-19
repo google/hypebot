@@ -46,7 +46,7 @@ class MemStore(storage_lib.HypeStore):
     self._memory = cache_lib.LRUCache(2048)
     # Seed the bank with a little bit of money so the temporary economy can
     # function.
-    self._memory.Put('hypebank:bank:balance', '1337000000')
+    self._memory.Put('_hypebank:bank:balance', '1337000000')
     super(MemStore, self).__init__(params, *args, **kwargs)
 
   @property
@@ -83,10 +83,8 @@ class MemStore(storage_lib.HypeStore):
                           subkey: AnyStr,
                           num_past_values: int,
                           tx: Optional[MemTransaction] = None):
-    value = self.GetJsonValue(key, subkey, tx)
-    if value is not None:
-      return [value]
-    return []
+    values = self.GetJsonValue(key, subkey, tx) or []
+    return values[:num_past_values]
 
   def PrependValue(self,
                    key: AnyStr,
@@ -94,7 +92,11 @@ class MemStore(storage_lib.HypeStore):
                    new_value: JsonType,
                    max_length: Optional[int] = None,
                    tx: Optional[MemTransaction] = None) -> None:
-    self.SetJsonValue(key, subkey, new_value, tx)
+    values = self.GetJsonValue(key, subkey, tx) or []
+    values.insert(0, new_value)
+    if max_length and len(values) > max_length:
+      values = values[:max_length]
+    self.SetJsonValue(key, subkey, values, tx)
 
   def NewTransaction(self, tx_name: AnyStr) -> MemTransaction:
     return MemTransaction(tx_name)

@@ -28,7 +28,8 @@ from typing import Optional, Text
 from hypebot import hype_types
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 
 _COLOR_PATTERN = re.compile(
     r'\x03(?P<fg>\d\d)(?:|,(?P<bg>\d\d))(?P<txt>.*?)\x0f')
@@ -56,22 +57,23 @@ class DiscordInterface(interface_lib.BaseChatInterface):
       logging.info('Message from: %s - %s#%s - %s',
                    message.author.name, message.author.display_name,
                    message.author.discriminator, message.author.id)
+      user = user_pb2.User(user_id=str(message.author.id),
+                           display_name=message.author.display_name)
       # Discord has DMChannel for single user interaction and GroupChannel for
       # group DMs outside of traditional TextChannels within a guild. We only
       # consider the DMChannel (single user) as private to prevent spam in Group
       # conversations.
       if isinstance(message.channel, discord.DMChannel):
-        channel = Channel(
+        channel = channel_pb2.Channel(
             id=str(message.channel.id),
-            visibility=Channel.PRIVATE,
+            visibility=channel_pb2.Channel.PRIVATE,
             name=message.channel.recipient.name)
       else:
-        channel = Channel(
+        channel = channel_pb2.Channel(
             id=str(message.channel.id),
-            visibility=Channel.PUBLIC,
+            visibility=channel_pb2.Channel.PUBLIC,
             name=message.channel.name)
-      self._on_message_fn(channel, message.author.name,
-                          self._CleanContent(message))
+      self._on_message_fn(channel, user, self._CleanContent(message))
 
     @self._client.event
     async def on_ready():
@@ -91,7 +93,7 @@ class DiscordInterface(interface_lib.BaseChatInterface):
         for channel in message.channel_mentions
     }
     transformations.update({
-        re.escape('<@{0.id}>'.format(member)): member.name
+        re.escape('<@{0.id}>'.format(member)): member.id
         for member in message.mentions
     })
 
@@ -116,12 +118,12 @@ class DiscordInterface(interface_lib.BaseChatInterface):
   def WhoAll(self):
     for guild in self._client.guilds:
       for member in guild.members:
-        if member.bot:
-          self._user_tracker.AddBot(member.name)
-        else:
-          self._user_tracker.AddHuman(member.name)
+        self._user_tracker.AddUser(user_pb2.User(
+            user_id=str(member.id),
+            display_name=member.display_name,
+            bot=member.bot))
 
-  def _FindDiscordUser(self, user: Text) -> Optional[discord.Member]:
+  def _FindDiscordUser(self, user_id: int) -> Optional[discord.Member]:
     """Find the corresponding user on any of the connected guilds.
 
     Args:
@@ -131,14 +133,14 @@ class DiscordInterface(interface_lib.BaseChatInterface):
       The corresponding discord member if they exist, otherwise None.
     """
     for guild in self._client.guilds:
-      member = discord.utils.find(lambda m: m.name == user, guild.members)
+      member = discord.utils.find(lambda m: m.id == user_id, guild.members)
       if member:
         return member
 
-  def Notice(self, channel: hype_types.Channel, message: hype_types.Message):
+  def Notice(self, channel: channel_pb2.Channel, message: hype_types.Message):
     self.SendMessage(channel, message)
 
-  def Topic(self, channel: hype_types.Channel, new_topic: Text):
+  def Topic(self, channel: channel_pb2.Channel, new_topic: Text):
     self._client.loop.create_task(self._Topic(channel, new_topic))
 
   async def _Topic(self, channel: discord.TextChannel, new_topic: Text):
@@ -150,14 +152,22 @@ class DiscordInterface(interface_lib.BaseChatInterface):
     self._client.edit_channel(disco_channel, topic=new_topic)
 
   def SendMessage(self,
-                  channel: hype_types.Channel, message: hype_types.Message):
-    disco_channel = None
+                  channel: channel_pb2.Channel, message: hype_types.Message):
     try:
       disco_channel = self._client.get_channel(int(channel.id))
     except ValueError:
-      pass
-    if not disco_channel:
-      disco_channel = self._FindDiscordUser(channel.id)
+      logging.error('Could not send message to %s', channel)
+      return
+    # Aggregate all lines into a single response to avoid Discord ratelimits.
+    text_messages = []
+    for msg in message.messages:
+      # TODO: Discord supports fancy messages.
+      text_messages.extend(msg.text)
+    self._client.loop.create_task(
+        self._SendMessage(disco_channel, '\n'.join(text_messages)))
+
+  def SendDirectMessage(self, user: user_pb2.User, message: hype_types.Message):
+    disco_channel = self._FindDiscordUser(int(user.user_id))
     if not disco_channel:
       return
     # Aggregate all lines into a single response to avoid Discord ratelimits.

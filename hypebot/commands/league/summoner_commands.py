@@ -26,7 +26,6 @@ import arrow
 
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
-from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data.league import messages
 from hypebot.plugins.league import summoner_lib
@@ -39,11 +38,6 @@ _U_GG = 'https://u.gg/lol/profile/{region}1/{summoner}/overview'
 
 class _BaseSummonerCommand(command_lib.BaseCommand):
   """Base class for commands that want to access summoners."""
-
-  DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BaseCommand.DEFAULT_PARAMS, {
-          'main_channel_only': False,
-      })
 
   _hypebot_message = 'I deserve challenjour!'
 
@@ -74,7 +68,9 @@ class _BaseSummonerCommand(command_lib.BaseCommand):
     summoners = self._core.summoner_tracker.ParseSummoner(
         user, smurfs, region, name)
     if not summoners:
-      return 'Unknown user. http://go/lolsummoners'
+      if name == 'me':
+        return 'Unknown user. Try `!set-pref lol_summoner $summoner_name`'
+      return 'Unknown user.'
     return self._HandleSummoners(summoners, *args, **kwargs)
 
 

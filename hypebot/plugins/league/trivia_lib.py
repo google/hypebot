@@ -58,8 +58,8 @@ class TriviaMaster(object):
     """Set up a TriviaChannel for the given channel, if it doesn't exist."""
     if self.IsTrivaChannel(channel):
       return
-    self._channel_map[channel.id] = TriviaChannel(
-        channel, self._question_maker, self._msg_fn)
+    self._channel_map[channel.id] = TriviaChannel(channel, self._question_maker,
+                                                  self._msg_fn)
 
   def AddQuestions(self, channel, num_questions):
     if not self.IsTrivaChannel(channel):
@@ -67,11 +67,11 @@ class TriviaMaster(object):
     trivia_channel = self._channel_map[channel.id]
     trivia_channel.AddQuestions(num_questions)
 
-  def CheckAnswer(self, channel, username, answer):
+  def CheckAnswer(self, channel, user, answer):
     if not self.IsTrivaChannel(channel):
       return
     trivia_channel = self._channel_map[channel.id]
-    trivia_channel.CheckAnswer(username, answer)
+    trivia_channel.CheckAnswer(user, answer)
 
 
 class TriviaChannel(object):
@@ -134,8 +134,8 @@ class TriviaChannel(object):
       if self.HasCurrentQuestion():
         return
       self._current_question = self._question_maker.GetRandomQuestion()
-      self._timeout_timer = threading.Timer(
-          self._DEFAULT_TIMEOUT_SEC, self._TimeoutQuestion)
+      self._timeout_timer = threading.Timer(self._DEFAULT_TIMEOUT_SEC,
+                                            self._TimeoutQuestion)
       self._timeout_timer.start()
       self._num_questions_remaining -= 1
       must_callback = True
@@ -162,11 +162,12 @@ class TriviaChannel(object):
     if must_callback:
       self._msg_fn(self._channel,
                    'Time\'s up! Answer was: %s' % question.GetAnswer())
-      timer = threading.Timer(
-          FLAGS.trivia_delay_seconds, self._MaybeStartNewQuestion)
+      timer = threading.Timer(FLAGS.trivia_delay_seconds,
+                              self._MaybeStartNewQuestion)
       timer.start()
 
-  def CheckAnswer(self, username, answer):
+  def CheckAnswer(self, user, answer):
+    """Check if the user answered correctly."""
     must_callback = False
     question = None
     if not self.HasCurrentQuestion():
@@ -182,14 +183,14 @@ class TriviaChannel(object):
         if self._timeout_timer:
           self._timeout_timer.cancel()
           self._timeout_timer = None
-        self._leaderboard.Correct(username, question.GetPointValue())
+        self._leaderboard.Correct(user, question.GetPointValue())
 
     if must_callback:
       self._msg_fn(
-          self._channel,
-          '%s got it! Answer was: %s' % (username, question.GetAnswer()))
-      timer = threading.Timer(
-          FLAGS.trivia_delay_seconds, self._MaybeStartNewQuestion)
+          self._channel, '%s got it! Answer was: %s' %
+          (user.display_name, question.GetAnswer()))
+      timer = threading.Timer(FLAGS.trivia_delay_seconds,
+                              self._MaybeStartNewQuestion)
       timer.start()
 
 
@@ -212,7 +213,7 @@ class QuestionMaker(object):
         (self._TitleToChampQuestion, 1.0),
         (self._ChampToTitleQuestion, 1.0),
         (self._HypeBotQuestion, 0.05),
-        ]
+    ]
 
   def GetRandomQuestion(self):
     question = None
@@ -288,7 +289,10 @@ class QuestionMaker(object):
 class Question(object):
   """A class that contains a question and its answer."""
 
-  def __init__(self, question, answer, point_value=1,
+  def __init__(self,
+               question,
+               answer,
+               point_value=1,
                canonical_fn=util_lib.CanonicalizeName):
     self._question = question
     self._answer = answer
@@ -327,11 +331,11 @@ class Leaderboard(object):
     self.Reset()
     self._active = True
 
-  def Correct(self, username, point_value):
+  def Correct(self, user, point_value):
     if self._active:
-      if username not in self._user_score_map:
-        self._user_score_map[username] = 0
-      self._user_score_map[username] += point_value
+      if user.display_name not in self._user_score_map:
+        self._user_score_map[user.display_name] = 0
+      self._user_score_map[user.display_name] += point_value
 
   def AttemptToFinishGame(self, msg_fn, channel):
     if self._active:
@@ -339,8 +343,8 @@ class Leaderboard(object):
     self._active = False
 
   def Results(self):
-    sorted_users = sorted(self._user_score_map.items(),
-                          key=operator.itemgetter(1), reverse=True)
+    sorted_users = sorted(
+        self._user_score_map.items(), key=operator.itemgetter(1), reverse=True)
     user_info = []
     for user in sorted_users:
       user_info.append('{} ({})'.format(user[0], user[1]))

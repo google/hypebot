@@ -121,7 +121,7 @@ class HypeBot(basebot.BaseBot):
     self._core.summoner = summoner_lib.SummonerLib(self._core.rito,
                                                    self._core.game)
     self._core.summoner_tracker = summoner_lib.SummonerTracker(
-        self._core.rito)
+        self._core.rito, self._core.user_prefs)
     self._core.esports = esports_lib.EsportsLib(
         self._core.proxy, self._core.executor, self._core.game,
         self._core.timezone, self._core.rito)

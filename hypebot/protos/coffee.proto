@@ -1,0 +1,90 @@
+// Copyright 2020 The Hypebot Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package hypebot;
+
+message Bean {
+  // ID to identify this type of bean. Note that Beans are not unique, meaning
+  // two different beans with identical properties are considered the same, and
+  // will have the same ID.
+  string id = 1;
+
+  // Area from the world where these beans come from. Only regions in
+  // hypebot/plugins/coffee_lib.py are considered valid, but no validation is
+  // done on this field.
+  string region = 2;
+  // The bean's variety. This field could be an enum, but it's used
+  // predominantly as a string and the translation from an enum value to its
+  // string name is cumbersome in Python.
+  string variety = 3;
+  // How rare these beans are. Like above, this field could be an enum, but is
+  // left a string for coding ergonomics in python.
+  string rarity = 4;
+}
+
+// Simple mapping from a badge's ID to the full Badge. Useful for use as a text
+// specification of available Badges.
+message BadgeList {
+  map<int64, Badge> badges = 1;
+}
+
+// A badge or achievement earnable though vaious HypeCoffee-related actions.
+message Badge {
+  // Unique identifier for a badge. Used to map code to the granting/revoking of
+  // the badge, so should not change over time.
+  int64 id = 1;
+  // Display name of the badge.
+  string name = 2;
+  // A description of how to acquire the badge.
+  string description = 3;
+  // If the badge should continue to be assigned to a user even if they no
+  // longer meet the criteria for earning the badge.
+  bool is_permanent = 4;
+  // The ID for this badge in any external system. May be used to grant badges
+  // to users in already existing systems of tracking badges/achievements.
+  string external_id = 5;
+  // The URL for an associated badge image, if any.
+  string image_url = 6;
+}
+
+message CoffeeStats {
+  // Number of times a user has found a bean.
+  int64 find_count = 1;
+  // Number of times a user has drank a cup of coffee.
+  int64 drink_count = 2;
+  // Number of times a user has sold beans.
+  int64 sell_count = 3;
+  // Number of times a user has bought beans.
+  int64 buy_count = 4;
+  // Total amount of money user has made by selling beans. Kept as a string to
+  // prevent overflow in irrationally inflated markets.
+  string sell_amount = 5;
+  // Total amount of money user has spent on buying beans. Kept as a string to
+  // prevent overflow in irrationally inflated markets.
+  string buy_amount = 6;
+
+}
+
+// Per-user coffee related data.
+message CoffeeData {
+  // Amount of energy User has.
+  int32 energy = 1;
+  // List of beans user owns
+  repeated Bean beans = 2;
+  // Statistics related to usage of coffee.
+  CoffeeStats statistics = 3;
+  // List of badge_ids this user has.
+  repeated int64 badges = 5;
+}
