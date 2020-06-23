@@ -25,6 +25,7 @@ from absl import logging
 from concurrent import futures
 
 from hypebot import hype_types
+from hypebot.core import activity_tracker
 from hypebot.core import async_lib
 from hypebot.core import schedule_lib
 from hypebot.core import util_lib
@@ -256,6 +257,7 @@ class Core(object):
     self.scheduler = schedule_lib.HypeScheduler(self.timezone)
     self.executor = futures.ThreadPoolExecutor(max_workers=8)
     self.runner = async_lib.AsyncRunner(self.executor)
+    self.activity_tracker = activity_tracker.ActivityTracker(self.scheduler)
     self.inventory = inventory_lib.InventoryManager(self.store)
     self.coffee = coffee_lib.CoffeeLib(
         self.scheduler, self.store, self.name.lower(), self.params.coffee)
