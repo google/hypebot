@@ -65,7 +65,7 @@ def FormatBean(bean_data: coffee_pb2.Bean,
 
 
 @command_lib.CommandRegexParser(
-    r'coffee (?:d(?:rink)?)(?:\s+(?P<bean_id>[A-Za-z0-9]+))?')
+    r'coffee d(?:rink)?(?:\s+(?P<bean_id>[A-Za-z0-9]+))?')
 class DrinkCoffeeCommand(command_lib.BaseCommand):
   """Plebs run on Coffee."""
 
@@ -109,7 +109,7 @@ class FindCoffeeCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'coffee')
 @command_lib.CommandRegexParser(
-    r'coffee (?:s(?:tash)?)(?: (?P<target_user>.*))?')
+    r'coffee s(?:tash)?(?: (?P<target_user>.*))?')
 class CoffeeStashCommand(command_lib.BaseCommand):
   """See yours or others' bean stashes."""
 

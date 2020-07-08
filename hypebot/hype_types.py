@@ -50,5 +50,5 @@ Target = Union[User, Channel]
 
 # These types will technically allow e.g. {'foo': {'bar': MyNonJsonObject}} but
 # this is close enough.
-BaseJsonType = Union[str, bytes, int, float, dict, list, None]
+BaseJsonType = Union[str, bytes, int, float, dict, list, tuple, None]
 JsonType = Union[Dict[Text, BaseJsonType], List[BaseJsonType], BaseJsonType]

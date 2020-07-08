@@ -79,6 +79,7 @@ class HypeQueueTest(unittest.TestCase):
 
     with self.assertRaises(RuntimeError):
       self.queue.ProcessQueue()
+    self.assertEqual(self._get_queue_state(), [1])
 
   def test_process_batch_size_limits_payloads_processed(self):
     payloads = [1, 2]
@@ -122,6 +123,15 @@ class HypeQueueTest(unittest.TestCase):
     queue = self._get_queue_state()
     self.assertEqual(len(queue), 5)
     self.assertCountEqual(queue, [x for x in payloads if x % 2 != 0])
+
+  def test_queue_is_persisted_across_restarts(self):
+    self.queue.Enqueue('a')
+
+    del self.queue
+
+    self.queue = storage_lib.HypeQueue(self._store, 'test', self._scheduler,
+                                       lambda _: True)
+    self.assertEqual(self._get_queue_state(), ['a'])
 
   def _get_queue_state(self):
     return self._store.GetJsonValue(self.queue._queue_name, self.queue._SUBKEY)
