@@ -126,7 +126,8 @@ class CoffeeStashCommand(command_lib.BaseCommand):
             subtitle='%d energy | %s | %s' %
             (coffee_data.energy,
              inflect_lib.Plural(len(coffee_data.beans or []), 'bean'),
-             inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))))
+             inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))),
+        visible_fields_count=5)
     if not coffee_data.beans:
       card.fields.add(text='A %s flies out of your empty stash.' %
                       random.choice(('moth', 'fly', 'hypebug', 'bee')))

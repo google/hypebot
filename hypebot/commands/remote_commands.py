@@ -19,7 +19,9 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import functools
 import random
+from typing import Text
 
 from absl import logging
 import arrow
@@ -35,7 +37,6 @@ from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
 from hypebot.protos import stock_pb2
 from hypebot.protos import user_pb2
-from typing import Text
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
@@ -242,28 +243,37 @@ class VirusCommand(command_lib.BaseCommand):
       return 'Unknown region, maybe everyone should move there.'
 
     # Raw data
-    cases = state_data.get('positive', 0)
-    tests = state_data.get('totalTestResults', 0)
-    hospitalized = state_data.get('hospitalizedCurrently', 0)
-    ventilators = state_data.get('onVentilatorCurrently', 0)
-    icu_patients = state_data.get('inIcuCurrently', 0)
-    deaths = state_data.get('death', 0)
+    cases, new_cases = self._ParseResult(state_data, 'positive')
+    tests, new_tests = self._ParseResult(state_data, 'totalTestResults')
+    hospitalized, new_hospitalizations = self._ParseResult(
+        state_data, 'hospitalizedCurrently')
+    ventilators, _ = self._ParseResult(state_data, 'onVentilatorCurrently')
+    icu_patients, _ = self._ParseResult(state_data, 'inIcuCurrently')
+    deaths, new_deaths = self._ParseResult(state_data, 'death')
     population = self._core.population.GetPopulation(region)
+
     if detailed:
       fields = []
+      info_field_fn = functools.partial(self._InfoField, population=population)
       if cases:
-        fields.append(self._InfoField('Confirmed cases', cases, population))
+        fields.append(info_field_fn('Confirmed cases', cases, new_cases))
       if tests:
-        fields.append(self._InfoField('Tests administered', tests, population))
-      if hospitalized:
-        fields.append(self._InfoField('Hospitalized', hospitalized, population))
-      if icu_patients:
-        fields.append(self._InfoField('ICU patients', icu_patients, population))
-      if ventilators:
         fields.append(
-            self._InfoField('Ventilators in use', ventilators, population))
+            info_field_fn(
+                'Tests administered', tests, new_tests, up_is_good=True))
+      if hospitalized:
+        fields.append(
+            info_field_fn(
+                'Hospitalized',
+                hospitalized,
+                new_hospitalizations,
+            ))
+      if icu_patients:
+        fields.append(info_field_fn('ICU patients', icu_patients))
+      if ventilators:
+        fields.append(info_field_fn('Ventilators in use', ventilators))
       if deaths:
-        fields.append(self._InfoField('Deaths', deaths, population))
+        fields.append(info_field_fn('Deaths', deaths, new_deaths))
 
       update_time = state_data.get('dateChecked') or state_data.get(
           'lastModified')
@@ -300,8 +310,28 @@ class VirusCommand(command_lib.BaseCommand):
     return '%s has %s (%s) with %s administered.' % (
         region or 'The US', case_str, death_str, test_str)
 
-  def _InfoField(self, title, value, population=None):
+  def _ParseResult(self, state_data, key):
+    increase_key = key + 'Increase'
+    if key == 'hospitalizedCurrently':
+      increase_key = 'hospitalizedIncrease'
+    return state_data.get(key, 0), state_data.get(increase_key, 0)
+
+  def _InfoField(self,
+                 title,
+                 value,
+                 delta=0,
+                 population=None,
+                 up_is_good=False):
     value_str = '{:,}'.format(value)
+    percent = delta / (value - delta)
+    if percent > 0:
+      color = 'green' if up_is_good else 'red'
+      value_str += util_lib.Colorize(
+          '⬆{:,} ({:.1%})'.format(delta, percent), color, irc=False)
+    elif percent < 0:
+      color = 'red' if up_is_good else 'green'
+      value_str += util_lib.Colorize(
+          '⬇{:,} ({:.1%})'.format(delta, percent), color, irc=False)
     if population:
       percent = float(value) / population
       if percent >= 0.0005:
