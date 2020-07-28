@@ -65,7 +65,7 @@ def FormatBean(bean_data: coffee_pb2.Bean,
 
 
 @command_lib.CommandRegexParser(
-    r'coffee (?:d(?:rink)?)(?:\s+(?P<bean_id>[A-Za-z0-9]+))?')
+    r'coffee d(?:rink)?(?:\s+(?P<bean_id>[A-Za-z0-9]+))?')
 class DrinkCoffeeCommand(command_lib.BaseCommand):
   """Plebs run on Coffee."""
 
@@ -109,7 +109,7 @@ class FindCoffeeCommand(command_lib.BaseCommand):
 
 @command_lib.CommandRegexParser(r'coffee')
 @command_lib.CommandRegexParser(
-    r'coffee (?:s(?:tash)?)(?: (?P<target_user>.*))?')
+    r'coffee s(?:tash)?(?: (?P<target_user>.*))?')
 class CoffeeStashCommand(command_lib.BaseCommand):
   """See yours or others' bean stashes."""
 
@@ -126,7 +126,8 @@ class CoffeeStashCommand(command_lib.BaseCommand):
             subtitle='%d energy | %s | %s' %
             (coffee_data.energy,
              inflect_lib.Plural(len(coffee_data.beans or []), 'bean'),
-             inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))))
+             inflect_lib.Plural(len(coffee_data.badges or []), 'badge'))),
+        visible_fields_count=5)
     if not coffee_data.beans:
       card.fields.add(text='A %s flies out of your empty stash.' %
                       random.choice(('moth', 'fly', 'hypebug', 'bee')))

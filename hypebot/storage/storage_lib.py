@@ -19,17 +19,18 @@
 
 import abc
 import json
-from typing import Any, AnyStr, Callable, List, Optional, Tuple, Union
+import threading
+from typing import Any, AnyStr, Callable, List, Optional, Text, Tuple, Union
 
 from absl import logging
-from six import with_metaclass
 import retrying
 
 from hypebot.core import params_lib
+from hypebot.core import schedule_lib
 from hypebot.hype_types import JsonType
 
 
-class HypeTransaction(with_metaclass(abc.ABCMeta)):
+class HypeTransaction(abc.ABC):
   """A base class for transactions used by implementations of HypeStore.
 
   HypeTransactions are NOT thread-safe.
@@ -61,7 +62,7 @@ class HypeTransaction(with_metaclass(abc.ABCMeta)):
     """
 
 
-class HypeStore(with_metaclass(abc.ABCMeta)):
+class HypeStore(abc.ABC):
   """Abstract base class for HypeBot storage."""
 
   DEFAULT_PARAMS = params_lib.HypeParams()
@@ -407,3 +408,90 @@ class SyncedDict(dict):
     self.clear()
     # Do not use SyncedDict.update since it will FlushToStorage unnecessarily.
     super(SyncedDict, self).update(store or {})
+
+
+class HypeQueue:
+  """A durable message queue built on top of an existing HypeStore.
+
+  Any JSONType can be added to the queue via Enqueue(), and will be processes
+  in a best-effort FIFO order at a later time. Messages are processed with a
+  user-provided function that should be idempotent as it may be called more than
+  once.
+
+  Note that while HypeQueue is designed to be thread-safe, it is not meant to be
+  used across processes. Put another way, for a given queue_name, only one
+  HypeQueue object should be created globally.
+  """
+  _SUBKEY = 'hype_queue'
+
+  def __init__(self, store: HypeStore, name: Text,
+               scheduler: schedule_lib.HypeScheduler,
+               process_fn: Callable[..., bool]):
+    self._store = store
+    self._scheduler = scheduler
+    self._queue_name = '%s-queue' % name
+    self._process_fn = process_fn
+
+    # Ensures only one thread is trying to process the queue at a time.
+    # Reentrant to support recursive calls to ProcessQueue via RunInTransaction.
+    self._process_lock = threading.RLock()
+    self._scheduler.FixedRate(30, 60, self.ProcessQueue)
+
+  def Enqueue(self, payload: JsonType, tx: HypeTransaction = None) -> None:
+    """Adds payload to the queue for processing.
+
+    Args:
+      payload: Any JSON-serializable type which will be passed to process_fn at
+        a later time.
+      tx: HypeTransaction which can be used to ensure a message is enqueued
+        atomically with another operation on a HypeStore. Note only transactions
+        created from the queue's underlying HypeStore are valid here.
+
+    Returns:
+      None.
+    """
+    if not tx:
+      return self._store.RunInTransaction(self.Enqueue, payload)
+    queue = self._store.GetJsonValue(self._queue_name, self._SUBKEY, tx) or []
+    queue.append(payload)
+    self._store.SetJsonValue(self._queue_name, self._SUBKEY, queue, tx)
+
+  def ProcessQueue(self,
+                   batch_size: int = 10,
+                   tx: HypeTransaction = None) -> bool:
+    """Processes items in the queue using the queue's process_fn.
+
+    Args:
+      batch_size: How many items to pull from the queue for processing. If
+        process_fn throws for any of these items, all items will be retried
+        again later.
+      tx: Transaction to run the processing within. Shouldn't be set unless
+        processing needs to be atomic with another write to the HypeStore.
+
+    Returns:
+      If ProcessQueue successfully ran. If another execution of ProcessQueue is
+      running, ProcessQueue will do no work, and return False. Note that
+      skipping execution due to there being no entries in the queue is
+      considered a success and will return True.
+    """
+    if not self._process_lock.acquire(blocking=False):
+      # Already running, just return.
+      return False
+    try:
+      if not tx:
+        return self._store.RunInTransaction(self.ProcessQueue, batch_size)
+
+      queue = self._store.GetJsonValue(self._queue_name, self._SUBKEY, tx) or []
+      for _ in range(min(len(queue), batch_size)):
+        payload = queue.pop(0)
+        # TODO: Run _process_fn on a separate thread to allow retries
+        #   without blocking queue processing. We would need to ensure we still
+        #   attempted to keep FIFO ordering.
+        ack = self._process_fn(payload)
+        if ack:
+          self._store.SetJsonValue(self._queue_name, self._SUBKEY, queue, tx)
+        else:
+          queue.append(payload)
+      return True
+    finally:
+      self._process_lock.release()

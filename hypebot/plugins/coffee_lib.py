@@ -297,8 +297,7 @@ class CoffeeLib:
     energy = random.randint(1, 6)
     user_data.energy += energy
     user_data.statistics.drink_count += 1
-    self._GrantBadges(user, user_data, bean)
-    self._SetCoffeeData(user, user_data, tx)
+    self._UpdateGameData(user, user_data, bean, tx)
     return {'energy': energy, 'bean': bean}
 
   def FindBeans(
@@ -336,15 +335,26 @@ class CoffeeLib:
     if bean:
       user_data.beans.append(bean)
       user_data.statistics.find_count += 1
-    self._GrantBadges(user, user_data, bean)
-    self._SetCoffeeData(user, user_data, tx)
+    self._UpdateGameData(user, user_data, bean, tx)
     return bean or StatusCode.NOT_FOUND
 
-  def _GrantBadges(self,
-                   user: user_pb2.User,
-                   user_data: coffee_pb2.CoffeeData,
-                   unused_bean: Optional[coffee_pb2.Bean] = None):
-    """Checks all possible badges and grants/revokes them as needed."""
+  def _GrantBadges(
+      self,
+      user: user_pb2.User,
+      user_data: coffee_pb2.CoffeeData,
+      unused_bean: Optional[coffee_pb2.Bean] = None,
+  ) -> Dict[Text, List[int]]:
+    """Checks all possible badges and grants/revokes them as needed.
+
+    Args:
+      user: User to grant/revoke badges for.
+      user_data: User's CoffeeData.
+      unused_bean: Bean found/consumed immediately prior to this call. Currently
+        unused.
+
+    Returns:
+      A dict with badges granted and revoked.
+    """
     modifications = {'grant': [], 'revoke': []}
     if not self.badges:
       return modifications
@@ -395,7 +405,7 @@ class CoffeeLib:
     # We first generate bean_ids for any beans missing one.
     for b in [b for b in coffee_data.beans if not b.id]:
       b.id = _GetBeanId(b)
-    serialized_data = json_format.MessageToJson(coffee_data)
+    serialized_data = json_format.MessageToJson(coffee_data, indent=0)
     self._store.SetJsonValue(user.user_id, self._SUBKEY, serialized_data, tx)
 
   def TransferBeans(
@@ -428,8 +438,14 @@ class CoffeeLib:
     buyer_stats.buy_count += 1
     buyer_stats.buy_amount = str(
         util_lib.UnformatHypecoins(buyer_stats.buy_amount or '0') + price)
-    self._GrantBadges(owner, owner_beans, bean)
-    self._GrantBadges(buyer, buyer_beans, bean)
-    self._SetCoffeeData(owner, owner_beans, tx)
-    self._SetCoffeeData(buyer, buyer_beans, tx)
+    self._UpdateGameData(owner, owner_beans, bean, tx)
+    self._UpdateGameData(buyer, buyer_beans, bean, tx)
     return StatusCode.OK
+
+  def _UpdateGameData(self,
+                      user: user_pb2.User,
+                      user_data: coffee_pb2.CoffeeData,
+                      bean: Optional[coffee_pb2.Bean] = None,
+                      tx: Optional[storage_lib.HypeTransaction] = None):
+    self._GrantBadges(user, user_data, bean)
+    self._SetCoffeeData(user, user_data, tx)

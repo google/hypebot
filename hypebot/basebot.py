@@ -221,7 +221,17 @@ class BaseBot(object):
 
     for command in self._commands:
       try:
-        self._core.Reply(channel, command.Handle(channel, user, msg))
+        sync_reply = command.Handle(channel, user, msg)
+        # Note that this does not track commands that result in only:
+        #   * async replies
+        #   * direct messages to users
+        #   * rate limits
+        #   * exceptions
+        # TODO: Figure out how to do proper activity tracking.
+        if sync_reply:
+          self._core.activity_tracker.RecordActivity(channel, user,
+                                                     command.__class__.__name__)
+        self._core.Reply(channel, sync_reply)
       except Exception:
         self._core.Reply(
             user,
