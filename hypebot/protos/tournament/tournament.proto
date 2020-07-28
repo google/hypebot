@@ -1,0 +1,548 @@
+syntax = "proto3";
+
+package hypebot.tournament;
+
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+// This API represents a tournament service. It defines the following resource
+// model:
+// ```
+// tournaments/* - Collection of Tournament resources.
+// ├─ stages/* - Collection of Stage resources.
+// │  └─ matches/* - Collection of Match resources.
+// │     └─ games/* - Collection of Game resources.
+// ├─ teams/* - Collection of Team resources.
+// └─ participants/* - Collection of Participant resources.
+// ```
+//
+// Each API consumer is identified by their API key, which associates them with
+// their Google Cloud project. When a Tournament resource is created, it is
+// owned by the creator's project. Only a Tournament resource's owner may create
+// or modify resources under it.
+//
+// A Tournament is a competition between multiple Teams, each of which has one
+// or more Participants as players. Participants may also serve in other
+// capacities, such as Team captains or substitutes in individual matches.
+//
+// A Tournament also has one or many Stages, which defines the structure of the
+// tournament. Match and Game resources in each Stage are automatically created
+// by the service.
+//
+// Example: The League of Legends World Championship's Main Event is a
+// tournament that has historically been divided into five stages. It begins
+// with Groups A through D, which are four double round-robin stages that run
+// concurrently. The top two teams from each Group stage advance to a final
+// Knockout stage, which is a single-elimination bracket. The Knockout stage
+// determines the finishing order of the tournament.
+// (--
+// TODO: Add google.api.ResourceReference annotations when we figure
+// out how to stop them from breaking Cloud Endpoints deployments.
+// --)
+service TournamentService {
+  // Lists the tournaments provided by this service.
+  rpc ListTournaments(ListTournamentsRequest)
+      returns (ListTournamentsResponse) {
+    option (google.api.http) = {
+      get: "/v1/tournaments"
+    };
+  }
+
+  // Gets a tournament. Returns NOT_FOUND if the tournament does not exist.
+  rpc GetTournament(GetTournamentRequest) returns (Tournament) {
+    option (google.api.http) = {
+      get: "/v1/{name=tournaments/*}"
+    };
+    option (google.api.method_signature) = "name";
+  }
+
+  // Creates a tournament. Returns ALREADY_EXISTS if a tournament with the
+  // desired name already exists.
+  rpc CreateTournament(CreateTournamentRequest) returns (Tournament) {
+    option (google.api.http) = {
+      post: "/v1/tournaments/{tournament_id=*}"
+      body: "tournament"
+    };
+    option (google.api.method_signature) = "tournament,tournament_id";
+  }
+
+  // Lists the teams in a tournament. Returns NOT_FOUND if the tournament does
+  // not exist.
+  rpc ListTeams(ListTeamsRequest) returns (ListTeamsResponse) {
+    option (google.api.http) = {
+      get: "/v1/{parent=tournaments/*}/teams"
+    };
+    option (google.api.method_signature) = "parent";
+  }
+
+  // Gets a team. Returns NOT_FOUND if the team does not exist.
+  rpc GetTeam(GetTeamRequest) returns (Team) {
+    option (google.api.http) = {
+      get: "/v1/{name=tournaments/*/teams/*}"
+    };
+    option (google.api.method_signature) = "name";
+  }
+
+  // Creates a team within a tournament. Returns ALREADY_EXISTS if a team with
+  // the desired name already exists.
+  rpc CreateTeam(CreateTeamRequest) returns (Team) {
+    option (google.api.http) = {
+      post: "/v1/{parent=tournaments/*}/teams/{team_id=*}"
+      body: "team"
+    };
+    option (google.api.method_signature) = "parent,team,team_id";
+  }
+
+  // Creates a participant. Returns ALREADY_EXISTS if a participant with the
+  // desired name already exists.
+  rpc CreateParticipant(CreateParticipantRequest) returns (Participant) {
+    option (google.api.http) = {
+      post: "/v1/{parent=tournaments/*}/participants/{participant_id=*}"
+      body: "participant"
+    };
+    option (google.api.method_signature) = "parent,participant,participant_id";
+  }
+
+  // Lists the stages in a tournament. Returns NOT_FOUND if the tournament does
+  // not exist.
+  rpc ListStages(ListStagesRequest) returns (ListStagesResponse) {
+    option (google.api.http) = {
+      get: "/v1/{parent=tournaments/*}/stages"
+    };
+    option (google.api.method_signature) = "parent";
+  }
+
+  // Gets a stage. Returns NOT_FOUND if the stage does not exist.
+  rpc GetStage(GetStageRequest) returns (Stage) {
+    option (google.api.http) = {
+      get: "/v1/{name=tournaments/*/stages/*}"
+    };
+    option (google.api.method_signature) = "name";
+  }
+
+  // Creates a stage within a tournament. Returns ALREADY_EXISTS if a stage with
+  // the desired name already exists.
+  rpc CreateStage(CreateStageRequest) returns (Stage) {
+    option (google.api.http) = {
+      post: "/v1/{parent=tournaments/*}/stages/{stage_id=*}"
+      body: "stage"
+    };
+    option (google.api.method_signature) = "parent,stage,stage_id";
+  }
+
+  // Lists the matches in a tournament stage. Returns NOT_FOUND if the stage
+  // does not exist.
+  rpc ListMatches(ListMatchesRequest) returns (ListMatchesResponse) {
+    option (google.api.http) = {
+      get: "/v1/{parent=tournaments/*/stages/*}/matches"
+    };
+    option (google.api.method_signature) = "parent";
+  }
+
+  // Gets a match. Returns NOT_FOUND if the match does not exist.
+  rpc GetMatch(GetMatchRequest) returns (Match) {
+    option (google.api.http) = {
+      get: "/v1/{name=tournaments/*/stages/*/matches/*}"
+    };
+    option (google.api.method_signature) = "name";
+  }
+
+  // Lists the games in a tournament match. Returns NOT_FOUND if the match does
+  // not exist.
+  rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {
+    option (google.api.http) = {
+      get: "/v1/{parent=tournaments/*/stages/*/matches/*}/games"
+    };
+    option (google.api.method_signature) = "parent";
+  }
+
+  // Gets a game. Returns NOT_FOUND if the game does not exist.
+  rpc GetGame(GetGameRequest) returns (Game) {
+    option (google.api.http) = {
+      get: "/v1/{name=tournaments/*/stages/*/matches/*/games/*}"
+    };
+    option (google.api.method_signature) = "name";
+  }
+}
+
+// A representation of a tournament.
+message Tournament {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Tournament"
+    pattern: "tournaments/{tournament}"
+  };
+
+  // The resource name of the tournament.
+  string name = 1;
+
+  // The display name of the tournament.
+  string display_name = 2;
+}
+
+// A representation of a tournament stage.
+message Stage {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Stage"
+    pattern: "tournaments/{tournament}/stages/{stage}"
+  };
+
+  // The resource name of the stage.
+  string name = 1;
+
+  // The display name of the stage.
+  string display_name = 2;
+
+  // The scheduling system for the stage.
+  System system = 3;
+
+  // The best-of match format for the stage.
+  BestOf best_of = 4;
+}
+
+// A representation of a tournament system. A system indicates the structure of
+// the schedule and the pairing algorithm for producing a stage's matches.
+message System {
+  // A tournament system that results in a ranking of teams.
+  // https://en.wikipedia.org/wiki/Group_tournament_ranking_system
+  message Group {
+    // A system in which every team plays every other team exactly _n_ times.
+    // https://en.wikipedia.org/wiki/Round-robin_tournament
+    message RoundRobin {
+      // The number of matches for each pair of teams.
+      int32 pairing_match_count = 1;
+    }
+
+    // A system in which teams with similar running scores are paired each
+    // round, but not the same opponent more than once.
+    // https://en.wikipedia.org/wiki/Swiss-system_tournament
+    message Swiss {
+      // The maximum number of repeating pairings, to avoid byes when the number
+      // of teams is not a power of 2.
+      // https://en.wikipedia.org/wiki/Bye_(sports)
+      int32 maximum_repeat_count = 1;
+    }
+
+    // Method of scoring matches for ranking.
+    enum Scoring {
+      // Default value. This value is unused.
+      SCORING_UNSPECIFIED = 0;
+
+      // Scoring method in which the winning team gets 1 point and the losing
+      // team gets 0 points. In the case of a draw, both teams get 1/2 points
+      // each.
+      ONE_POINT_FOR_A_WIN = 1;
+
+      // Scoring method in which the winning team gets 3 points and the losing
+      // team gets 0 points. In the case of a draw, both teams get 1 point each.
+      // https://en.wikipedia.org/wiki/Three_points_for_a_win
+      THREE_POINTS_FOR_A_WIN = 2;
+    }
+
+    oneof type {
+      RoundRobin round_robin = 1;
+      Swiss swiss = 2;
+    }
+
+    Scoring scoring = 3;
+  }
+
+  // A tournament system that successively eliminates teams in each round to
+  // produce a single winning team.
+  // https://en.wikipedia.org/wiki/Tournament#Knockout_tournaments
+  message Elimination {
+    // A system in which a single loss eliminates a team from the tournament.
+    // https://en.wikipedia.org/wiki/Single-elimination_tournament
+    message SingleElimination {}
+
+    // A system in which two losses eliminates a team from the tournament.
+    // https://en.wikipedia.org/wiki/Double-elimination_tournament
+    message DoubleElimination {}
+
+    oneof type {
+      SingleElimination single_elimination = 1;
+      DoubleElimination double_elimination = 2;
+    }
+  }
+
+  // A tournament system that is unstructured and does not have a defined end.
+  // Scratch matches ("pick-up games") are between two static teams that have
+  // no players or captains, but instead are played entirely by substitutes.
+  // https://en.wikipedia.org/wiki/Pick-up_game
+  message Scratch {
+    // The minimum number of unplayed matches that should exist when the service
+    // automatically creates matches.
+    int32 minimum_pool_size = 1;
+  }
+
+  oneof type {
+    Group group = 1;
+    Elimination elimination = 2;
+    Scratch scratch = 3;
+  }
+}
+
+// A match format in which the winner of the majority of _n_ games wins the
+// match. When there is an even number of games, the match may result in a draw
+// if both teams win the same number of games.
+// https://en.wikipedia.org/wiki/Playoff_format#Best-of_formats
+message BestOf {
+  // The maximum number of games to play in the match.
+  int32 maximum_game_count = 1;
+}
+
+// A representation of a team participating in a tournament.
+message Team {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Team"
+    pattern: "tournaments/{tournament}/teams/{team}"
+  };
+
+  // The resource name of the team.
+  string name = 1;
+
+  // The display name of the team.
+  string display_name = 2;
+
+  // The captain of the team.
+  Participant captain = 3;
+
+  // The players on the team.
+  repeated Participant players = 4;
+}
+
+// A representation of a participant in a tournament.
+message Participant {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Participant"
+    pattern: "tournaments/{tournament}/participants/{participant}"
+  };
+
+  // The resource name of the participant.
+  string name = 1;
+}
+
+// A representation of a match in a tournament.
+message Match {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Match"
+    pattern: "tournaments/{tournament}/stages/{stage}/matches/{match}"
+  };
+
+  // The resource name of the match.
+  string name = 1;
+
+  message Team {
+    // The resource name of the team.
+    string team = 1;
+
+    // The resource names of the participants that are playing as substitutes in
+    // the match.
+    repeated string substitutes = 2;
+  }
+
+  // The teams competing in the match.
+  repeated Team teams = 2;
+
+  // The resource names of the teams that won the game. If this is empty, then
+  // the match has not completed. In a head-to-head match, two winning teams
+  // indicates a draw.
+  repeated string winning_teams = 3;
+
+  // The scheduled start time of the match.
+  google.protobuf.Timestamp start_time = 4;
+
+  // Livestream URIs for the match.
+  repeated string livestream_uris = 5;
+}
+
+// A representation of a game.
+message Game {
+  option (google.api.resource) = {
+    type: "gateway-umkabaapxa-uc.a.run.app/Game"
+    pattern: "tournaments/{tournament}/stages/{stage}/matches/{match}/games/{game}"
+  };
+
+  // The resource name of the game.
+  string name = 1;
+
+  // The resource names of the teams that won the game. If this is empty, then
+  // the game has not completed. In a head-to-head game, two winning teams
+  // indicates a draw.
+  repeated string winning_teams = 2;
+
+  // Recording URIs of videos for the game.
+  repeated string recording_uris = 3;
+
+  // The pre-defined tournament code for the game, if supported by the game's
+  // client. Codes are used by the game's client to place players directly into
+  // the game's pre-defined lobby.
+  string tournament_code = 4;
+
+  // The id of the game, for getting detailed statistics from the game's
+  // developer. This may be empty only if the game has not completed.
+  string game_id = 5;
+}
+
+// Request message for TournamentService.ListTournaments.
+message ListTournamentsRequest {}
+
+// Response message for TournamentService.ListTournaments.
+message ListTournamentsResponse {
+  // The tournaments hosted by this tournament service.
+  repeated Tournament tournaments = 1;
+}
+
+// Request message for TournamentService.GetTournament.
+message GetTournamentRequest {
+  // The name of the tournament to retrieve.
+  // Format: tournaments/{tournament}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.CreateTournament.
+message CreateTournamentRequest {
+  // The tournament to create.
+  Tournament tournament = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The ID to use for the tournament, which will become the final component of
+  // the tournament's resource name.
+  //
+  // This value should be 4-63 characters, and valid characters
+  // are /[a-z][0-9]-/.
+  string tournament_id = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.ListMatches.
+message ListMatchesRequest {
+  // The parent tournament stage, in which these matches exist.
+  // Format: tournaments/{tournament}/stages/{stage}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Response message for TournamentService.ListMatches.
+message ListMatchesResponse {
+  // The matches from the specified tournament.
+  repeated Match matches = 1;
+}
+
+// Request message for TournamentService.GetMatch.
+message GetMatchRequest {
+  // The name of the match to retrieve.
+  // Format: tournaments/{tournament}/stages/{stage}/matches/{match}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.ListStages.
+message ListStagesRequest {
+  // The parent tournament, in which these stages exist.
+  // Format: tournaments/{tournament}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Response message for TournamentService.ListStages.
+message ListStagesResponse {
+  // The stages from the specified tournament.
+  repeated Stage stages = 1;
+}
+
+// Request message for TournamentService.GetStage.
+message GetStageRequest {
+  // The name of the stage to retrieve.
+  // Format: tournaments/{tournament}/stages/{stage}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.CreateStage.
+message CreateStageRequest {
+  // The parent tournament, in which the stage will be created.
+  // Format: tournaments/{tournament}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The stage to create.
+  Stage stage = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // The ID to use for the stage, which will become the final component of
+  // the stage's resource name.
+  //
+  // This value should be 2-63 characters, and valid characters
+  // are /[a-z][0-9]-/.
+  string stage_id = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.ListTeams.
+message ListTeamsRequest {
+  // The parent tournament, in which these teams exist.
+  // Format: tournaments/{tournament}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Response message for TournamentService.ListTeams.
+message ListTeamsResponse {
+  // The teams from the specified tournament.
+  repeated Team teams = 1;
+}
+
+// Request message for TournamentService.GetTeam.
+message GetTeamRequest {
+  // The name of the team to retrieve.
+  // Format: tournaments/{tournament}/teams/{team}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.CreateTeam.
+message CreateTeamRequest {
+  // The parent tournament, in which the team will be created.
+  // Format: tournaments/{tournament}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The team to create.
+  Team team = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // The ID to use for the team, which will become the final component of
+  // the team's resource name.
+  //
+  // This value should be 2-63 characters, and valid characters
+  // are /[a-z][0-9]-/.
+  string team_id = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.CreateParticipant.
+message CreateParticipantRequest {
+  // The parent tournament, in which the participant will be created.
+  // Format: tournaments/{tournament}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The participant to create.
+  Participant participant = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // The ID to use for the participant, which will become the final component of
+  // the participant's resource name.
+  //
+  // This value should be 1-63 characters, and valid characters
+  // are /[a-z][0-9]-/.
+  string participant_id = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request message for TournamentService.ListGames.
+message ListGamesRequest {
+  // The parent tournament match, in which these games exist.
+  // Format: tournaments/{tournament}/stages/{stage}/matches/{match}
+  string parent = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Response message for TournamentService.ListGames.
+message ListGamesResponse {
+  // The games from the specified tournament match.
+  repeated Game games = 1;
+}
+
+// Request message for TournamentService.GetGame.
+message GetGameRequest {
+  // The name of the game to retrieve.
+  // Format:
+  // tournaments/{tournament}/stages/{stage}/matches/{match}/games/{game}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
