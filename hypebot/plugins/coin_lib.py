@@ -526,7 +526,7 @@ class Bank(object):
          lambda x, y: 'You can\'t put a price on this bot.'),
         (r'(dank)? ?memes?$', _MemeTeam),
         (r'(-?[0-9]+)$', _IntAmount),
-        (r'(?:0x)?([0-9,a-f]+)$', _HexAmount),
+        (r'(?:0x)([0-9,a-f]+)$', _HexAmount),
         (r'(a )?positive int$', _RandomBalance),
         (r'(-?[0-9.]+ ?[A-Za-z]+)$', _HumanIntAmount),
     )
