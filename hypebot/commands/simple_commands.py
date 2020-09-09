@@ -22,9 +22,12 @@ from __future__ import unicode_literals
 import collections
 import datetime
 import random
+import re
 import time
+from typing import Optional, Text
 
 from absl import logging
+
 from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import inflect_lib
@@ -34,7 +37,6 @@ from hypebot.data import messages
 from hypebot.plugins import vegas_game_lib
 from hypebot.protos import channel_pb2
 from hypebot.protos import user_pb2
-from typing import Optional, Text
 
 
 @command_lib.CommandRegexParser(r'8ball (.+)')
@@ -71,6 +73,9 @@ class DebugCommand(command_lib.BaseCommand):
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               subcommand: Text) -> hype_types.CommandResponse:
     subcommand = subcommand.lower().strip()
+    use_len = re.match(r'^len\((.+)\)$', subcommand)
+    if use_len:
+      subcommand = use_len.group(1)
     subcommands = subcommand.split('.')
     obj = self._core
     while subcommands:
@@ -82,10 +87,10 @@ class DebugCommand(command_lib.BaseCommand):
         except AttributeError:
           logging.warning('Tried to access %s on %s with ap: %s', token, obj,
                           available_properties)
-          return str(obj)
+          return str(len(obj) if use_len else obj)
       else:
         return 'Unknown property: %s' % subcommand
-    return str(obj)
+    return str(len(obj) if use_len else obj)
 
 
 @command_lib.CommandRegexParser(r'disappoint ?(?P<target_user>.*)')
