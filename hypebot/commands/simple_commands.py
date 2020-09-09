@@ -63,7 +63,11 @@ class CoinFlipCommand(command_lib.BaseCommand):
 class DebugCommand(command_lib.BaseCommand):
   """Peer into the depths of the bot."""
 
-  @command_lib.PrivateOnly
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.BaseCommand.DEFAULT_PARAMS, {
+          'private_channels_only': True,
+      })
+
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               subcommand: Text) -> hype_types.CommandResponse:
     subcommand = subcommand.lower().strip()
@@ -226,12 +230,10 @@ class RageCommand(command_lib.TextCommand):
 class RatelimitCommand(command_lib.TextCommand):
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.TextCommand.DEFAULT_PARAMS,
-      {'choices': messages.RATELIMIT_MEMES})
-
-  @command_lib.PrivateOnly
-  def _Handle(self, *args, **kwargs):
-    return super(RatelimitCommand, self)._Handle(*args, **kwargs)
+      command_lib.TextCommand.DEFAULT_PARAMS, {
+          'choices': messages.RATELIMIT_MEMES,
+          'private_channels_only': True
+      })
 
 
 @command_lib.CommandRegexParser(r'raise ?(?P<target_user>.*)')

@@ -75,6 +75,9 @@ class BaseCommand(object):
       # override this to `True`, it will create a fake user with user_id and
       # display_name set to target_user if the user does not exist.
       'target_any': False,
+      # If the command should only be invoked in channels with PRIVATE
+      # visibility (aka private messages, or DMs as the kids say).
+      'private_channels_only': False,
   })
 
   # Used to ignore a level of scoping.
@@ -129,6 +132,8 @@ class BaseCommand(object):
         channel_pb2.Channel.PRIVATE, channel_pb2.Channel.SYSTEM
     ]:
       return True
+    elif self._params.private_channels_only:
+      return False
     # Channel scope
     if (not util_lib.MatchesAny(self._params.channels, channel) or
         util_lib.MatchesAny(self._params.avoid_channels, channel)):
@@ -390,20 +395,6 @@ def PublicParser(cls):
 # === Handler Decorators ===
 # Put these decorators on _Handle to filter what is handled regardless of parser
 # triggering. Useful for ratelimiting or channel specific behavior.
-# TODO: Make class decorators or conditional within command params.
-# Left as similar to previous behavior for now.
-
-
-def PrivateOnly(fn):
-  """Decorator to restrict handling to queries."""
-
-  @wraps(fn)
-  def Wrapped(fn_self, channel: channel_pb2.Channel, user: user_pb2.User, *args,
-              **kwargs):
-    if channel.visibility == channel_pb2.Channel.PRIVATE:
-      return fn(fn_self, channel, user, *args, **kwargs)
-
-  return Wrapped
 
 
 def LimitPublicLines(max_lines: int = 6):
