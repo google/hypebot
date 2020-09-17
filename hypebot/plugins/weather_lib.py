@@ -1,3 +1,4 @@
+# Lint as: python3
 # coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
@@ -14,20 +15,18 @@
 # limitations under the License.
 """Current / historical weather from darksky.net."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import os
 
-from typing import Any, Dict, Optional, Text
+from typing import Any, Dict, Optional
 
+from hypebot.core import params_lib
+from hypebot.core import util_lib
 from hypebot.protos import weather_pb2
 from hypebot.proxies import proxy_lib
 
 _GEOCODE_URL = 'https://api.geocod.io/v1.4/geocode'
 _DARKSKY_URL = 'https://api.darksky.net/forecast'
+_AIRNOW_URL = 'http://www.airnowapi.org/aq'
 
 
 class WeatherException(Exception):
@@ -38,14 +37,23 @@ class WeatherException(Exception):
 
 
 class WeatherLib(object):
+  """Is it raining, is it snowing, is a hurricane a-blowing?"""
 
-  def __init__(self, proxy: proxy_lib.Proxy, darksky_key: Text,
-               geocode_key: Text):
+  DEFAULT_PARAMS = params_lib.HypeParams({
+      'geocode_key': None,
+      'darksky_key': None,
+      'airnow_key': None,
+  })
+
+  def __init__(self,
+               proxy: proxy_lib.Proxy,
+               params: params_lib.HypeParams):
     self._proxy = proxy
-    self._darksky_key = darksky_key
-    self._geocode_key = geocode_key
+    self._params = params_lib.HypeParams(self.DEFAULT_PARAMS)
+    self._params.Override(params)
+    self._params.Lock()
 
-  def _LocationToGPS(self, location: Text) -> Optional[Dict[Any, Any]]:
+  def _LocationToGPS(self, location: str) -> Optional[Dict[Any, Any]]:
     """Uses geocode API to convert human location into GPS coordinates.
 
     Args:
@@ -59,11 +67,15 @@ class WeatherLib(object):
     Raises:
       WeatherException: If the API call failed.
     """
+    # Override airport code from pacific.
+    if location.lower() == 'mtv':
+      location = 'mountain view, CA'
+
     response = self._proxy.FetchJson(
         _GEOCODE_URL,
         params={
             'q': location,
-            'api_key': self._geocode_key,
+            'api_key': self._params.geocode_key,
             'limit': 1,
         },
         force_lookup=True)
@@ -73,12 +85,12 @@ class WeatherLib(object):
       return None
     return response['results'][0]
 
-  def _CallForecast(self, gps: Dict[Text, Any]):
-    url = os.path.join(_DARKSKY_URL, self._darksky_key,
+  def _CallForecast(self, gps: Dict[str, Any]):
+    url = os.path.join(_DARKSKY_URL, self._params.darksky_key,
                        '{lat},{lng}'.format(**gps))
     return self._proxy.FetchJson(url, force_lookup=True)
 
-  def GetForecast(self, location: Text):
+  def GetForecast(self, location: str):
     """Get weather forecast for the location.
 
     Forecast consists of the current conditions and predictions for the future.
@@ -112,3 +124,32 @@ class WeatherLib(object):
           icon=day['icon'])
 
     return weather
+
+  def _CallAQI(self, zip_code: str):
+    return self._proxy.FetchJson(
+        os.path.join(_AIRNOW_URL, 'observation/zipCode/current'),
+        params={
+            'format': 'application/json',
+            'zipCode': zip_code,
+            'distance': 50,
+            'API_KEY': self._params.airnow_key,
+        },
+        force_lookup=True)
+
+  def GetAQI(self, location: str):
+    """Get air quality index for the location.
+
+    Args:
+      location: Location in human readable form.
+
+    Returns:
+      AQI response from airnow.
+    """
+    location = self._LocationToGPS(location)
+    if not location:
+      return None
+    zip_code = util_lib.Access(location, 'address_components.zip')
+    if not zip_code:
+      return None
+
+    return self._CallAQI(zip_code)

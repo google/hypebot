@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 
 import functools
 import random
-from typing import Text
+from typing import Optional, Text
 
 from absl import logging
 import arrow
@@ -32,11 +32,39 @@ from hypebot.core import inflect_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
-from hypebot.plugins import weather_lib
 from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
 from hypebot.protos import stock_pb2
 from hypebot.protos import user_pb2
+
+
+@command_lib.CommandRegexParser(
+    r'a(?:ir)?q(?:uality)?(?:i(?:ndex)?)?(?: (.*))?')
+class AirQualityCommand(command_lib.BaseCommand):
+  """Okay Google, can I breathe?"""
+
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              location: Optional[Text]):
+    location = location or self._core.user_prefs.Get(user, 'location')
+
+    aqi = self._core.weather.GetAQI(location)
+    if not aqi:
+      return f'Cannot fetch AQI for {location}'
+
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(
+            title=location,
+            subtitle='%s %s %s%s' % (aqi[0]['ReportingArea'],
+                                     aqi[0]['DateObserved'],
+                                     aqi[0]['HourObserved'],
+                                     aqi[0]['LocalTimeZone'])))
+
+    for observation in aqi:
+      card.fields.add(
+          title=observation['ParameterName'],
+          text='%s: %s' % (observation['AQI'], observation['Category']['Name']))
+
+    return card
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
@@ -346,28 +374,17 @@ class WeatherCommand(command_lib.BaseCommand):
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'forecast_days': ['Today', 'Tomorrow', 'The next day'],
-          'geocode_key': None,
-          'darksky_key': None,
       })
 
   _ICON_URL = 'https://darksky.net/images/weather-icons/%s.png'
-
-  def __init__(self, *args):
-    super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
-    self._weather = weather_lib.WeatherLib(self._core.proxy,
-                                           self._params.darksky_key,
-                                           self._params.geocode_key)
 
   def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
               unit: Text, location: Text):
     unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()
     location = location or self._core.user_prefs.Get(user, 'location')
-    # Override airport code from pacific.
-    if location.lower() == 'mtv':
-      location = 'mountain view, CA'
 
-    weather = self._weather.GetForecast(location)
+    weather = self._core.weather.GetForecast(location)
     if not weather:
       return 'Unknown location.'
 

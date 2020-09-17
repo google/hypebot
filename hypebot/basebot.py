@@ -75,6 +75,11 @@ class BaseBot(object):
       'stocks': {
           'type': 'IEXStock'
       },
+      'weather': {
+          'geocode_key': None,
+          'darksky_key': None,
+          'airnow_key': None,
+      },
       'execution_mode': {
           # If this bot is being run for development. Points to non-prod data
           # and changes the command prefix.
