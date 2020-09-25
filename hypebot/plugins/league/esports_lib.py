@@ -269,6 +269,9 @@ class RitoProvider(TournamentProvider):
         for team in group['teams']:
           if team['id'] not in self._teams:
             self._LoadTeam(team['slug'])
+          if team['id'] not in self._teams:
+            # New for 2020, we have TBD teams which don't exist.
+            continue
           b.standings.add(
               rank=group['ordinal'],
               wins=team['record']['wins'],
@@ -827,6 +830,12 @@ class EsportsLib(object):
             'LCK',
             '98767991310872058',
             aliases=['KR', 'Korea'],
+            stats_enabled=False),
+        RitoProvider(
+            self._proxy,
+            'Worlds',
+            '98767975604431411',
+            aliases=['IN'],
             stats_enabled=False),
     ]
 
