@@ -250,30 +250,40 @@ class RitoProvider(TournamentProvider):
       logging.error('Failed to get standings.')
       return
     for stage in standings_data['standings'][0]['stages']:
-      bracket_id = self._MakeBracketId(stage['name'])
-      if bracket_id in self._brackets:
-        b = self._brackets[bracket_id]
-      else:
-        b = esports_pb2.Bracket(
-            bracket_id=self._MakeBracketId(stage['name']),
-            name=stage['name'],
-            league_id=self._league_id,
-            is_playoffs=stage['slug'] == 'playoffs')
-        self._brackets[b.bracket_id] = b
+      for section in stage['sections']:
+        # The section name is more of a slug and not a pretty name. Lolesports
+        # uses JavaScript and a locale file to convert to human name, but we do
+        # the best we can given that it's non-trivial (and even more brittle) to
+        # try to parse the JS to figure out exactly what to display.
+        section_name = section['name'].replace('_', ' ').title()
+        full_name = '%s: %s' % (stage['name'], section_name)
+        bracket_id = self._MakeBracketId(full_name)
+        if bracket_id in self._brackets:
+          b = self._brackets[bracket_id]
+          del b.standings[:]
+        else:
+          b = esports_pb2.Bracket(
+              bracket_id=bracket_id,
+              name=full_name,
+              league_id=self._league_id,
+              is_playoffs=stage['slug'] == 'playoffs')
+          self._brackets[b.bracket_id] = b
 
-      del b.standings[:]
-      rankings = util_lib.Access(stage, 'sections.0.rankings')
-      if not rankings:
-        continue
-      for group in rankings:
-        for team in group['teams']:
-          if team['id'] not in self._teams:
-            self._LoadTeam(team['slug'])
-          b.standings.add(
-              rank=group['ordinal'],
-              wins=team['record']['wins'],
-              losses=team['record']['losses'],
-              team=self._teams[team['id']])
+        rankings = util_lib.Access(section, 'rankings')
+        if not rankings:
+          continue
+        for group in rankings:
+          for team in group['teams']:
+            if team['id'] not in self._teams:
+              self._LoadTeam(team['slug'])
+            if team['id'] not in self._teams:
+              # New for 2020, we have TBD teams which don't exist.
+              continue
+            b.standings.add(
+                rank=group['ordinal'],
+                wins=team['record']['wins'],
+                losses=team['record']['losses'],
+                team=self._teams[team['id']])
 
   def _LoadSchedule(self, bracket):
     """Loads schedule for given bracket.
@@ -827,6 +837,12 @@ class EsportsLib(object):
             'LCK',
             '98767991310872058',
             aliases=['KR', 'Korea'],
+            stats_enabled=False),
+        RitoProvider(
+            self._proxy,
+            'Worlds',
+            '98767975604431411',
+            aliases=['IN'],
             stats_enabled=False),
     ]
 

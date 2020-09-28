@@ -38,6 +38,7 @@ from hypebot.plugins import deploy_lib
 from hypebot.plugins import hypestack_lib
 from hypebot.plugins import inventory_lib
 from hypebot.plugins import population_lib
+from hypebot.plugins import weather_lib
 from hypebot.protos import channel_pb2
 from hypebot.protos import user_pb2
 from hypebot.proxies import proxy_factory
@@ -273,6 +274,7 @@ class Core(object):
                                                self.Reply)
     self.news = news_factory.CreateFromParams(self.params.news, self.proxy)
     self.population = population_lib.PopulationLib(self.proxy)
+    self.weather = weather_lib.WeatherLib(self.proxy, self.params.weather)
     self.betting_games = []
     self.last_command = None
     self.default_channel = self.params.default_channel
