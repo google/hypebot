@@ -21,9 +21,10 @@ from __future__ import unicode_literals
 from hypebot.core import factory_lib
 from hypebot.proxies import proxy_lib
 
-# pylint: disable=unused-import
+# pylint: disable=unused-import,g-bad-import-order
+from hypebot.proxies import empty_proxy
 from hypebot.proxies import requests_proxy
-# pylint: enable=unused-import
+# pylint: enable=unused-import,g-bad-import-order
 
 _factory = factory_lib.Factory(proxy_lib.Proxy)
 # Creates a proxy instance for the registered name.

@@ -23,6 +23,7 @@ import abc
 from absl import logging
 from hypebot import hype_types
 from hypebot.core import params_lib
+from hypebot.protos import user_pb2
 from six import with_metaclass
 from typing import Optional, Text
 
@@ -53,7 +54,7 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     or user information comes.
 
     Args:
-      on_message_fn: {callable(Channel, user, message)} Function that will be
+      on_message_fn: {callable(Channel, User, message)} Function that will be
         called in response to an incoming message.
       user_tracker: {UserTracker} Where to store results of Who/WhoAll requests.
       user_prefs: {SyncedDict} Persistent user preferences.
@@ -96,17 +97,33 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
     """
     raise NotImplementedError()
 
-  @abc.abstractmethod
-  def Who(self, user: hype_types.User):
-    """Request that `user` be added to the user tracker eventually.
+  def FindUser(self, query: Text) -> Optional[user_pb2.User]:
+    """Find user with the given name or user_id.
 
-    Subclasses are allowed (possibly encouraged) to implement this
-    asynchronously. So take care not to depend on the result immediately.
+    Attempts to find a user proto for the given query. Some interfaces provide
+    an annotation syntax to allow specifying a specific user. Since these aren't
+    universal, the Interface will convert it into the user_id for the command.
+    However, we would also like to support referring to a user by their display
+    name directly. If specifying the display name, it is possible for it not to
+    be unique.
 
     Args:
-      user: {string} user name to query.
+      query: Either user_id or display name of user.
+
+    Returns:
+      The full user proto of the desired user or None if no user exists or the
+      query does not resolve to a unique user.
     """
-    raise NotImplementedError()
+    users = self._user_tracker.AllUsers()
+    matches = []
+    for user in users:
+      if user.user_id == query:
+        return user
+      if user.display_name.lower() == query.lower():
+        matches.append(user)
+    if len(matches) == 1:
+      return matches[0]
+    return None
 
   @abc.abstractmethod
   def WhoAll(self):
@@ -123,6 +140,10 @@ class BaseChatInterface(with_metaclass(abc.ABCMeta)):
       channel: channel to receive message.
       message: message to send to the channel.
     """
+    raise NotImplementedError()
+
+  @abc.abstractmethod
+  def SendDirectMessage(self, user: user_pb2.User, message: hype_types.Message):
     raise NotImplementedError()
 
   # TODO: Eliminate Optional from the message type.

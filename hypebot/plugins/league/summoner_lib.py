@@ -21,9 +21,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from collections import defaultdict
-from threading import Lock
-
 from absl import logging
 import arrow
 
@@ -46,7 +43,8 @@ GAME_MODES = {
         constants_pb2.QueueType.RANKED_FLEX_SR: 'Flecks',
         constants_pb2.QueueType.RANKED_FLEX_TT: 'TT Flecks',
         constants_pb2.QueueType.RANKED_SOLO_5x5: 'YoloQ',
-        constants_pb2.QueueType.TEAM_BUILDER_RANKED_SOLO: 'YoloQ',  # this is weird
+        constants_pb2.QueueType.TEAM_BUILDER_RANKED_SOLO:
+            'YoloQ',  # this is weird
         constants_pb2.QueueType.RANKED_TEAM_3x3: 'Ranked 3s',
         constants_pb2.QueueType.RANKED_TEAM_5x5: 'Ranked 5s',
         constants_pb2.QueueType.TEAM_BUILDER_DRAFT_UNRANKED_5x5: 'Normals',
@@ -76,7 +74,8 @@ class SummonerLib(object):
 
   def _GetMatchParticipant(self, encrypted_account_id, match_ref, match):
     participant_ids = [
-        p.participant_id for p in match.participant_identities
+        p.participant_id
+        for p in match.participant_identities
         if p.player.current_account_id == encrypted_account_id
     ]
     participant = None
@@ -140,8 +139,8 @@ class SummonerLib(object):
       # It seems rito api returns games in US/Pacific time, but this could
       # change at any point in the future.
       logging.info('SummonerLib: gametime: %s', last_game_ref.timestamp)
-      game_data['time'] = arrow.get(
-          last_game_ref.timestamp / 1000.0).to('US/Pacific')
+      game_data['time'] = arrow.get(last_game_ref.timestamp /
+                                    1000.0).to('US/Pacific')
 
       # Other data (win/loss, fantasy points, penta)
       game_data['win'] = participant.stats.win
@@ -180,8 +179,8 @@ class SummonerLib(object):
 
       top_champs = []
       for champ in r.champion_masteries[:3]:
-        top_champs.append(
-            self._game.champion_id_to_name[str(champ.champion_id)])
+        top_champs.append(self._game.champion_id_to_name[str(
+            champ.champion_id)])
       top_champ_lvl = r.champion_masteries[0].champion_level
 
       chest_verb = ''
@@ -198,8 +197,8 @@ class SummonerLib(object):
           break
 
       if chest_verb:
-        chest_str = '%s %s' % (chest_verb, inflect_lib.Plural(total_chests,
-                                                              'chest'))
+        chest_str = '%s %s' % (chest_verb,
+                               inflect_lib.Plural(total_chests, 'chest'))
       else:
         chest_str = 'with a boatload of chests (%d)' % total_chests
 
@@ -225,8 +224,8 @@ class SummonerLib(object):
                    champ_display_name)
       champ_level = r.champion_level
       points = r.champion_points
-      return ('%s is a L%d %s player with %d mastery points.' % (
-          summoner['summoner'], champ_level, champ_display_name, points))
+      return ('%s is a L%d %s player with %d mastery points.' %
+              (summoner['summoner'], champ_level, champ_display_name, points))
     else:
       logging.info(
           'Got chimp mastery data for %s/%s [%s] on Champ %s (no data)', region,
@@ -279,14 +278,9 @@ class SummonerLib(object):
 class SummonerTracker(object):
   """Tracks summoners."""
 
-  def __init__(self, rito):
+  def __init__(self, rito, user_prefs):
     self._rito = rito
-
-    # Maps user => [main_summoner, smurf_1, ...].
-    self._users = defaultdict(list)
-    # Maps summoner name to details.
-    self._summoners = {}
-    self._lock = Lock()
+    self._user_prefs = user_prefs
 
   def ParseSummoner(self, user, smurfs, region, name):
     """Parses a summoner(s) out of mangled garbage the user supplied as input.
@@ -296,6 +290,7 @@ class SummonerTracker(object):
       smurfs: Whether to include smurfs.
       region: If any/not default.
       name: summoner or special string (e.g., 'me').
+
     Returns:
       A list of summoner_info dicts with the following fields:
         - username: Unused for now
@@ -308,64 +303,28 @@ class SummonerTracker(object):
             API calls
         - region: The given or inferred region for which this summoner is valid
     """
-    lookup_all = smurfs is not None
-    if region:
-      region.lower()
+    region = (region or self._user_prefs.Get(user, 'lol_region')).lower()
 
-    name = NormalizeSummoner(name)
     if name == 'me':
-      name = user
-
-    logging.info('Looking up %s', name)
-    summoners = []
-    # This if block is dead since self._users will always be empty until we have
-    # a way to map a username -> owned summoner name(s).
-    if name in self._users:
-      summoner_names = self._users[name]
-      known_region = self._summoners[summoner_names[0]]['region'].lower()
-      if region and region != known_region:
-        # Look up corresponding summoner name in specified region instead.
-        r = self._rito.GetSummoner(region, summoner_names[0])
-        if not r:
-          return summoners
-        summoners.append({'username': None,
-                          'summoner': summoner_names[0],
-                          'encrypted_summoner_id': r.id,
-                          'encrypted_account_id': r.account_id,
-                          'encrypted_puuid': r.puuid,
-                          'region': region})
-      else:
-        if lookup_all:
-          summoners.extend([self._summoners[x] for x in summoner_names])
-        else:
-          summoners.append(self._summoners[summoner_names[0]])
-    elif name in self._summoners:
-      known_region = self._summoners[name]['region'].lower()
-      if region and region != known_region:
-        # Same summoner as a tracked user, but different region. Need correct
-        # ID.
-        r = self._rito.GetSummoner(region, name)
-        if not r:
-          return summoners
-        summoners.append({'username': None,
-                          'summoner': r.name,
-                          'encrypted_summoner_id': r.id,
-                          'encrypted_account_id': r.account_id,
-                          'encrypted_puuid': r.puuid,
-                          'region': region})
-      else:
-        summoners.append(self._summoners[name])
+      names = self._user_prefs.Get(user, 'lol_summoner')
+      if not names:
+        return []
     else:
-      # We don't know of this summoner/username, but we can attempt to look it
-      # up with Riot and display valid summoner data anyways
-      region = region or DEFAULT_REGION
+      names = self._user_prefs.Get(name, 'lol_summoner') or name
+    names = [NormalizeSummoner(name) for name in names.split(',')]
+    if smurfs is None:
+      names = names[:1]
+
+    summoners = []
+    for name in names:
       r = self._rito.GetSummoner(region, name)
-      if not r:
-        return summoners
-      summoners.append({'username': None,
-                        'summoner': r.name,
-                        'encrypted_summoner_id': r.id,
-                        'encrypted_account_id': r.account_id,
-                        'encrypted_puuid': r.puuid,
-                        'region': region})
+      if r:
+        summoners.append({
+            'username': None,
+            'summoner': r.name,
+            'encrypted_summoner_id': r.id,
+            'encrypted_account_id': r.account_id,
+            'encrypted_puuid': r.puuid,
+            'region': region
+        })
     return summoners

@@ -28,14 +28,15 @@ import re
 from absl import app
 from absl import flags
 from absl import logging
-import arrow
 
 from hypebot import hypecore
 from hypebot.commands import command_factory
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_factory
 from hypebot.plugins import alias_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
+from typing import Text
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('params', None, 'Bot parameter overrides.')
@@ -51,9 +52,6 @@ class BaseBot(object):
       'interface': {
           'type': 'DiscordInterface'
       },
-      # Restrict some responses to only these channels.
-      # Empty string matches all channels.
-      'main_channels': [''],
       # The default channel for announcements and discussion.
       'default_channel': {
           'id': '418098011445395462',
@@ -64,6 +62,9 @@ class BaseBot(object):
       'news': {
           'type': 'NYTimesNews',
       },
+      'coffee': {
+          'badge_data_path': 'hypebot/data/coffee_badges.textproto',
+      },
       'proxy': {
           'type': 'RequestsProxy'
       },
@@ -73,6 +74,11 @@ class BaseBot(object):
       },
       'stocks': {
           'type': 'IEXStock'
+      },
+      'weather': {
+          'geocode_key': None,
+          'darksky_key': None,
+          'airnow_key': None,
       },
       'execution_mode': {
           # If this bot is being run for development. Points to non-prod data
@@ -106,11 +112,11 @@ class BaseBot(object):
           'InventoryUse': {},
           'JackpotCommand': {},
           'KittiesSalesCommand': {},
-          'MainCommand': {},
           'MemeCommand': {},
           'MissingPingCommand': {},
           'NewsCommand': {},
           'OrRiotCommand': {},
+          'PopulationCommand': {},
           'PreferencesCommand': {},
           'PrideAndAccomplishmentCommand': {},
           'RageCommand': {},
@@ -128,6 +134,8 @@ class BaseBot(object):
           'StoryCommand': {},
           'SubCommand': {},
           'VersionCommand': {},
+          'VirusCommand': {},
+          'WebsiteDevelopmentCommand': {},
           'WordCountCommand': {},
           # Hypecoins
           'HCBalanceCommand': {},
@@ -139,6 +147,11 @@ class BaseBot(object):
           'HCResetCommand': {},
           'HCRobCommand': {},
           'HCTransactionsCommand': {},
+          # HypeCoffee
+          'DrinkCoffeeCommand': {},
+          'FindCoffeeCommand': {},
+          'CoffeeBadgeCommand': {},
+          'CoffeeStashCommand': {},
           # Deployment
           'BuildCommand': {},
           'DeployCommand': {},
@@ -175,8 +188,8 @@ class BaseBot(object):
     # nested callbacks.
     self.interface = interface_factory.CreateFromParams(self._params.interface)
     self._InitCore()
-    self.interface.RegisterHandlers(
-        self.HandleMessage, self._core.user_tracker, self._core.user_prefs)
+    self.interface.RegisterHandlers(self.HandleMessage, self._core.user_tracker,
+                                    self._core.user_prefs)
 
     # TODO: Factory built code change listener.
 
@@ -197,12 +210,14 @@ class BaseBot(object):
     """
     self._core = hypecore.Core(self._params, self.interface)
 
-  def HandleMessage(self, channel, user, msg):
+  def HandleMessage(self, channel: channel_pb2.Channel, user: user_pb2.User,
+                    msg: Text):
     """Handle an incoming message from the interface."""
+    self._core.user_tracker.AddUser(user)
     msg = self._ProcessAliases(channel, user, msg)
     msg = self._ProcessNestedCalls(channel, user, msg)
 
-    if channel.visibility == Channel.PRIVATE:
+    if channel.visibility == channel_pb2.Channel.PRIVATE:
       # See if someone is confirming/denying a pending request. This must happen
       # before command parsing so that we don't try to resolve a request created
       # in this message (e.g. !stack buy 1)
@@ -211,21 +226,35 @@ class BaseBot(object):
 
     for command in self._commands:
       try:
-        self._core.Reply(channel, command.Handle(channel, user, msg))
+        sync_reply = command.Handle(channel, user, msg)
+        # Note that this does not track commands that result in only:
+        #   * async replies
+        #   * direct messages to users
+        #   * rate limits
+        #   * exceptions
+        # TODO: Figure out how to do proper activity tracking.
+        if sync_reply:
+          self._core.activity_tracker.RecordActivity(channel, user,
+                                                     command.__class__.__name__)
+        self._core.Reply(channel, sync_reply)
       except Exception:
-        self._core.Reply(user, 'Exception handling: %s' % msg,
-                         log=True, log_level=logging.ERROR)
+        self._core.Reply(
+            user,
+            'Exception handling: %s' % msg,
+            log=True,
+            log_level=logging.ERROR)
 
     # This must come after message processing for paychecks to work properly.
-    self._core.executor.submit(self._RecordUserActivity, channel, user)
+    self._core.user_tracker.RecordActivity(user, channel)
 
-  def _ProcessAliases(self, unused_channel, user, msg):
+  def _ProcessAliases(self, unused_channel, user: user_pb2.User, msg: Text):
     return alias_lib.ExpandAliases(self._core.cached_store, user, msg)
 
-  NESTED_PATTERN = re.compile(r'\$\(([^\(\)]+'
-                              # TODO: Actually tokenize input
-                              # instead of relying on cheap hacks
-                              r'(?:[^\(\)]*".*?"[^\(\)]*)*)\)')
+  NESTED_PATTERN = re.compile(
+      r'\$\(([^\(\)]+'
+      # TODO: Actually tokenize input
+      # instead of relying on cheap hacks
+      r'(?:[^\(\)]*".*?"[^\(\)]*)*)\)')
 
   def _ProcessNestedCalls(self, channel, user, msg):
     """Evaluate nested commands within $(...)."""
@@ -235,9 +264,10 @@ class BaseBot(object):
       self._core.interface = interface_factory.Create('CaptureInterface', {})
 
       # Pretend it's Private to avoid ratelimit.
-      nested_channel = Channel(id=channel.id,
-                               visibility=Channel.PRIVATE,
-                               name=channel.name)
+      nested_channel = channel_pb2.Channel(
+          id=channel.id,
+          visibility=channel_pb2.Channel.PRIVATE,
+          name=channel.name)
       self.HandleMessage(nested_channel, user, m.group(1))
       response = self._core.interface.MessageLog()
 
@@ -245,22 +275,6 @@ class BaseBot(object):
       self._core.interface = backup_interface
       m = self.NESTED_PATTERN.search(msg)
     return msg
-
-  def _RecordUserActivity(self, unused_channel, user):
-    """TLA recording of users."""
-    if not self._core.user_tracker.IsKnown(user):
-      logging.info('Unknown user %s, not recording activity', user)
-      self.interface.Who(user)
-      return
-    if self._core.user_tracker.IsBot(user) or not self._core.cached_store:
-      return
-    # Update user's activity. We only store at the 5 minute resolution to cut
-    # down on the number of storage writes we need to do.
-    utc_now = arrow.utcnow().timestamp // (5 * 60)
-    try:
-      self._core.cached_store.SetValue(user, 'lastseen', str(utc_now))
-    except Exception as e:
-      logging.error('Error recording user activity: %s', e)
 
 
 def main(argv):

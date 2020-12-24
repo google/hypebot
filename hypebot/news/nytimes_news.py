@@ -18,6 +18,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import arrow
+
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.news import news_lib
@@ -52,7 +54,9 @@ class NYTimesNews(news_lib.NewsLib):
         params={
             'api-key': self._params.api_key,
             'q': query,
-            'sort': 'relevance'
+            'sort': 'relevance',
+            'fl': 'headline,web_url,source,pub_date',
+            'begin_date': arrow.now().shift(years=-1).strftime('%Y%m%d')
         })
 
     articles = []

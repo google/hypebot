@@ -1,3 +1,4 @@
+# Lint as: python3
 # coding=utf-8
 # Copyright 2018 The Hypebot Authors. All rights reserved.
 #
@@ -28,16 +29,19 @@ import random
 import re
 from threading import RLock
 import time
+from typing import Text
 
 from absl import logging
 import arrow
-
+from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
 from hypebot.plugins import coin_lib
 from hypebot.plugins import inventory_lib
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 
 
 @command_lib.PublicParser
@@ -45,7 +49,8 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
   """Auto-reply to auto-replies."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
-      command_lib.BasePublicCommand.DEFAULT_PARAMS, {
+      command_lib.BasePublicCommand.DEFAULT_PARAMS,
+      {
           'probability': 0.25,
           # How often to apply extra snark. Note this is only checked when an
           # auto-reply is emitted. Thus the chance that an extra-snarky reply is
@@ -84,7 +89,8 @@ class AutoReplySnarkCommand(command_lib.BasePublicCommand):
     super(AutoReplySnarkCommand, self).__init__(*args)
     self._regex = re.compile(r' \((auto|auto-reply|ar)\)$')
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     match = self._regex.search(message)
     if match and random.random() < self._params.probability:
       reply = random.choice(self._AUTO_REPLIES)
@@ -108,13 +114,11 @@ class CookieJarCommand(command_lib.BasePublicCommand):
       })
 
   _SONG = [
-      _SongLine('accusation',
-                None,
+      _SongLine('accusation', None,
                 r'(?i)(\S+) stole the (\S+)s from the \2 jar\??$'),
       _SongLine('disbelief', 'Who, me?', r'(?i)who,? me'),
       _SongLine('confirmation', 'Yes, you!', r'(?i)yes,? you'),
-      _SongLine('denial',
-                'Couldn\'t be!',
+      _SongLine('denial', 'Couldn\'t be!',
                 r"(?i)(couldn't be|not me|wasn't me)"),
       _SongLine('question', 'Then who?', r'(?i)then,? who'),
   ]
@@ -140,11 +144,11 @@ class CookieJarCommand(command_lib.BasePublicCommand):
 
   def _BotIsAccusor(self):
     with self._lock:
-      return self._accusor == self._core.name
+      return self._accusor.user_id == self._core.name
 
   def _BotIsAccused(self):
     with self._lock:
-      return self._accused == self._core.name
+      return self._accused.user_id == self._core.name
 
   def _NextLine(self, channel):
     with self._lock:
@@ -160,13 +164,15 @@ class CookieJarCommand(command_lib.BasePublicCommand):
         # Bot needs to take action.
         if line.state == 'accusation':
           self._accused = random.choice(self._core.user_tracker.AllHumans())
-          self._Reply(channel, '%s stole the %ss from the %s jar' % (
-              self._accused, self._cookie, self._cookie))
+          self._Reply(
+              channel, '%s stole the %ss from the %s jar' %
+              (self._accused.display_name, self._cookie, self._cookie))
         else:
           self._Reply(channel, line.lyric)
         self._NextLine(channel)
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     with self._lock:
       if (self._cookie and
           time.time() - self._last_time > self._params.timeout_sec):
@@ -182,9 +188,10 @@ class CookieJarCommand(command_lib.BasePublicCommand):
               return
             self._cookie = match.groups()[1]
             self._accusor = user
-            self._accused = self._core.name
+            self._accused = user_pb2.User(
+                user_id=self._core.name, display_name=self._core.name)
           elif user == self._accusor and match.groups()[1] == self._cookie:
-            self._accused = match.groups()[0].lower()
+            self._accused = self._core.interface.FindUser(match.groups()[0])
 
         if ((self._AccusorsTurn() and user == self._accusor) or
             (self._AccusedTurn() and user == self._accused)):
@@ -192,16 +199,16 @@ class CookieJarCommand(command_lib.BasePublicCommand):
 
 
 @command_lib.PublicParser
-class EggHunt(command_lib.BasePublicCommand):
+class EggHuntCommand(command_lib.BasePublicCommand):
   """Gotta find them all."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BasePublicCommand.DEFAULT_PARAMS, {
           'find_chance': 0.05,
-          'main_channel_only': False,
       })
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     if random.random() < self._params.find_chance:
       item = inventory_lib.Create('HypeEgg', self._core, user, {})
       self._core.inventory.AddItem(user, item)
@@ -219,32 +226,28 @@ class GreetingsCommand(command_lib.BasePublicCommand):
               'enabled': True,
               'return_only': True
           },
-          'main_channel_only': False,
           # Channels where we greet users who don't explictly greet hypebot.
           # Still grants paychecks in all other channels.
           'greet_channels': []
       })
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     got_paid = False
     # We only deliver paychecks if:
     #  * We're running in prod (to avoid dev bots spamming people)
     #  * We have a cached_store to read from
     #  * The request comes from a main channel
     #  * The user is not a bot
-    #  * The user is not named like a subaccount
-    if all((not self._core.params.execution_mode.dev,
-            self._core.cached_store,
-            util_lib.MatchesAny(self._core.params.main_channels, channel),
-            not self._core.user_tracker.IsBot(user),
-            not coin_lib.IsSubAccount(user))):
+    if all((not self._core.params.execution_mode.dev, self._core.cached_store,
+            not user.bot)):
       got_paid = self._DeliverPaycheck(user)
 
     # TODO: This and below don't really belong here.
     if re.search(
         r'(?i)Good ?night,? (sweet )?(%s|#?%s)' %
         (self._core.name, channel.name), message):
-      return 'And flights of angels sing thee to thy rest, {}'.format(user)
+      return f'And flights of angels sing thee to thy rest, {user.display_name}'
 
     if re.search(r'(?i)oh,? %s(\..*)?\s*$' % self._core.name, message):
       return messages.OH_STRING
@@ -261,15 +264,14 @@ class GreetingsCommand(command_lib.BasePublicCommand):
     if got_paid and util_lib.MatchesAny(self._params.greet_channels, channel):
       return self._BuildGreeting(user)
 
-  def _DeliverPaycheck(self, user):
+  def _DeliverPaycheck(self, user: user_pb2.User):
     """Potentially give user a paycheck, returns if user got paid."""
     now = arrow.utcnow()
-    last_activity = arrow.Arrow.fromtimestamp(
-        int(self._core.cached_store.GetValue(user, 'lastseen') or 0) * 5 * 60)
+    last_activity = self._core.user_tracker.LastActivity(user)
 
     if last_activity < now.shift(hours=-6):
-      if not self._core.bank.ProcessPayment(
-          coin_lib.MINT_ACCOUNT, user, 100, 'Paycheck', self._Reply):
+      if not self._core.bank.ProcessPayment(coin_lib.MINT_ACCOUNT, user, 100,
+                                            'Paycheck', self._Reply):
         self._Reply(user, messages.HYPECOIN_MINT_EXHAUSTION_STR)
       return True
 
@@ -299,8 +301,8 @@ class GreetingsCommand(command_lib.BasePublicCommand):
       time_ranges = (list(range(0, 3)) + list(range(18, 24)),
                      list(range(15, 18)) + list(range(3, 6)))
 
-    greeting_params = {'user': user, 'time_of_day': time_of_day}
-    custom_greeting = self._core.store.GetValue(user, 'greetings')
+    greeting_params = {'user': user.display_name, 'time_of_day': time_of_day}
+    custom_greeting = self._core.store.GetValue(user.user_id, 'greetings')
     if hour in time_ranges[0]:
       greeting = custom_greeting or '{time_of_day}, {user}'
     elif hour in time_ranges[1]:
@@ -331,17 +333,15 @@ class HypeCommand(command_lib.BaseCommand):
       command_lib.BaseCommand.DEFAULT_PARAMS,
       {
           # Number of unique hypers needed to get doged.
-          'doge_num_hypers': 5,
+          'doge_num_hypers': 3,
           # Time needed to get doged.
           'doge_time_seconds': 10,
           # Interval between doge spams.
           'doge_rate_seconds': 3600,
-          # Hype ratelimiting is channel-wide so science doesn't go too far
           'ratelimit': {
-              'scope': 'CHANNEL',
+              'interval': 0.5,
               'return_only': True,
           },
-          'main_channel_only': False,
       })
 
   def __init__(self, *args):
@@ -353,7 +353,10 @@ class HypeCommand(command_lib.BaseCommand):
     self._hype_chains = collections.defaultdict(
         lambda: collections.defaultdict(dict))
 
-  def _Handle(self, channel, user, message):
+  # Prevents bots from recursive hyping.
+  @command_lib.HumansOnly()
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     if message == 'hype':
       # Fake the hype so it can still trigger easter eggs.
       message = '#%sHype' % self._core.name
@@ -364,18 +367,18 @@ class HypeCommand(command_lib.BaseCommand):
     for token in message.split():
       if re.match(r'(?i)(#.*antihy+pe+)\W*$', token):
         self._Spook(user)  # This avoid ratelimit, but it's private.
-        return '%s, take that non-hype attitude elsewhere.' % user
+        return '%s, take that non-hype attitude elsewhere.' % user.display_name
       match = re.match(r'(?i)(#.*hy+pe+)\W*$', token)
       if match:
         hypes.append(match.group(1))
-        if self._core.user_tracker.IsHuman(user):
-          self._UpdateHypeChains(channel, user, t)
+        self._UpdateHypeChains(channel, user, t)
         self._dogers = {
-            user: hype_time
-            for (user, hype_time) in self._dogers.items()
+            user_id: hype_time
+            for (user_id, hype_time) in self._dogers.items()
             if t - hype_time <= self._params.doge_time_seconds
         }
-        self._dogers[user] = t
+        self._dogers[user.user_id] = t
+        logging.info('Dogers: %s', self._dogers)
         if random.randint(0, 100) == 42:
           responses.append(messages.PROSE_HYPE % self._core.name)
         if len(self._dogers) >= self._params.doge_num_hypers:
@@ -391,23 +394,28 @@ class HypeCommand(command_lib.BaseCommand):
 
   def _UpdateHypeChains(self, channel, user, hype_time):
     """Records humans who have hyped recently and awards HypeStacks."""
-    logging.info('HypeChain: Adding/Updating hypechain for %s/%s',
-                 channel.id, user)
-    user_hype_record = self._hype_chains[channel.id][user]
+    logging.info('HypeChain: Adding/Updating hypechain for %s/%s', channel.id,
+                 user)
+    user_hype_record = self._hype_chains[channel.id][user.user_id]
     user_hype_record['time'] = hype_time
     if 'users' not in user_hype_record:
       user_hype_record['users'] = set()
 
-    for hype_user, hype_info in self._hype_chains[channel.id].items():
+    to_be_removed = set()
+    for hype_user_id, hype_info in self._hype_chains[channel.id].items():
       if hype_time - hype_info['time'] > 60:
         logging.info('HypeChain: Removing hypechain for %s/%s', channel.id,
-                     hype_user)
-        del self._hype_chains[channel.id][hype_user]
-      elif hype_user != user and user not in user_hype_record['users']:
+                     hype_user_id)
+        to_be_removed.add(hype_user_id)
+      elif (hype_user_id != user.user_id and
+            user.user_id not in user_hype_record['users']):
         logging.info('HypeChain: Awarding a stack to %s for %s\'s hype in %s',
-                     hype_user, user, channel.name)
-        user_hype_record['users'].add(user)
-        self._core.hypestacks.AwardStack(hype_user)
+                     hype_user_id, user, channel.name)
+        user_hype_record['users'].add(user.user_id)
+        self._core.hypestacks.AwardStack(
+            self._core.interface.FindUser(hype_user_id))
+    for user_id in to_be_removed:
+      del self._hype_chains[channel.id][user_id]
 
 
 @command_lib.PublicParser
@@ -425,25 +433,26 @@ class MissingPingCommand(command_lib.BasePublicCommand):
 
   def __init__(self, *args):
     super(MissingPingCommand, self).__init__(*args)
-    self._last_user = collections.defaultdict(str)
+    self._target = collections.defaultdict(str)
     self._regex = re.compile(r'^\?+(.*)')
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     ping_match = self._regex.match(message)
     if ping_match:
       ping_target = ping_match.groups()[0].strip()
       missing_str = 'enemies are'
       if ping_target:
         if util_lib.CanonicalizeName(ping_target) == self._core.name.lower():
-          ping_target = user
+          ping_target = user.display_name
         missing_str = '%s is' % ping_target
-        self._last_user[channel.id] = ping_target
-      elif self._last_user[channel.id]:
-        missing_str = '%s is' % self._last_user[channel.id]
+        self._target[channel.id] = ping_target
+      elif self._target[channel.id]:
+        missing_str = '%s is' % self._target[channel.id]
       return '%s signals that %s missing' % (self._core.params.name,
                                              missing_str)
-    elif self._core.user_tracker.IsHuman(user):
-      self._last_user[channel.id] = user
+    elif not user.bot:
+      self._target[channel.id] = user.display_name
 
 
 _SayPhrase = collections.namedtuple('_SayPhrase', 'phrase repetitions')
@@ -473,12 +482,13 @@ class SayCommand(command_lib.BasePublicCommand):
     self._phrases = collections.defaultdict(
         lambda: collections.defaultdict(dict))
 
-  def _Handle(self, channel, user, message):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              message: Text) -> hype_types.CommandResponse:
     match = self._regex.search(message)
     if match:
       speaker = match.groups()[0].lower()
       if speaker == 'i':
-        speaker = user
+        speaker = user.user_id
       if speaker in ['we', 'anyone', 'someone']:
         speaker = self._ANY_SPEAKER
       speaker_phrase = match.groups()[1]
@@ -487,7 +497,7 @@ class SayCommand(command_lib.BasePublicCommand):
           hypebot_phrase, self._params.repetitions)
 
     responses = []
-    for speaker in [user, self._ANY_SPEAKER]:
+    for speaker in [user.user_id, self._ANY_SPEAKER]:
       say = self._phrases[channel.id][speaker].get(message)
       if say and say.repetitions > 0:
         responses.append(say.phrase)
@@ -498,4 +508,4 @@ class SayCommand(command_lib.BasePublicCommand):
         else:
           self._phrases[channel.id][speaker][message] = say
         # Short circuit so we only get one response.
-        return responses
+      return responses

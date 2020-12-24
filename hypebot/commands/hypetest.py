@@ -29,9 +29,11 @@ from hypebot import hypecore
 from hypebot.core import params_lib
 from hypebot.interfaces import interface_factory
 from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 
 TEST_CHANNEL = channel_pb2.Channel(
     id='#test', name='Test', visibility=channel_pb2.Channel.PUBLIC)
+TEST_USER = user_pb2.User(user_id='_test', display_name='user')
 
 
 def ForCommand(command_cls):
@@ -50,6 +52,11 @@ class BaseCommandTestCase(unittest.TestCase):
   BOT_PARAMS = params_lib.MergeParams(basebot.BaseBot.DEFAULT_PARAMS, {
       'interface': {
           'type': 'CaptureInterface',
+      },
+      'proxy': {
+          # Tests are often run in an environment with no external access, so we
+          # provide a fake Proxy.
+          'type': 'EmptyProxy',
       },
       'storage': {
           'type': 'MemStore',
@@ -83,6 +90,10 @@ class BaseCommandTestCase(unittest.TestCase):
         self.BOT_PARAMS.interface)
     self.core = hypecore.Core(self.BOT_PARAMS, self.interface)
     # We disable ratelimiting for tests.
-    self.command = self._command_cls({'ratelimit': {
-        'enabled': False
-    }}, self.core)
+    self.command = self._command_cls(
+        {
+            'ratelimit': {
+                'enabled': False
+            },
+            'target_any': True
+        }, self.core)

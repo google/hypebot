@@ -16,13 +16,14 @@ syntax = "proto3";
 package hypebot;
 
 import "google/protobuf/any.proto";
+import "hypebot/protos/user.proto";
 
 message Bet {
   // The name of the game for which this bet is placed.
   string game = 1;
 
   // The user who placed the bet.
-  string user = 2;
+  User user = 2;
 
   // The target for the bet. Combined with the game/user, this makes a unique
   // key. E.g., stock symbol, league match_id.

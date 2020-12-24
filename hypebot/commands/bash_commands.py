@@ -21,14 +21,12 @@ from __future__ import unicode_literals
 import argparse
 import re
 
-from absl import logging
-
 from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.data import messages
 from hypebot.plugins import alias_lib
-from hypebot.protos.channel_pb2 import Channel
-from hypebot.protos.user_pb2 import User
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 
@@ -40,8 +38,8 @@ class AliasAddCommand(command_lib.BaseCommand):
   """Adds or updates a user's alias."""
 
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               add_prefix: Text,
               alias_name: Text,
               alias_cmd: Text) -> hype_types.CommandResponse:
@@ -64,17 +62,17 @@ class AliasCloneCommand(command_lib.BaseCommand):
   """Steal an alias from someone else."""
 
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               alias_name: Text,
-              target_user: User) -> hype_types.CommandResponse:
+              target_user: user_pb2.User) -> hype_types.CommandResponse:
     alias_name = alias_name.lower()
-    aliases = alias_lib.GetAliases(self._core.cached_store, target_user.id)
+    aliases = alias_lib.GetAliases(self._core.cached_store, target_user)
 
     if alias_name in aliases:
       alias_lib.AddOrUpdateAlias(self._core.cached_store, user, alias_name,
                                  aliases[alias_name])
-      return 'Cloned %s from %s.' % (alias_name, target_user.name)
+      return 'Cloned %s from %s.' % (alias_name, target_user.display_name)
     else:
       return 'Alias %s not found' % alias_name
 
@@ -84,8 +82,8 @@ class AliasRemoveCommand(command_lib.BaseCommand):
   """Removes an alias from a user's set."""
 
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               alias_name: Text) -> hype_types.CommandResponse:
     had_command = alias_lib.RemoveAlias(self._core.cached_store, user,
                                         alias_name)
@@ -101,14 +99,13 @@ class AliasListCommand(command_lib.BaseCommand):
 
   @command_lib.LimitPublicLines()
   def _Handle(self,
-              channel: Channel,
-              user: Text,
-              target_user: User) -> hype_types.CommandResponse:
-    aliases = alias_lib.GetAliases(self._core.cached_store, target_user.id)
-    logging.info('Aliases for user %s: %s', target_user.name, str(aliases))
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
+              target_user: user_pb2.User) -> hype_types.CommandResponse:
+    aliases = alias_lib.GetAliases(self._core.cached_store, target_user)
     if not aliases:
-      return messages.ALIASES_NO_ALIASES % target_user.name
-    header = ['%s aliases:' % target_user.name]
+      return messages.ALIASES_NO_ALIASES % target_user.display_name
+    header = ['%s aliases:' % target_user.display_name]
     return header + ['[%s] -> %s' % (k, v) for k, v in aliases.items()]
 
 
@@ -118,8 +115,8 @@ class EchoCommand(command_lib.BaseCommand):
 
   @command_lib.LimitPublicLines()
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               string: Text) -> hype_types.CommandResponse:
     lines = string.split('\n')
     return lines
@@ -131,8 +128,8 @@ class GrepCommand(command_lib.BaseCommand):
 
   @command_lib.LimitPublicLines()
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               multi_word: Text,
               single_word: Text,
               message: Text) -> hype_types.CommandResponse:
@@ -159,8 +156,8 @@ class SubCommand(command_lib.BaseCommand):
 
   @command_lib.LimitPublicLines()
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               multi_word_search: Text,
               single_word_search: Text,
               multi_word_replace: Text,
@@ -192,8 +189,8 @@ class WordCountCommand(command_lib.BaseCommand):
     self._parser.add_argument('-c', '--chars', action='store_true')
 
   def _Handle(self,
-              channel: Channel,
-              unused_user: Text,
+              channel: channel_pb2.Channel,
+              unused_user: user_pb2.User,
               options: Text,
               message: Text) -> hype_types.CommandResponse:
     if options:

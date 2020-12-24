@@ -14,13 +14,16 @@
 """Commands that control the chat application interface."""
 
 from hypebot.commands import command_lib
+from hypebot.core import params_lib
 from hypebot.protos.channel_pb2 import Channel
 
 
 @command_lib.CommandRegexParser(r'join (#[^ ]+)')
 class JoinCommand(command_lib.BaseCommand):
 
-  @command_lib.PrivateOnly
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.TextCommand.DEFAULT_PARAMS, {'private_channels_only': True})
+
   def _Handle(self, channel, user, channel_name):
     self._core.interface.Join(
         Channel(id=channel_name, visibility=Channel.PUBLIC, name=channel_name))
@@ -29,7 +32,9 @@ class JoinCommand(command_lib.BaseCommand):
 @command_lib.CommandRegexParser(r'(?:part|leave) (#[^ ]+)')
 class LeaveCommand(command_lib.BaseCommand):
 
-  @command_lib.PrivateOnly
+  DEFAULT_PARAMS = params_lib.MergeParams(
+      command_lib.TextCommand.DEFAULT_PARAMS, {'private_channels_only': True})
+
   def _Handle(self, channel, user, channel_name):
     self._core.interface.Leave(
         Channel(id=channel_name, visibility=Channel.PUBLIC, name=channel_name))

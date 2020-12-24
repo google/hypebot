@@ -32,6 +32,7 @@ from hypebot.core import util_lib
 from hypebot.plugins import playing_cards_lib
 from hypebot.plugins import vegas_game_lib
 from hypebot.protos import bet_pb2
+from hypebot.protos import user_pb2
 from typing import Dict, List, Optional, Text
 
 # Double deck to allow people to count cards.
@@ -115,12 +116,13 @@ def HandFromMatch(fn):
   """
 
   @wraps(fn)
-  def Wrapper(self, user, *args, **kwargs):
+  def Wrapper(self, user: user_pb2.User, *args, **kwargs):
     """Internal wrapper."""
     # pylint: disable=protected-access
     with self._lock:
-      if user not in self._peeps:
-        self._msg_fn(None, '%s: You are not playing in this round.' % user)
+      if user.user_id not in self._peeps:
+        self._msg_fn(
+            None, '%s: You are not playing in this round.' % user.display_name)
         return
 
       if 'hand' in kwargs:
@@ -133,15 +135,17 @@ def HandFromMatch(fn):
         hand_id = 0
 
       try:
-        hand = self._peeps[user][hand_id]
+        hand = self._peeps[user.user_id][hand_id]
       except KeyError:
         self._msg_fn(
             None, '%s: Please specify a valid hand: 0 through %d' %
-            (user, len(self._peeps[user]) - 1))
+            (user.display_name, len(self._peeps[user.user_id]) - 1))
         return
 
       if not hand.IsActive():
-        self._msg_fn(None, '%s: Hand %s is already complete.' % (user, hand_id))
+        self._msg_fn(
+            None,
+            '%s: Hand %s is already complete.' % (user.display_name, hand_id))
         return
 
       kwargs['hand'] = hand
@@ -195,21 +199,23 @@ class Game(vegas_game_lib.GameBase):
 
   def FormatBet(self, bet):
     return u'%s %s %s in %s' % (util_lib.FormatHypecoins(
-        bet.amount), bet_pb2.Bet.Direction.Name(bet.direction).lower(),
-                                bet.target, self.name)
+        bet.amount), bet_pb2.Bet.Direction.Name(
+            bet.direction).lower(), bet.target, self.name)
 
   def SettleBets(self, pool, msg_fn, *args, **kwargs):
     with self._lock:
       winners = defaultdict(int)
-      for user, user_bets in pool.items():
-        if user not in self._peeps:
+      users_by_id = {}
+      for user_id, user_bets in pool.items():
+        if user_id not in self._peeps:
           # This means the game wasn't finished. Either user timed out or prior
           # crash. Hypebot steals the bet either way.
           continue
+        users_by_id[user_id] = user_bets[0].user
 
         for bet in user_bets:
           hand_id = int(bet.target.split('-')[-1])
-          hand = self._peeps[user][hand_id]
+          hand = self._peeps[user_id][hand_id]
 
           result_str = 'lost'
           if hand.IsBusted():
@@ -217,25 +223,29 @@ class Game(vegas_game_lib.GameBase):
           elif hand.IsHypeJack():
             if self._dealer_hand.IsHypeJack():
               result_str = 'pushed'
-              winners[user] += bet.amount
+              winners[user_id] += bet.amount
             else:
               result_str = 'hypejack!'
-              winners[user] += bet.amount * 5 // 2
+              winners[user_id] += bet.amount * 5 // 2
           elif (self._dealer_hand.IsBusted() or
                 hand.Score() > self._dealer_hand.Score()):
-            winners[user] += bet.amount * 2
+            winners[user_id] += bet.amount * 2
             result_str = 'won'
           elif hand.Score() == self._dealer_hand.Score():
-            winners[user] += bet.amount
+            winners[user_id] += bet.amount
             result_str = 'pushed'
-          self._msg_fn(None, '%s: %s %s' % (user, unicode(hand), result_str))
+          self._msg_fn(
+              None,
+              '%s: %s %s' % (bet.user.display_name, unicode(hand), result_str))
 
-      return (winners.items(), {}, [])
+      return ({
+          users_by_id[user_id]: amount for user_id, amount in winners.items()
+      }, {}, [])
 
   # ============================================================================
   # HypeJack logic.
   # ============================================================================
-  def HandleMessage(self, user, msg):
+  def HandleMessage(self, user: user_pb2.User, msg: Text):
     with self._lock:
       hand_regex = r' ?([0-9]*)'
 
@@ -265,10 +275,10 @@ class Game(vegas_game_lib.GameBase):
   # ============================================================================
   # User commands.
   # ============================================================================
-  def Bet(self, user, match):
+  def Bet(self, user: user_pb2.User, match):
     with self._lock:
       if self._active_round:
-        self._msg_fn(None, '%s: Round is currently active.' % user)
+        self._msg_fn(None, '%s: Round is currently active.' % user.display_name)
         return
 
       amount = self._core.bank.ParseAmount(user,
@@ -283,7 +293,7 @@ class Game(vegas_game_lib.GameBase):
 
       if not self._core.bets.PlaceBet(self, bet, self._msg_fn):
         return
-      self._msg_fn(None, '%s joined the round.' % user)
+      self._msg_fn(None, '%s joined the round.' % user.display_name)
 
       if not self._pending_start:
         self._pending_start = True
@@ -291,7 +301,10 @@ class Game(vegas_game_lib.GameBase):
         self._scheduler.InSeconds(self.ROUND_DELAY, self.PlayRound)
 
   @HandFromMatch
-  def Double(self, user: Text, hand: Optional[Hand] = None, match=None):
+  def Double(self,
+             user: user_pb2.User,
+             hand: Optional[Hand] = None,
+             match=None):
     if not hand:
       return
     with self._lock:
@@ -299,14 +312,15 @@ class Game(vegas_game_lib.GameBase):
       hand.bet.amount *= 2
 
       if not self._core.bets.PlaceBet(self, hand.bet, self._msg_fn):
-        self._msg_fn(None, '%s: Not enough hypecoins to double.' % user)
+        self._msg_fn(None,
+                     '%s: Not enough hypecoins to double.' % user.display_name)
         hand.bet.amount /= 2
         return
       self.Hit(user, hand=hand)
       self.Stand(user, hand=hand)
       self._DisplayUser(user)
 
-  def Help(self, user):
+  def Help(self, user: user_pb2.User):
     lines = """HypeJack bears a strong resemblence to a popular casino game.
 Commands:
 * bet [amount]: signal intent to play in the round.
@@ -318,7 +332,10 @@ Commands:
     self._msg_fn(user, lines)
 
   @HandFromMatch
-  def Hit(self, user: Text, hand: Optional[Hand] = None, match=None):
+  def Hit(self,
+          user: user_pb2.User,
+          hand: Optional[Hand] = None,
+          match=None):
     if not hand:
       return
     with self._lock:
@@ -326,7 +343,10 @@ Commands:
       self._DisplayUser(user)
 
   @HandFromMatch
-  def Stand(self, user: Text, hand: Optional[Hand] = None, match=None):
+  def Stand(self,
+            user: user_pb2.User,
+            hand: Optional[Hand] = None,
+            match=None):
     if not hand:
       return
     with self._lock:
@@ -334,22 +354,27 @@ Commands:
       self._DisplayUser(user)
 
   @HandFromMatch
-  def Split(self, user: Text, hand: Optional[Hand] = None, match=None):
+  def Split(self,
+            user: user_pb2.User,
+            hand: Optional[Hand] = None,
+            match=None):
     if not hand:
       return
     with self._lock:
       if (len(hand.cards) != 2 or _CARD_POINTS[hand.cards[0].value] !=
           _CARD_POINTS[hand.cards[1].value]):
-        self._msg_fn(None, '%s: Can only split 2 equal value cards.' % user)
+        self._msg_fn(
+            None, '%s: Can only split 2 equal value cards.' % user.display_name)
         return
       new_bet = bet_pb2.Bet()
       new_bet.CopyFrom(hand.bet)
-      new_bet.target = 'hand-%d' % len(self._peeps[user])
+      new_bet.target = 'hand-%d' % len(self._peeps[user.user_id])
       if not self._core.bets.PlaceBet(self, new_bet, self._msg_fn):
-        self._msg_fn(None, '%s: Not enough hypecoins to split.' % user)
+        self._msg_fn(None,
+                     '%s: Not enough hypecoins to split.' % user.display_name)
         return
       new_hand = Hand(new_bet, hand.cards.pop())
-      self._peeps[user].append(new_hand)
+      self._peeps[user.user_id].append(new_hand)
       self.Hit(user, hand=hand)
       self.Hit(user, hand=new_hand)
       self._DisplayUser(user)
@@ -382,10 +407,10 @@ Commands:
         self._ShuffleCards()
 
       # Deal cards to plebs.
-      for user, user_bets in bets.items():
+      for user_id, user_bets in bets.items():
         hand = Hand(user_bets[0], self._shoe.pop(), self._shoe.pop())
-        self._peeps[user] = [hand]
-        self._DisplayUser(user)
+        self._peeps[user_id] = [hand]
+        self._DisplayUser(user_bets[0].user)
 
       # Deal cards to hypebot.
       self._dealer_hand = Hand(None, self._shoe.pop(), self._shoe.pop())
@@ -398,7 +423,7 @@ Commands:
       # Short-circuit game play if the dealer has a hypejack or if all peeps
       # have hypejacks.
       if not self._dealer_hand.IsHypeJack() and any(
-          [self._IsActive(user) for user in self._peeps.keys()]):
+          [self._IsActive(user_id) for user_id in self._peeps.keys()]):
         # Force the round to end after some time if some peep ran away. Waiting
         # on a condition releases the lock while waiting, then reacquires it
         # automatically. Will shortcircuit if notified when all peeps have
@@ -425,24 +450,23 @@ Commands:
         self._shoe.extend(playing_cards_lib.BuildDeck())
       random.shuffle(self._shoe)
 
-  def _DisplayUser(self, user):
+  def _DisplayUser(self, user: user_pb2.User):
     with self._lock:
-      if user in self._peeps and len(self._peeps[user]):
-        hands = self._peeps[user]
-        self._msg_fn(None, '%s: %s' % (
-            user,
-            ', '.join(
-                ['%s:%s' % (i,
-                            unicode(hand)) for i, hand in enumerate(hands)])))
+      if user in self._peeps and len(self._peeps[user.user_id]):
+        hands = self._peeps[user.user_id]
+        self._msg_fn(
+            None, '%s: %s' % (user.display_name, ', '.join([
+                '%s:%s' % (i, unicode(hand)) for i, hand in enumerate(hands)
+            ])))
 
-  def _IsActive(self, user):
+  def _IsActive(self, user_id: Text):
     """Check if user has any active hands."""
     with self._lock:
-      return (user in self._peeps and
-              any([hand.IsActive() for hand in self._peeps[user]]))
+      return (user_id in self._peeps and
+              any([hand.IsActive() for hand in self._peeps[user_id]]))
 
   def _PossiblyEndRound(self):
     """End round if no users are active."""
     with self._lock:
-      if all([not self._IsActive(user) for user in self._peeps.keys()]):
+      if all([not self._IsActive(user_id) for user_id in self._peeps.keys()]):
         self._game_ender.notify()

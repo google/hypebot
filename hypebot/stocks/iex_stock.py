@@ -74,7 +74,7 @@ class IEXStock(stock_lib.StockLib):
       stock.change_percent = quote.get('changePercent') or (
           stock.change / (stock.close or 1) * 100)
       realtime_price = quote.get('iexRealtimePrice')
-      if realtime_price and realtime_price != stock.price:
+      if realtime_price and abs(realtime_price - stock.price) > 1e-4:
         stock.extended_price = realtime_price
         stock.extended_change = realtime_price - stock.price
         stock.extended_change_percent = int(

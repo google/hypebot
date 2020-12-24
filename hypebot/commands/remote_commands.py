@@ -19,24 +19,60 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import functools
+import random
+from typing import Optional, Text
+
+from absl import logging
 import arrow
 
 from hypebot import hype_types
 from hypebot.commands import command_lib
+from hypebot.core import inflect_lib
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.plugins import vegas_game_lib
-from hypebot.plugins import weather_lib
+from hypebot.protos import channel_pb2
 from hypebot.protos import message_pb2
 from hypebot.protos import stock_pb2
-from typing import Text
+from hypebot.protos import user_pb2
+
+
+@command_lib.CommandRegexParser(
+    r'a(?:ir)?q(?:uality)?(?:i(?:ndex)?)?(?: (.*))?')
+class AirQualityCommand(command_lib.BaseCommand):
+  """Okay Google, can I breathe?"""
+
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              location: Optional[Text]):
+    location = location or self._core.user_prefs.Get(user, 'location')
+
+    aqi = self._core.weather.GetAQI(location)
+    if not aqi:
+      return f'Cannot fetch AQI for {location}'
+
+    card = message_pb2.Card(
+        header=message_pb2.Card.Header(
+            title=location,
+            subtitle='%s %s %s%s' % (aqi[0]['ReportingArea'],
+                                     aqi[0]['DateObserved'],
+                                     aqi[0]['HourObserved'],
+                                     aqi[0]['LocalTimeZone'])))
+
+    for observation in aqi:
+      card.fields.add(
+          title=observation['ParameterName'],
+          text='%s: %s' % (observation['AQI'], observation['Category']['Name']))
+
+    return card
 
 
 @command_lib.CommandRegexParser(r'(?:crypto)?kitties sales')
 class KittiesSalesCommand(command_lib.BaseCommand):
   """Humor brcooley."""
 
-  def _Handle(self, channel: hype_types.Channel, user: Text):
+  def _Handle(self, channel: channel_pb2.Channel,
+              user: user_pb2.User) -> hype_types.CommandResponse:
     data = self._core.proxy.FetchJson(
         'https://kittysales.herokuapp.com/data', {
             'offset': 0,
@@ -58,7 +94,8 @@ class KittiesSalesCommand(command_lib.BaseCommand):
 class NewsCommand(command_lib.BaseCommand):
   """If it's on the internet, it must be true."""
 
-  def _Handle(self, channel, user, query):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              query: Text) -> hype_types.CommandResponse:
     if not query:
       raw_results = self._core.news.GetTrending()
       return self._BuildHeadlineCard('Here are today\'s top stories',
@@ -73,7 +110,11 @@ class NewsCommand(command_lib.BaseCommand):
             title=header_text, image=self._core.news.icon),
         visible_fields_count=6)
 
-    for article in raw_results:
+    sorted_results = sorted(
+        raw_results,
+        key=lambda x: x.get('pub_date', arrow.get(0)),
+        reverse=True)
+    for article in sorted_results:
       field = message_pb2.Card.Field(text=article['title'])
       if article.get('pub_date'):
         field.title = 'Published %s ago' % util_lib.TimeDeltaToHumanDuration(
@@ -82,15 +123,49 @@ class NewsCommand(command_lib.BaseCommand):
       if source and source != self._core.news.source:
         field.bottom_text = source
       card.fields.append(field)
-      card.fields.append(message_pb2.Card.Field(buttons=[
-          message_pb2.Card.Field.Button(
-              text='Read article', action_url=article['url'])]))
+      card.fields.append(
+          message_pb2.Card.Field(buttons=[
+              message_pb2.Card.Field.Button(
+                  text='Read article', action_url=article['url'])
+          ]))
 
     return card
 
 
+@command_lib.CommandRegexParser(r'pop(?:ulation)?\s*(.*)')
+class PopulationCommand(command_lib.BaseCommand):
+  """Returns populations for queried regions."""
+
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              query: Text) -> hype_types.CommandResponse:
+    if not query:
+      return message_pb2.Card(
+          header=message_pb2.Card.Header(
+              title='usage: %spopulation [region_id]' % self.command_prefix),
+          fields=[
+              message_pb2.Card.Field(
+                  text=('Population data is provided by The World Bank, the US '
+                        'Census Bureau, and viewers like you.'))
+          ])
+
+    region_name = self._core.population.GetNameForRegion(query)
+    if not region_name:
+      return 'I don\'t know where that is, so I\'ll say {:,} or so.'.format(
+          random.randint(1, self._core.population.GetPopulation('world')))
+
+    provider = 'US Census Bureau' if self._core.population.IsUSState(
+        query) else 'The World Bank'
+    return message_pb2.Card(fields=[
+        message_pb2.Card.Field(
+            text='{} has a population of {:,}'.format(
+                region_name, self._core.population.GetPopulation(query)),
+            title='Source: %s' % provider)
+    ])
+
+
 @command_lib.CommandRegexParser(r'stocks?(?: (.*))?')
 class StocksCommand(command_lib.BaseCommand):
+  """Stonks go up."""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
@@ -113,7 +188,8 @@ class StocksCommand(command_lib.BaseCommand):
     if notifications:
       self._core.PublishMessage('stocks', notifications)
 
-  def _Handle(self, channel: hype_types.Channel, user: Text, symbols: Text):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              symbols: Text):
     symbols = symbols or self._core.user_prefs.Get(user, 'stocks')
     symbols = self._core.stocks.ParseSymbols(symbols)
     quotes = self._core.stocks.Quotes(symbols)
@@ -166,34 +242,149 @@ class StocksCommand(command_lib.BaseCommand):
     return change_str
 
 
+@command_lib.CommandRegexParser(
+    r'(?:virus|covid|corona(?:virus)?)(full)?[- ]?(.+)?')
+class VirusCommand(command_lib.BaseCommand):
+  """How bad is it now?"""
+
+  _API_URL = 'https://covidtracking.com/api/'
+
+  def _Handle(self, unused_channel, unused_user, detailed, region):
+    endpoint = 'us'
+    if region:
+      region = region.upper()
+      endpoint = 'states'
+    region = region or 'USA'
+    raw_results = self._core.proxy.FetchJson(self._API_URL + endpoint)
+    logging.info('CovidAPI raw_result: %s', raw_results)
+    if not raw_results:
+      return 'Unknown region, maybe everyone should move there.'
+
+    state_data = {}
+    if len(raw_results) == 1:
+      state_data = raw_results[0]
+    else:
+      state_data = [state for state in raw_results
+                    if state.get('state') == region][0]
+
+    if not state_data:
+      return 'Unknown region, maybe everyone should move there.'
+
+    # Raw data
+    cases, new_cases = self._ParseResult(state_data, 'positive')
+    tests, new_tests = self._ParseResult(state_data, 'totalTestResults')
+    hospitalized, new_hospitalizations = self._ParseResult(
+        state_data, 'hospitalizedCurrently')
+    ventilators, _ = self._ParseResult(state_data, 'onVentilatorCurrently')
+    icu_patients, _ = self._ParseResult(state_data, 'inIcuCurrently')
+    deaths, new_deaths = self._ParseResult(state_data, 'death')
+    population = self._core.population.GetPopulation(region)
+
+    if detailed:
+      fields = []
+      info_field_fn = functools.partial(self._InfoField, population=population)
+      if cases:
+        fields.append(info_field_fn('Confirmed cases', cases, new_cases))
+      if tests:
+        fields.append(
+            info_field_fn(
+                'Tests administered', tests, new_tests, up_is_good=True))
+      if hospitalized:
+        fields.append(
+            info_field_fn(
+                'Hospitalized',
+                hospitalized,
+                new_hospitalizations,
+            ))
+      if icu_patients:
+        fields.append(info_field_fn('ICU patients', icu_patients))
+      if ventilators:
+        fields.append(info_field_fn('Ventilators in use', ventilators))
+      if deaths:
+        fields.append(info_field_fn('Deaths', deaths, new_deaths))
+
+      update_time = state_data.get('dateChecked') or state_data.get(
+          'lastModified')
+      update_time_str = 'some time'
+      if update_time:
+        update_timedelta = arrow.utcnow() - arrow.get(update_time)
+        update_time_str = util_lib.TimeDeltaToHumanDuration(update_timedelta)
+
+      fields.append(
+          message_pb2.Card.Field(buttons=[
+              message_pb2.Card.Field.Button(
+                  text='Source', action_url='https://covidtracking.com/')
+          ]))
+      return message_pb2.Card(
+          header=message_pb2.Card.Header(
+              title='%s COVID-19 Statistics' %
+              self._core.population.GetNameForRegion(region),
+              subtitle='Updated %s ago' % update_time_str),
+          fields=fields,
+          visible_fields_count=4)
+
+    deaths, descriptor = inflect_lib.Plural(deaths, 'death').split()
+    death_str = '{:,} {}'.format(int(deaths), descriptor)
+
+    cases, descriptor = inflect_lib.Plural(cases,
+                                           'confirmed cases').split(maxsplit=1)
+    case_str = '{:,} {}'.format(int(cases), descriptor)
+
+    tests, descriptor = inflect_lib.Plural(tests, 'test').split()
+    percent_tested = float(tests) / population
+    test_str = '{:,} [{:.1%} of the population] {}'.format(
+        int(tests), percent_tested, descriptor)
+
+    return '%s has %s (%s) with %s administered.' % (
+        region or 'The US', case_str, death_str, test_str)
+
+  def _ParseResult(self, state_data, key):
+    increase_key = key + 'Increase'
+    if key == 'hospitalizedCurrently':
+      increase_key = 'hospitalizedIncrease'
+    return state_data.get(key, 0), state_data.get(increase_key, 0)
+
+  def _InfoField(self,
+                 title,
+                 value,
+                 delta=0,
+                 population=None,
+                 up_is_good=False):
+    value_str = '{:,}'.format(value)
+    percent = delta / (value - delta)
+    if percent > 0:
+      color = 'green' if up_is_good else 'red'
+      value_str += util_lib.Colorize(
+          '⬆{:,} ({:.1%})'.format(delta, percent), color, irc=False)
+    elif percent < 0:
+      color = 'red' if up_is_good else 'green'
+      value_str += util_lib.Colorize(
+          '⬇{:,} ({:.1%})'.format(delta, percent), color, irc=False)
+    if population:
+      percent = float(value) / population
+      if percent >= 0.0005:
+        value_str += ' [{:.1%} of the population]'.format(percent)
+    return message_pb2.Card.Field(title=title, text=value_str)
+
+
 @command_lib.CommandRegexParser(r'weather(?:-([kfc]))?(?: (.*))?')
 class WeatherCommand(command_lib.BaseCommand):
+  """Okay Google, what's the weather?"""
 
   DEFAULT_PARAMS = params_lib.MergeParams(
       command_lib.BaseCommand.DEFAULT_PARAMS, {
           'forecast_days': ['Today', 'Tomorrow', 'The next day'],
-          'geocode_key': None,
-          'darksky_key': None,
       })
 
   _ICON_URL = 'https://darksky.net/images/weather-icons/%s.png'
 
-  def __init__(self, *args):
-    super(WeatherCommand, self).__init__(*args)  # pytype: disable=wrong-arg-count
-    self._weather = weather_lib.WeatherLib(self._core.proxy,
-                                           self._params.darksky_key,
-                                           self._params.geocode_key)
-
-  def _Handle(self, channel: hype_types.Channel, user: Text, unit: Text,
-              location: Text):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
+              unit: Text, location: Text):
     unit = unit or self._core.user_prefs.Get(user, 'temperature_unit')
     unit = unit.upper()
     location = location or self._core.user_prefs.Get(user, 'location')
-    # Override airport code from pacific.
-    if location.lower() == 'mtv':
-      location = 'mountain view, CA'
 
-    weather = self._weather.GetForecast(location)
+    weather = self._core.weather.GetForecast(location)
     if not weather:
       return 'Unknown location.'
 

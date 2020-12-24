@@ -24,6 +24,9 @@ from __future__ import unicode_literals
 
 import re
 
+from hypebot.protos import user_pb2
+from typing import Text
+
 ALIAS_SUBKEY = 'user_aliases'
 ME_REGEX = re.compile(r'\\me\b')
 ALL_ARGS_REGEX = re.compile(r'\\@:?')
@@ -31,23 +34,23 @@ ALL_ARGS_RANGED_REGEX = re.compile(r'\\@(-?\d+)?:(-?\d+)?')
 ARGS_REGEX = re.compile(r'\\\d+')
 
 
-def GetAliases(store, user):
-  return store.GetJsonValue(user, ALIAS_SUBKEY) or {}
+def GetAliases(store, user: user_pb2.User):
+  return store.GetJsonValue(user.user_id, ALIAS_SUBKEY) or {}
 
 
-def AddOrUpdateAlias(store, user, alias_name, alias_cmd):
-  return store.UpdateJson(user, ALIAS_SUBKEY,
+def AddOrUpdateAlias(store, user: user_pb2.User, alias_name, alias_cmd):
+  return store.UpdateJson(user.user_id, ALIAS_SUBKEY,
                           lambda a: a.update({alias_name: alias_cmd}),
                           lambda a: alias_name in a)
 
 
-def RemoveAlias(store, user, alias_name):
-  return store.UpdateJson(user, ALIAS_SUBKEY,
+def RemoveAlias(store, user: user_pb2.User, alias_name):
+  return store.UpdateJson(user.user_id, ALIAS_SUBKEY,
                           lambda a: a.pop(alias_name, None),
                           lambda a: alias_name in a)
 
 
-def ExpandAliases(store, user, msg):
+def ExpandAliases(store, user: user_pb2.User, msg: Text):
   r"""Replaces placeholders in an alias with the arguments from the alias.
 
   \me becomes the username of whoever invoked the command.
@@ -69,7 +72,7 @@ def ExpandAliases(store, user, msg):
     if msg_args[0] == alias_key:
       transformed_msg = alias_value
 
-      transformed_msg = ME_REGEX.sub(user, transformed_msg)
+      transformed_msg = ME_REGEX.sub(user.display_name, transformed_msg)
       transformed_msg = _ExpandAllSign(transformed_msg, msg_args[1:])
       transformed_msg = ALL_ARGS_REGEX.sub(' '.join(msg_args[1:]),
                                            transformed_msg)

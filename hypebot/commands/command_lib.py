@@ -32,10 +32,10 @@ from hypebot import hype_types
 from hypebot.core import params_lib
 from hypebot.core import util_lib
 from hypebot.data import messages
-from hypebot.protos.channel_pb2 import Channel
-from hypebot.protos.user_pb2 import User
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 
-from typing import Any, Callable, Dict, List, Text, Tuple
+from typing import Any, Callable, Dict, List, Optional, Text, Tuple
 
 
 class BaseCommand(object):
@@ -68,9 +68,16 @@ class BaseCommand(object):
       #
       # Default allows all channels to handle the message.
       'avoid_channels': [],
-      # If the command should be invoked in all channels that match channels
-      # above, or only the ones listed in core.params.main_channels.
-      'main_channel_only': True,
+      # By default, parsers may provide a `target_user` in their kwargs which
+      # gets auto-converted into a User proto if the correponsing user exists.
+      # If the user does not exist, the command will respond "Unknown user
+      # $target_user" and not call the underlying `_Handle` method. If you
+      # override this to `True`, it will create a fake user with user_id and
+      # display_name set to target_user if the user does not exist.
+      'target_any': False,
+      # If the command should only be invoked in channels with PRIVATE
+      # visibility (aka private messages, or DMs as the kids say).
+      'private_channels_only': False,
   })
 
   # Used to ignore a level of scoping.
@@ -87,9 +94,7 @@ class BaseCommand(object):
     self._ratelimit_lock = Lock()
     self._spook_replies = util_lib.WeightedCollection(messages.SPOOKY_STRINGS)
 
-  def Handle(self,
-             channel: Channel,
-             user: Text,
+  def Handle(self, channel: channel_pb2.Channel, user: user_pb2.User,
              message: Text) -> hype_types.CommandResponse:
     """Attempt to handle the message.
 
@@ -98,7 +103,7 @@ class BaseCommand(object):
     send the parsed command to the internal _Handle function.
 
     Args:
-      channel: Where to send the reply.
+      channel: Channel from which the message was received.
       user: User who invoked the command.
       message: Raw message from application.
 
@@ -110,29 +115,34 @@ class BaseCommand(object):
     for parser in self._parsers:
       take, args, kwargs = parser(channel, user, message)
       if take:
-        if 'target_user' in kwargs:
-          kwargs['target_user'] = self._ParseCommandTarget(
+        if 'target_user' in kwargs and kwargs['target_user'] is not None:
+          target_user = self._ParseCommandTarget(
               user, kwargs['target_user'], message)
+          if not target_user:
+            return 'Unrecognized user %s' % kwargs['target_user']
+          kwargs['target_user'] = target_user
 
         # Ensure we don't handle the same message twice.
         return self._Ratelimit(channel, user, *args, **kwargs)
 
-  def _InScope(self, channel: Channel):
+  def _InScope(self, channel: channel_pb2.Channel):
+    """Determine if channel is in scope."""
     # DMs and system internal commands are always allowed.
-    if channel.visibility in [Channel.PRIVATE, Channel.SYSTEM]:
+    if channel.visibility in [
+        channel_pb2.Channel.PRIVATE, channel_pb2.Channel.SYSTEM
+    ]:
       return True
+    elif self._params.private_channels_only:
+      return False
     # Channel scope
     if (not util_lib.MatchesAny(self._params.channels, channel) or
         util_lib.MatchesAny(self._params.avoid_channels, channel)):
       return False
-    # MainChannelOnly
-    if (self._params.main_channel_only and
-        not util_lib.MatchesAny(self._core.params.main_channels, channel)):
-      return False
 
     return True
 
-  def _Ratelimit(self, channel: Channel, user: Text, *args, **kwargs):
+  def _Ratelimit(self, channel: channel_pb2.Channel, user: user_pb2.User, *args,
+                 **kwargs):
     """Ratelimits calls/responses from Handling the message.
 
     In general this, prevents the same user, channel, or global triggering a
@@ -154,22 +164,23 @@ class BaseCommand(object):
     Returns:
       Optional message(s) to reply to the channel.
     """
-    if (not self._params.ratelimit.enabled or
-        channel.visibility in [Channel.PRIVATE, Channel.SYSTEM]):
+    if (not self._params.ratelimit.enabled or channel.visibility in [
+        channel_pb2.Channel.PRIVATE, channel_pb2.Channel.SYSTEM
+    ]):
       return self._Handle(channel, user, *args, **kwargs)
 
-    scoped_channel = Channel()
+    scoped_channel = channel_pb2.Channel()
     scoped_channel.CopyFrom(channel)
-    scoped_user = user
+    scoped_user_id = user.user_id
     if self._params.ratelimit.scope == 'GLOBAL':
       scoped_channel.id = self._DEFAULT_SCOPE
-      scoped_user = self._DEFAULT_SCOPE
+      scoped_user_id = self._DEFAULT_SCOPE
     elif self._params.ratelimit.scope == 'CHANNEL':
-      scoped_user = self._DEFAULT_SCOPE
+      scoped_user_id = self._DEFAULT_SCOPE
 
     with self._ratelimit_lock:
       t = time.time()
-      delta_t = t - self._last_called[scoped_channel.id][scoped_user]
+      delta_t = t - self._last_called[scoped_channel.id][scoped_user_id]
       response = None
       if self._params.ratelimit.return_only:
         response = self._Handle(channel, user, *args, **kwargs)
@@ -178,33 +189,36 @@ class BaseCommand(object):
 
       if delta_t < self._params.ratelimit.interval:
         logging.info('Call to %s._Handle ratelimited in %s for %s: %s < %s',
-                     self.__class__.__name__, scoped_channel.id, scoped_user,
+                     self.__class__.__name__, scoped_channel.id, scoped_user_id,
                      delta_t, self._params.ratelimit.interval)
         self._Reply(user, random.choice(messages.RATELIMIT_MEMES))
         return
 
-      self._last_called[scoped_channel.id][scoped_user] = t
+      self._last_called[scoped_channel.id][scoped_user_id] = t
       return response or self._Handle(channel, user, *args, **kwargs)
 
-  def _ParseCommandTarget(self, user: Text, target_user: Text,
-                          message: Text) -> User:
+  def _ParseCommandTarget(self, user: user_pb2.User, target_user: Text,
+                          message: Text) -> Optional[user_pb2.User]:
     """Processes raw target_user into a User class, resolving 'me' to user."""
-    target_user = util_lib.BuildUser(target_user)
     # An empty target_user defaults to the calling user
-    if target_user.id in ('', 'me'):
+    if target_user.strip() in ('', 'me'):
       self._core.last_command = partial(self.Handle, message=message)
-      return util_lib.BuildUser(user, canonicalize=False)
-    return target_user
+      return user
+    real_user = self._core.interface.FindUser(target_user)
+    if self._params.target_any and not real_user:
+      real_user = user_pb2.User(user_id=target_user, display_name=target_user)
+    return real_user
 
   def _Reply(self, *args, **kwargs):
     return self._core.Reply(*args, **kwargs)
 
-  def _Spook(self, user: Text) -> None:
+  def _Spook(self, user: user_pb2.User) -> None:
     """Creates a spooky encounter with user."""
     logging.info('Spooking %s', user)
     self._Reply(user, self._spook_replies.GetAndDownweightItem())
 
-  def _Handle(self, channel: Channel, user: Text, *args, **kwargs):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User, *args,
+              **kwargs):
     """Internal method that handles the command.
 
     *args and **kwargs are the logical arguments returned by the parsers.
@@ -214,6 +228,7 @@ class BaseCommand(object):
       user: User who invoked the command.
       *args: defined by subclass
       **kwargs: defined by subclass
+
     Returns:
       Optional message(s) to reply to the channel.
     """
@@ -272,8 +287,9 @@ def CommandRegexParser(pattern: Text,
     Decorator that adds parser to class.
   """
 
-  def Parser(channel: Channel, unused_user: Text, message: Text,
-             command_prefix: Text) -> Tuple[bool, List, Dict]:
+  def Parser(channel: channel_pb2.Channel, unused_user: user_pb2.User,
+             message: Text,
+             command_prefix: Text) -> Tuple[bool, List[Any], Dict[Text, Any]]:
     """Determine if message should be handled.
 
     Args:
@@ -286,19 +302,18 @@ def CommandRegexParser(pattern: Text,
       {tuple<boolean, *args, **kwargs} Whether to take message and parsed
         args/kwargs.
     """
-    is_public = channel.visibility == Channel.PUBLIC
-    is_private = channel.visibility == Channel.PRIVATE
-    is_system = channel.visibility == Channel.SYSTEM
+    is_public = channel.visibility == channel_pb2.Channel.PUBLIC
+    is_private = channel.visibility == channel_pb2.Channel.PRIVATE
+    is_system = channel.visibility == channel_pb2.Channel.SYSTEM
     # Cannot precompile since this depends on the channel.
     match = re.match(
         r'(?i)^%s%s%s\s*$' %
         (command_prefix, '' if is_public else '?', pattern),
         message,
         flags=flags)
-    if (match
-        and (reply_to_public or not is_public)
-        and (reply_to_private or not is_private)
-        and (reply_to_system or not is_system)):
+    if (match and (reply_to_public or not is_public) and
+        (reply_to_private or not is_private) and
+        (reply_to_system or not is_system)):
       args, kwargs = _ParseArgs(match)
       return True, args, kwargs
     return False, [], {}
@@ -341,7 +356,7 @@ def RegexParser(pattern):
   """
   regex = re.compile(pattern)
 
-  def Parser(unused_channel: Channel, unused_user: Text,
+  def Parser(unused_channel: channel_pb2.Channel, unused_user: user_pb2.User,
              message: Text) -> Tuple[bool, List, Dict]:
     """Determine if message should be handled.
 
@@ -367,9 +382,9 @@ def RegexParser(pattern):
 def PublicParser(cls):
   """Parser that handles all public channels."""
 
-  def Parser(channel: Channel, unused_user: Text,
+  def Parser(channel: channel_pb2.Channel, unused_user: user_pb2.User,
              message: Text) -> Tuple[bool, List[Any], Dict]:
-    if channel.visibility == Channel.PUBLIC:
+    if channel.visibility == channel_pb2.Channel.PUBLIC:
       return True, [message], {}
     return False, [], {}
 
@@ -380,19 +395,6 @@ def PublicParser(cls):
 # === Handler Decorators ===
 # Put these decorators on _Handle to filter what is handled regardless of parser
 # triggering. Useful for ratelimiting or channel specific behavior.
-# TODO: Make class decorators or conditional within command params.
-# Left as similar to previous behavior for now.
-
-
-def PrivateOnly(fn):
-  """Decorator to restrict handling to queries."""
-
-  @wraps(fn)
-  def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
-    if channel.visibility == Channel.PRIVATE:
-      return fn(fn_self, channel, user, *args, **kwargs)
-
-  return Wrapped
 
 
 def LimitPublicLines(max_lines: int = 6):
@@ -404,6 +406,7 @@ def LimitPublicLines(max_lines: int = 6):
 
   Args:
     max_lines: Maximum number of lines to send to a public channel.
+
   Returns:
     Decorator.
   """
@@ -412,9 +415,10 @@ def LimitPublicLines(max_lines: int = 6):
     """Decorator to restrict lines returned to a public channel."""
 
     @wraps(fn)
-    def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
+    def Wrapped(fn_self, channel: channel_pb2.Channel, user: user_pb2.User,
+                *args, **kwargs):
       msg = fn(fn_self, channel, user, *args, **kwargs)
-      if channel.visibility == Channel.PUBLIC and isinstance(
+      if channel.visibility == channel_pb2.Channel.PUBLIC and isinstance(
           msg, list) and len(msg) > max_lines:
         # TODO: Switch to calling _core.interface.SendMessage.
         getattr(fn_self, '_core').Reply(user, msg)
@@ -430,11 +434,13 @@ def HumansOnly(message='I\'m sorry %s, I\'m afraid I can\'t do that'):
   """Decorator to restrict handling to humans."""
 
   def Decorator(fn):
+    """Decorator to restrict handling to only humans."""
 
     @wraps(fn)
-    def Wrapped(fn_self, channel: Channel, user: Text, *args, **kwargs):
-      if getattr(fn_self, '_core').user_tracker.IsBot(user):
-        return message % user
+    def Wrapped(fn_self, channel: channel_pb2.Channel, user: user_pb2.User,
+                *args, **kwargs):
+      if user.bot:
+        return message % user.display_name
       else:
         return fn(fn_self, channel, user, *args, **kwargs)
 
@@ -448,9 +454,10 @@ def RequireReady(obj_name):
 
   Args:
     obj_name: The name of the object that must be ready for the call to fn to
-        succeed. Note that if the decorated function's owning class (e.g. the
-        first positional arg normally called `self`) does not have an object
-        with this name, fn will never be called.
+      succeed. Note that if the decorated function's owning class (e.g. the
+      first positional arg normally called `self`) does not have an object with
+      this name, fn will never be called.
+
   Returns:
     Decorator.
   """
@@ -490,11 +497,11 @@ class TextCommand(BaseCommand):
     super(TextCommand, self).__init__(*args)
     self._choices = util_lib.WeightedCollection(self._params.choices)
 
-  def _Handle(self, channel, user):
+  def _Handle(self, channel: channel_pb2.Channel, user: user_pb2.User):
     if self._choices:
       item = self._choices.GetAndDownweightItem()
       if '{person}' in item:
-        item = item.format(item, person=user)
+        item = item.format(item, person=user.display_name)
       if item.startswith('/me '):
         item = '%s %s' % (self._core.params.name, item[4:])
       return item

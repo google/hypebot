@@ -49,6 +49,10 @@ class CaptureInterface(interface_lib.BaseChatInterface):
     """This interface does not interact with a chat application."""
     pass
 
+  def FindUser(self, query: Text):
+    """This interface doesn't care about plebs."""
+    pass
+
   def Who(self, unused_user: hype_types.User):
     """This interface doesn't care about plebs."""
     pass
@@ -63,6 +67,10 @@ class CaptureInterface(interface_lib.BaseChatInterface):
       # Messages with only cards and no text will have had default text already
       # added by the HypeCore.
       self._msgs.extend(msg.text)
+
+  def SendDirectMessage(self, user, message):
+    """Don't capture direct messages."""
+    pass
 
   def Notice(self, unused_channel: hype_types.Channel,
              unused_message: hype_types.Message):

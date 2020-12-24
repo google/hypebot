@@ -16,9 +16,10 @@ syntax = "proto3";
 package hypebot;
 
 import "google/protobuf/timestamp.proto";
+import "hypebot/protos/user.proto";
 
 // A single entry into a entity's ledger recording a HypeCoin transaction. When
-// HypeCoins pass between two entities, there is be a cooresponding LedgerEntry
+// HypeCoins pass between two entities, there is be a corresponding LedgerEntry
 // for each side of the transaction. The entity sending HypeCoins will see a
 // LedgerEntry with a negative amount (denoting a withdrawl from their balance)
 // and the entity receiving the HypeCoins will see an entry with a positive
@@ -53,7 +54,7 @@ message LedgerEntry {
   google.protobuf.Timestamp create_time = 2;
   // The "other side" of the transaction. Currently always set, but could be
   // omitted for privacy/spooky reasons.
-  string counterparty = 3;
+  User counterparty = 3;
   // The amount of HypeCoins included in the transaction.
   sint64 amount = 4;
   // Human-readable reason for the transaction or other notes about the

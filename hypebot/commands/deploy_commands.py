@@ -22,7 +22,8 @@ from absl import logging
 from hypebot import hype_types
 from hypebot.commands import command_lib
 from hypebot.core import util_lib
-from hypebot.protos.channel_pb2 import Channel
+from hypebot.protos import channel_pb2
+from hypebot.protos import user_pb2
 from typing import Text
 
 
@@ -42,7 +43,7 @@ class _BaseDeployCommand(command_lib.BaseCommand):
   """Parent class for deploy related commands."""
 
   def _DeployActionInProgress(self,
-                              channel: Channel,
+                              channel: channel_pb2.Channel,
                               bot_name: Text = '') -> None:
     msg = ('%s deploy action already in progress.' % bot_name).capitalize()
     # TODO: Add logging ability to Reply. Commands shouldn't use
@@ -51,8 +52,8 @@ class _BaseDeployCommand(command_lib.BaseCommand):
 
   @command_lib.HumansOnly()
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               raw_cl: Text,
               raw_bot: Text) -> hype_types.CommandResponse:
     """Validate and parse raw CL number and bot name."""
@@ -69,8 +70,8 @@ class _BaseDeployCommand(command_lib.BaseCommand):
     return 'I don\'t recognize %s, sorry.' % bot_name
 
   def _HandleParsed(self,
-                    channel: Channel,
-                    user: Text,
+                    channel: channel_pb2.Channel,
+                    user: user_pb2.User,
                     cl: int,
                     bot_name: Text) -> hype_types.CommandResponse:
     raise NotImplementedError('Must implement _HandleParsed.')
@@ -81,8 +82,8 @@ class BuildCommand(_BaseDeployCommand):
   """Issues a build request, from an optional changelist."""
 
   def _HandleParsed(self,
-                    channel: Channel,
-                    user: Text,
+                    channel: channel_pb2.Channel,
+                    user: user_pb2.User,
                     cl: int,
                     bot_name: Text) -> hype_types.CommandResponse:
     if self._core.deployment_manager.RequestBuild(user, cl, bot_name, channel):
@@ -96,8 +97,8 @@ class DeployCommand(_BaseDeployCommand):
   """Issues a deploy (test/build/push) request on behalf of user."""
 
   def _HandleParsed(self,
-                    channel: Channel,
-                    user: Text,
+                    channel: channel_pb2.Channel,
+                    user: user_pb2.User,
                     cl: int,
                     bot_name: Text) -> hype_types.CommandResponse:
     if self._core.deployment_manager.RequestDeploy(user, cl, bot_name, [],
@@ -112,8 +113,8 @@ class PushCommand(_BaseDeployCommand):
   """Issues a reload command."""
 
   def _HandleParsed(self,
-                    channel: Channel,
-                    user: Text,
+                    channel: channel_pb2.Channel,
+                    user: user_pb2.User,
                     cl: int,
                     bot_name: Text) -> hype_types.CommandResponse:
     if bot_name == self._core.name.lower():
@@ -132,8 +133,8 @@ class SetSchemaCommand(_BaseDeployCommand):
   """Updates the storage schema if applicable."""
 
   def _Handle(self,
-              channel: Channel,
-              user: Text,
+              channel: channel_pb2.Channel,
+              user: user_pb2.User,
               raw_cl: Text,
               env: Text) -> hype_types.CommandResponse:
     if raw_cl:
@@ -151,8 +152,8 @@ class TestCommand(_BaseDeployCommand):
   """Runs HypeBot tests, fining the change author if they fail."""
 
   def _HandleParsed(self,
-                    channel: Channel,
-                    user: Text,
+                    channel: channel_pb2.Channel,
+                    user: user_pb2.User,
                     cl: int,
                     bot_name: Text) -> hype_types.CommandResponse:
     if self._core.deployment_manager.RequestTest(user, cl, bot_name, channel):

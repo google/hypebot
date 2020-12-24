@@ -16,13 +16,16 @@ syntax = "proto3";
 package hypebot;
 
 message User {
-  // Main display name for this user.
-  string name = 1;
-  // Identifier for this user. Note that it is possible to have two distinct
-  // names which map to the same ID, so care should be taken when using this
-  // value for lookups or equality. The main purpose of this field is to
-  // normalize over input, e.g. so that "brcooley " is the same as "BRCooley",
-  // but when the input is used in the output from a command, you can still
-  // show "brcooley is the best" vs. "BRCooley is the best".
-  string id = 2;
+  // Unique identifier for the user. Not necessarily human readable. Used by the
+  // interface to send messages to a specific user and by the storage system to
+  // keep track of your tendies.
+  string user_id = 1;
+
+  // Human readable display name for the user. Not necessarily unique, but
+  // should be used when rendering the user's name.
+  string display_name = 2;
+
+  // True if the user is a bot, False if it is a human. Defaults to human on
+  // purpose since almost all Users are human.
+  bool bot = 3;
 }
